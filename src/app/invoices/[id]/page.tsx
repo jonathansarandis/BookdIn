@@ -2,24 +2,16 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { ArrowLeft, User, Calendar, FileText, DollarSign } from 'lucide-react'
-import { formatCurrency, formatDateShort } from '@/lib/utils'
+import { ArrowLeft, User, Calendar, FileText } from 'lucide-react'
+import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import PayButton from '@/components/payments/PayButton'
 
-const STATUS_STYLES = {
+const STATUS_STYLES: Record<string, string> = {
   draft:   'bg-gray-100 text-gray-600 border-gray-200',
   sent:    'bg-blue-50 text-blue-700 border-blue-200',
   paid:    'bg-green-50 text-green-700 border-green-200',
   overdue: 'bg-red-50 text-red-700 border-red-200',
   void:    'bg-gray-100 text-gray-400 border-gray-200',
-}
-
-const STATUS_LABELS = {
-  draft:   'Draft',
-  sent:    'Sent',
-  paid:    'Paid',
-  overdue: 'Overdue',
-  void:    'Void',
 }
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
@@ -33,7 +25,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     .eq('id', user.id)
     .single()
 
-  const { data: invoice } = await supabase
+  const { data: invoice, error } = await supabase
     .from('invoices')
     .select(`
       *,
@@ -44,7 +36,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     .eq('business_id', profile?.business_id)
     .single()
 
-  if (!invoice) redirect('/invoices')
+  if (error || !invoice) redirect('/invoices')
 
   const isPaid = invoice.status === 'paid'
   const canPay = !isPaid && invoice.status !== 'void' && invoice.total > 0
@@ -59,14 +51,14 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             <ArrowLeft className="w-5 h-5 text-gray-500" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Invoice #{invoice.invoice_number}</h1>
-            <p className="text-sm text-gray-500">
-              Created {formatDateShort(invoice.created_at)}
-            </p>
+            <h1 className="text-xl font-bold text-gray-900">
+              INV-{invoice.id.slice(0, 8).toUpperCase()}
+            </h1>
+            <p className="text-sm text-gray-500">Created {formatDateShort(invoice.created_at)}</p>
           </div>
         </div>
-        <span className={`px-3 py-1 rounded-full text-sm font-medium border ${STATUS_STYLES[invoice.status] || 'bg-gray-100 text-gray-700'}`}>
-          {STATUS_LABELS[invoice.status] || invoice.status}
+        <span className={cn('px-3 py-1 rounded-full text-sm font-medium border capitalize', STATUS_STYLES[invoice.status] || 'bg-gray-100 text-gray-700')}>
+          {invoice.status}
         </span>
       </div>
 
@@ -113,28 +105,23 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             </div>
           )}
 
-          {/* Line items */}
+          {/* Amount breakdown */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">Line items</h2>
-            {invoice.line_items && invoice.line_items.length > 0 ? (
-              <div className="space-y-2">
-                {invoice.line_items.map((item: any, i: number) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{item.description || item.name}</span>
-                    <span className="font-medium text-gray-900">{formatCurrency(item.amount || item.price)}</span>
-                  </div>
-                ))}
-                <div className="border-t border-gray-100 pt-2 flex justify-between text-sm font-semibold">
-                  <span>Total</span>
-                  <span>{formatCurrency(invoice.total)}</span>
-                </div>
-              </div>
-            ) : (
+            <h2 className="font-semibold text-gray-900">Amount</h2>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="text-gray-900">{formatCurrency(invoice.subtotal || invoice.total)}</span>
+            </div>
+            {invoice.tax_amount > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">{invoice.description || 'Service'}</span>
-                <span className="font-medium">{formatCurrency(invoice.total)}</span>
+                <span className="text-gray-500">Tax</span>
+                <span className="text-gray-900">{formatCurrency(invoice.tax_amount)}</span>
               </div>
             )}
+            <div className="border-t border-gray-100 pt-2 flex justify-between text-sm font-semibold">
+              <span>Total</span>
+              <span>{formatCurrency(invoice.total)}</span>
+            </div>
           </div>
 
           {/* Notes */}
@@ -164,8 +151,8 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Status</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLES[invoice.status]}`}>
-                {STATUS_LABELS[invoice.status]}
+              <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border capitalize', STATUS_STYLES[invoice.status])}>
+                {invoice.status}
               </span>
             </div>
             {canPay && (
@@ -184,21 +171,19 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
             <h2 className="font-semibold text-gray-900 mb-3">Actions</h2>
             {invoice.status === 'draft' && (
-              <button className="w-full py-2 px-4 text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors">
-                Mark as sent
-              </button>
+              <form action={`/api/invoices/${invoice.id}/send`} method="POST">
+                <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors">
+                  Mark as sent
+                </button>
+              </form>
             )}
             {invoice.status !== 'void' && invoice.status !== 'paid' && (
-              <button className="w-full py-2 px-4 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors">
-                Mark as paid
-              </button>
+              <form action={`/api/invoices/${invoice.id}/mark-paid`} method="POST">
+                <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors">
+                  Mark as paid
+                </button>
+              </form>
             )}
-            <Link
-              href={`/invoices/new?duplicate=${invoice.id}`}
-              className="block w-full py-2 px-4 text-sm font-medium text-center text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              Duplicate
-            </Link>
           </div>
 
         </div>
