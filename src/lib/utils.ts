@@ -7,11 +7,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(amount: number | null | undefined, currency = 'AUD'): string {
+  if (amount == null) return '$0.00'
+  return new Intl.NumberFormat('en-AU', {
     style: 'currency',
     currency,
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount / 100) // amounts stored in cents
 }
