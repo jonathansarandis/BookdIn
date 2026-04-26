@@ -155,6 +155,7 @@ export default function BookingPage() {
         scheduled_at: scheduledAt.toISOString(),
         duration_minutes: selectedService?.duration_minutes || 120,
         price: totalPrice,
+      total_price: totalPrice,
         tax_amount: 0,
         frequency: form.frequency,
         customer_notes: form.customer_notes || null,
