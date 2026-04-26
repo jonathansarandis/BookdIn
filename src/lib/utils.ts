@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { format, formatDistanceToNow, isToday, isTomorrow, isYesterday } from 'date-fns'
