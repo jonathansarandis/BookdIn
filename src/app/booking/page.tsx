@@ -1,4 +1,5 @@
 // @ts-nocheck
+import PaymentSection from '@/components/payments/PaymentSection'
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -55,6 +56,8 @@ export default function BookingPage() {
   })
 
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
+  const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
 
   function update(field: string, value: any) {
     setForm(f => ({ ...f, [field]: value }))
@@ -163,6 +166,19 @@ export default function BookingPage() {
         booking_source: 'admin',
       }).select().single()
       if (jobErr) throw new Error('Failed to create job: ' + jobErr.message)
+
+      // Handle card payment - create payment intent with manual capture
+      if (paymentMethod === 'card' && getCardPaymentMethod) {
+        const paymentMethodId = await getCardPaymentMethod()
+        if (!paymentMethodId) throw new Error('Please enter valid card details')
+        const intentRes = await fetch('/api/stripe/intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: job.id, paymentMethodId }),
+        })
+        const intentData = await intentRes.json()
+        if (intentData.error) throw new Error(intentData.error)
+      }
 
       // Insert extras
       if (selectedExtras.length > 0) {
@@ -454,7 +470,13 @@ export default function BookingPage() {
             ))}
           </div>
 
-          <div className="flex gap-3 pb-8">
+          <PaymentSection
+          paymentMethod={paymentMethod}
+          onPaymentMethodChange={setPaymentMethod}
+          onCardReady={(fn) => setGetCardPaymentMethod(() => fn)}
+        />
+
+        <div className="flex gap-3 pb-8">
             <button onClick={() => setStep(2)}
               className="flex-1 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
               Back
