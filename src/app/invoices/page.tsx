@@ -72,7 +72,7 @@ export default async function InvoicesPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {invoices.map((invoice) => (
-                <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={invoice.id} className="hover:bg-gray-50 transition-colors relative cursor-pointer" onClick={undefined}>
                   <td className="px-5 py-3.5">
                     <Link href={`/invoices/${invoice.id}`} className="text-sm font-medium text-brand-600 hover:underline">
                       INV-{invoice.id.slice(0, 8).toUpperCase()}
