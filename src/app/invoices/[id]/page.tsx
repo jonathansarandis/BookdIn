@@ -33,7 +33,6 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       job:jobs(id, scheduled_at, service:services(name))
     `)
     .eq('id', params.id)
-    .eq('business_id', profile?.business_id)
     .single()
 
   if (error || !invoice) redirect('/invoices')
