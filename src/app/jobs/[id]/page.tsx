@@ -185,7 +185,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           {/* Status updater */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <h2 className="font-semibold text-gray-900">Update status</h2>
-            <JobStatusUpdater jobId={job.id} currentStatus={job.status} />
+            <JobStatusUpdater jobId={job.id} currentStatus={job.status} providers={[]} currentProviderId={job.provider_id || null} />
           </div>
 
         </div>
