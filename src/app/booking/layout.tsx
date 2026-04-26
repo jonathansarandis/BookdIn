@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 
+type Profile = {
+  onboarding_complete: boolean
+  businesses: any | null
+  [key: string]: any
+}
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -13,7 +19,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .from('profiles')
     .select('*, businesses(*)')
     .eq('id', user.id)
-    .single()
+    .single() as { data: Profile | null }
 
   if (!profile?.onboarding_complete && profile?.businesses === null) {
     redirect('/onboarding')
