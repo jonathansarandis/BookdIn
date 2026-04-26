@@ -63,7 +63,7 @@ export default function BookingPage() {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
+      const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
       const bid = profile!.business_id!
 
       const [{ data: svcs }, { data: cxs }, { data: prvs }] = await Promise.all([
@@ -109,7 +109,7 @@ export default function BookingPage() {
 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
+    const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
     const bid = profile!.business_id!
 
     try {
