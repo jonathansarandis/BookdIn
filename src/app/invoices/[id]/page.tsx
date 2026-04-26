@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { ArrowLeft, User, Calendar, FileText } from 'lucide-react'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import PayButton from '@/components/payments/PayButton'
@@ -25,7 +26,12 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     .eq('id', user.id)
     .single()
 
-  const { data: invoice, error } = await supabase
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { data: invoice, error } = await serviceClient
     .from('invoices')
     .select(`
       *,
