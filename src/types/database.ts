@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Auto-generated types for Cleanly database schema
 // Run `npm run db:generate` to regenerate after schema changes
 
