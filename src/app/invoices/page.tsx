@@ -6,6 +6,14 @@ import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 
 export const metadata = { title: 'Invoices' }
 
+const STATUS_COLORS: Record<string, string> = {
+  draft:   'bg-gray-100 text-gray-600 border-gray-200',
+  sent:    'bg-blue-50 text-blue-700 border-blue-200',
+  paid:    'bg-green-50 text-green-700 border-green-200',
+  overdue: 'bg-red-50 text-red-700 border-red-200',
+  void:    'bg-gray-100 text-gray-400 border-gray-200',
+}
+
 export default async function InvoicesPage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -16,14 +24,6 @@ export default async function InvoicesPage() {
     .select('*, customer:customers(full_name, email)')
     .eq('business_id', profile!.business_id!)
     .order('created_at', { ascending: false })
-
-  const STATUS_COLORS: Record<string, string> = {
-    draft:   'bg-gray-100 text-gray-600 border-gray-200',
-    sent:    'bg-blue-50 text-blue-700 border-blue-200',
-    paid:    'bg-green-50 text-green-700 border-green-200',
-    overdue: 'bg-red-50 text-red-700 border-red-200',
-    void:    'bg-gray-100 text-gray-400 border-gray-200',
-  }
 
   const totalPaid = invoices?.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.total, 0) || 0
   const totalOutstanding = invoices?.filter(i => ['sent','overdue'].includes(i.status)).reduce((sum, i) => sum + i.total, 0) || 0
@@ -49,22 +49,23 @@ export default async function InvoicesPage() {
           { label: 'Total paid', value: formatCurrency(totalPaid), color: 'text-green-600' },
           { label: 'Outstanding', value: formatCurrency(totalOutstanding), color: 'text-blue-600' },
           { label: 'Overdue', value: formatCurrency(totalOverdue), color: 'text-red-600' },
-        ].map(s => (
-          <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 mb-1">{s.label}</p>
-            <p className={`text-xl font-semibold ${s.color}`}>{s.value}</p>
+        ].map(card => (
+          <div key={card.label} className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+            <p className={`text-xl font-semibold ${card.color}`}>{card.value}</p>
           </div>
         ))}
       </div>
 
+      {/* Invoices table */}
       {invoices && invoices.length > 0 ? (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-5 py-3">Invoice</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3">Customer</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3">Date</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3">Created</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3">Due</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3">Amount</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3">Status</th>
@@ -79,22 +80,32 @@ export default async function InvoicesPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="text-sm text-gray-900">{invoice.customer?.full_name}</p>
-                    <p className="text-xs text-gray-400">{invoice.customer?.email}</p>
+                    <Link href={`/invoices/${invoice.id}`} className="block hover:opacity-80">
+                      <p className="text-sm text-gray-900">{invoice.customer?.full_name}</p>
+                      <p className="text-xs text-gray-400">{invoice.customer?.email}</p>
+                    </Link>
                   </td>
                   <td className="px-4 py-3.5 text-sm text-gray-600">
-                    {formatDateShort(invoice.created_at)}
+                    <Link href={`/invoices/${invoice.id}`} className="block">
+                      {formatDateShort(invoice.created_at)}
+                    </Link>
                   </td>
                   <td className="px-4 py-3.5 text-sm text-gray-600">
-                    {invoice.due_date ? formatDateShort(invoice.due_date) : '—'}
+                    <Link href={`/invoices/${invoice.id}`} className="block">
+                      {invoice.due_date ? formatDateShort(invoice.due_date) : '—'}
+                    </Link>
                   </td>
                   <td className="px-4 py-3.5 text-sm font-medium text-gray-900">
-                    {formatCurrency(invoice.total)}
+                    <Link href={`/invoices/${invoice.id}`} className="block">
+                      {formatCurrency(invoice.total)}
+                    </Link>
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border capitalize', STATUS_COLORS[invoice.status])}>
-                      {invoice.status}
-                    </span>
+                    <Link href={`/invoices/${invoice.id}`} className="block">
+                      <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border capitalize', STATUS_COLORS[invoice.status])}>
+                        {invoice.status}
+                      </span>
+                    </Link>
                   </td>
                 </tr>
               ))}
