@@ -36,12 +36,12 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     .select(`
       *,
       customer:customers(id, full_name, email, phone),
-      job:jobs(id, scheduled_at, service:services(name))
+      job:jobs!invoices_job_id_fkey(id, scheduled_at, service:services(name))
     `)
     .eq('id', params.id)
     .single()
 
-  if (error || !invoice) return <div style={{padding:'20px'}}><h1>Debug</h1><p>Error: {JSON.stringify(error)}</p><p>Invoice: {JSON.stringify(invoice)}</p><p>Profile: {JSON.stringify(profile)}</p><p>Params ID: {params.id}</p></div>
+  if (error || !invoice) redirect('/invoices')
 
   const isPaid = invoice.status === 'paid'
   const canPay = !isPaid && invoice.status !== 'void' && invoice.total > 0
