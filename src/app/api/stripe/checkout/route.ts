@@ -11,13 +11,13 @@ export async function POST(request: NextRequest) {
     const { jobId, invoiceId } = await request.json()
     const supabase = createAdminClient()
 
-    let amount: number
-    let description: string
-    let customerId: string
-    let customerEmail: string
-    let customerName: string
-    let businessId: string
-    let returnPath: string
+    let amount = 0
+    let description = ''
+    let customerId = ''
+    let customerEmail = ''
+    let customerName = ''
+    let businessId = ''
+    let returnPath = ''
 
     if (jobId) {
       const { data: job } = await supabase
@@ -28,12 +28,13 @@ export async function POST(request: NextRequest) {
 
       if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
-      amount = job.price
-      description = `${job.service?.name} - ${new Date(job.scheduled_at).toLocaleDateString()}`
-      customerId = job.customer_id
-      customerEmail = job.customer.email
-      customerName = job.customer.full_name
-      businessId = job.business_id
+      const j = job as any
+      amount = j.price
+      description = `${j.service?.name} - ${new Date(j.scheduled_at).toLocaleDateString()}`
+      customerId = j.customer_id
+      customerEmail = j.customer.email
+      customerName = j.customer.full_name
+      businessId = j.business_id
       returnPath = `/jobs/${jobId}`
     } else if (invoiceId) {
       const { data: invoice } = await supabase
@@ -44,12 +45,13 @@ export async function POST(request: NextRequest) {
 
       if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
-      amount = invoice.total
+      const inv = invoice as any
+      amount = inv.total
       description = `Invoice INV-${invoiceId.slice(0, 8).toUpperCase()}`
-      customerId = invoice.customer_id
-      customerEmail = invoice.customer.email
-      customerName = invoice.customer.full_name
-      businessId = invoice.business_id
+      customerId = inv.customer_id
+      customerEmail = inv.customer.email
+      customerName = inv.customer.full_name
+      businessId = inv.business_id
       returnPath = `/invoices/${invoiceId}`
     } else {
       return NextResponse.json({ error: 'jobId or invoiceId required' }, { status: 400 })
