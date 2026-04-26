@@ -1,6 +1,6 @@
 // @ts-nocheck
-import PaymentSection from '@/components/payments/PaymentSection'
 'use client'
+import PaymentSection from '@/components/payments/PaymentSection'
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
