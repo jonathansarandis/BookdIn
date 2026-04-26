@@ -14,7 +14,7 @@ import {
 const NAV = [
   { href: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard },
   { href: '/calendar',    label: 'Calendar',   icon: Calendar,       badge: 3 },
-  { href: '/jobs',        label: 'Jobs',       icon: ClipboardList,  badge: 5, badgeWarn: true },
+  { href: '/jobs',        label: 'Jobs',       icon: ClipboardList },
   { href: '/customers',   label: 'Customers',  icon: Users },
   { section: 'Financials' },
   { href: '/invoices',    label: 'Invoices',   icon: DollarSign },
