@@ -41,7 +41,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     .eq('id', params.id)
     .single()
 
-  if (error || !invoice) redirect('/invoices')
+  if (error || !invoice) return <div style={{padding:'20px'}}><h1>Debug</h1><p>Error: {JSON.stringify(error)}</p><p>Invoice: {JSON.stringify(invoice)}</p><p>Profile: {JSON.stringify(profile)}</p><p>Params ID: {params.id}</p></div>
 
   const isPaid = invoice.status === 'paid'
   const canPay = !isPaid && invoice.status !== 'void' && invoice.total > 0
