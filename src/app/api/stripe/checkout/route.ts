@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
       const j = job as any
       amount = j.price
-      description = `${j.service?.name} - ${new Date(j.scheduled_at).toLocaleDateString()}`
+      description = j.service?.name || 'Service'
       customerId = j.customer_id
       customerEmail = j.customer.email
       customerName = j.customer.full_name
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       line_items: [{
         price_data: {
           currency: 'aud',
-          product_data: { name: description, metadata: { customer: customerName } },
+          product_data: { name: description },
           unit_amount: amount,
         },
         quantity: 1,
