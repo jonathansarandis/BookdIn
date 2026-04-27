@@ -39,7 +39,6 @@ export async function POST(
     .eq('id', user.id)
     .single()
 
-  // Get quote with customer and business details
   const { data: quote, error: quoteError } = await serviceClient
     .from('quotes')
     .select(`
@@ -63,7 +62,14 @@ export async function POST(
   }
 
   const quoteRef = `QT-${quote.id.slice(0, 8).toUpperCase()}`
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL!
+  const businessName = quote.business?.name || 'BookdIn'
+  const tenantEmail = quote.business?.email || null
+
+  // From: business name via BookdIn's sending domain
+  // Reply-To: tenant's own email so customer replies go directly to them
+  const fromAddress = `${businessName} <info@cleanfreaks.au>`
+  // TODO: When BookdIn has its own domain, change to:
+  // const fromAddress = `${businessName} <quotes@bookdin.com>`
 
   const emailHtml = `
 <!DOCTYPE html>
@@ -71,7 +77,6 @@ export async function POST(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quote from ${quote.business?.name}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 20px;">
@@ -79,33 +84,28 @@ export async function POST(
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
           
-          <!-- Header -->
           <tr>
             <td style="background-color: #166534; padding: 32px 40px;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">${quote.business?.name}</h1>
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">${businessName}</h1>
               <p style="margin: 8px 0 0; color: #bbf7d0; font-size: 14px;">Quote for services</p>
             </td>
           </tr>
 
-          <!-- Body -->
           <tr>
             <td style="padding: 40px;">
-              <p style="margin: 0 0 24px; color: #374151; font-size: 16px;">
-                Hi ${quote.customer.full_name},
-              </p>
+              <p style="margin: 0 0 24px; color: #374151; font-size: 16px;">Hi ${quote.customer.full_name},</p>
               <p style="margin: 0 0 32px; color: #6b7280; font-size: 15px; line-height: 1.6;">
-                Please find your quote below. If you have any questions, feel free to reply to this email.
+                Please find your quote below. If you have any questions, feel free to reply to this email and we'll get back to you.
               </p>
 
-              <!-- Quote details -->
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
                 <tr>
-                  <td style="padding-bottom: 12px;">
+                  <td>
                     <span style="color: #6b7280; font-size: 13px;">Quote reference</span><br>
                     <span style="color: #111827; font-size: 15px; font-weight: 600;">${quoteRef}</span>
                   </td>
                   ${quote.valid_until ? `
-                  <td style="padding-bottom: 12px; text-align: right;">
+                  <td style="text-align: right;">
                     <span style="color: #6b7280; font-size: 13px;">Valid until</span><br>
                     <span style="color: #111827; font-size: 15px; font-weight: 600;">${formatDate(quote.valid_until)}</span>
                   </td>
@@ -113,60 +113,51 @@ export async function POST(
                 </tr>
               </table>
 
-              <!-- Pricing -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 32px;">
                 <tr>
                   <td style="border-top: 1px solid #e5e7eb; padding: 12px 0;">
-                    <table width="100%">
-                      <tr>
-                        <td style="color: #6b7280; font-size: 14px;">Subtotal</td>
-                        <td style="text-align: right; color: #111827; font-size: 14px;">${formatCurrency(quote.subtotal)}</td>
-                      </tr>
-                    </table>
+                    <table width="100%"><tr>
+                      <td style="color: #6b7280; font-size: 14px;">Subtotal</td>
+                      <td style="text-align: right; color: #111827; font-size: 14px;">${formatCurrency(quote.subtotal)}</td>
+                    </tr></table>
                   </td>
                 </tr>
                 ${quote.tax_amount > 0 ? `
                 <tr>
-                  <td style="padding: 12px 0; border-top: 1px solid #e5e7eb;">
-                    <table width="100%">
-                      <tr>
-                        <td style="color: #6b7280; font-size: 14px;">Tax</td>
-                        <td style="text-align: right; color: #111827; font-size: 14px;">${formatCurrency(quote.tax_amount)}</td>
-                      </tr>
-                    </table>
+                  <td style="border-top: 1px solid #e5e7eb; padding: 12px 0;">
+                    <table width="100%"><tr>
+                      <td style="color: #6b7280; font-size: 14px;">Tax</td>
+                      <td style="text-align: right; color: #111827; font-size: 14px;">${formatCurrency(quote.tax_amount)}</td>
+                    </tr></table>
                   </td>
                 </tr>
                 ` : ''}
                 <tr>
-                  <td style="border-top: 2px solid #e5e7eb; border-bottom: 2px solid #e5e7eb; padding: 16px 0;">
-                    <table width="100%">
-                      <tr>
-                        <td style="color: #111827; font-size: 16px; font-weight: 700;">Total</td>
-                        <td style="text-align: right; color: #111827; font-size: 20px; font-weight: 700;">${formatCurrency(quote.total)}</td>
-                      </tr>
-                    </table>
+                  <td style="border-top: 2px solid #111827; border-bottom: 2px solid #111827; padding: 16px 0;">
+                    <table width="100%"><tr>
+                      <td style="color: #111827; font-size: 16px; font-weight: 700;">Total</td>
+                      <td style="text-align: right; color: #111827; font-size: 20px; font-weight: 700;">${formatCurrency(quote.total)}</td>
+                    </tr></table>
                   </td>
                 </tr>
               </table>
 
               ${quote.notes ? `
-              <!-- Notes -->
               <div style="background-color: #f9fafb; border-left: 3px solid #166534; padding: 16px; border-radius: 4px; margin-bottom: 32px;">
                 <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.6;">${quote.notes}</p>
               </div>
               ` : ''}
 
               <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
-                Thank you for considering ${quote.business?.name}. We look forward to working with you.
+                Thank you for considering ${businessName}. We look forward to working with you.
               </p>
             </td>
           </tr>
 
-          <!-- Footer -->
           <tr>
             <td style="background-color: #f9fafb; padding: 24px 40px; border-top: 1px solid #e5e7eb;">
               <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">
-                ${quote.business?.name} · Powered by BookdIn
+                ${businessName} · Powered by BookdIn
               </p>
             </td>
           </tr>
@@ -181,13 +172,14 @@ export async function POST(
 
   try {
     await resend.emails.send({
-      from: `${quote.business?.name} <info@cleanfreaks.au>`,
+      from: fromAddress,
+      // Reply-To ensures customer replies go directly to the tenant, not to BookdIn
+      reply_to: tenantEmail || fromAddress,
       to: quote.customer.email,
-      subject: `Quote ${quoteRef} from ${quote.business?.name}`,
+      subject: `Your quote from ${businessName} — ${quoteRef}`,
       html: emailHtml,
     })
 
-    // Update quote status to sent
     await serviceClient
       .from('quotes')
       .update({ status: 'sent', sent_at: new Date().toISOString() })
