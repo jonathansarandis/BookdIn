@@ -1,29 +1,93 @@
 // @ts-nocheck
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
-import { CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react'
+import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react'
 
-export const metadata = { title: 'Settings' }
+const TIMEZONES = [
+  { label: 'Melbourne / Sydney (AEST)', value: 'Australia/Melbourne' },
+  { label: 'Brisbane (AEST no DST)', value: 'Australia/Brisbane' },
+  { label: 'Adelaide (ACST)', value: 'Australia/Adelaide' },
+  { label: 'Perth (AWST)', value: 'Australia/Perth' },
+  { label: 'Darwin (ACST no DST)', value: 'Australia/Darwin' },
+  { label: 'Hobart (AEST)', value: 'Australia/Hobart' },
+  { label: 'Auckland (NZST)', value: 'Pacific/Auckland' },
+  { label: 'London (GMT)', value: 'Europe/London' },
+  { label: 'New York (EST)', value: 'America/New_York' },
+  { label: 'Los Angeles (PST)', value: 'America/Los_Angeles' },
+]
 
-export default async function SettingsPage() {
+const CURRENCIES = [
+  { label: 'AUD — Australian Dollar', value: 'AUD' },
+  { label: 'NZD — New Zealand Dollar', value: 'NZD' },
+  { label: 'USD — US Dollar', value: 'USD' },
+  { label: 'GBP — British Pound', value: 'GBP' },
+  { label: 'EUR — Euro', value: 'EUR' },
+  { label: 'CAD — Canadian Dollar', value: 'CAD' },
+  { label: 'SGD — Singapore Dollar', value: 'SGD' },
+]
+
+export default function SettingsPage() {
+  const [profile, setProfile] = useState<any>(null)
+  const [business, setBusiness] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [currency, setCurrency] = useState('')
+  const [timezone, setTimezone] = useState('')
+  const [flashMessage, setFlashMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*, businesses(*)')
-    .eq('id', user.id)
-    .single()
+  useEffect(() => {
+    // Check for Stripe Connect redirect params
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('stripe_success') === 'true') {
+      setFlashMessage({ type: 'success', text: 'Stripe connected successfully! Your customers can now pay online.' })
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (params.get('stripe_error')) {
+      setFlashMessage({ type: 'error', text: `Stripe connection failed: ${params.get('stripe_error')}` })
+      window.history.replaceState({}, '', window.location.pathname)
+    }
 
-  const business = Array.isArray(profile?.businesses)
-    ? profile.businesses[0]
-    : profile?.businesses
+    fetchData()
+  }, [])
 
-  const stripeConnected = !!process.env.STRIPE_SECRET_KEY &&
-    !process.env.STRIPE_SECRET_KEY.includes('YOUR_KEY')
+  async function fetchData() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { window.location.href = '/auth/login'; return }
+
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('*, businesses(*)')
+      .eq('id', user.id)
+      .single()
+
+    const biz = Array.isArray(prof?.businesses) ? prof.businesses[0] : prof?.businesses
+    setProfile(prof)
+    setBusiness(biz)
+    setCurrency(biz?.currency || 'AUD')
+    setTimezone(biz?.timezone || 'Australia/Melbourne')
+  }
+
+  async function handleSaveBusinessInfo() {
+    if (!business) return
+    setSaving(true)
+    const { error } = await supabase
+      .from('businesses')
+      .update({ currency, timezone })
+      .eq('id', business.id)
+
+    setSaving(false)
+    if (!error) {
+      setSaved(true)
+      setBusiness({ ...business, currency, timezone })
+      setTimeout(() => setSaved(false), 3000)
+    }
+  }
+
+  const stripeConnected = business?.stripe_account_id && business?.stripe_charges_enabled
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -33,6 +97,16 @@ export default async function SettingsPage() {
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
             <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
+
+            {flashMessage && (
+              <div className={`px-4 py-3 rounded-lg text-sm ${
+                flashMessage.type === 'success'
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {flashMessage.text}
+              </div>
+            )}
 
             {/* Business info */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
@@ -48,21 +122,55 @@ export default async function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Currency</p>
-                  <p className="font-medium text-gray-900">{business?.currency}</p>
+                  <select
+                    value={currency}
+                    onChange={e => setCurrency(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    {CURRENCIES.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Timezone</p>
-                  <p className="font-medium text-gray-900">{business?.timezone}</p>
+                  <select
+                    value={timezone}
+                    onChange={e => setTimezone(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    {TIMEZONES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={handleSaveBusinessInfo}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {saving ? 'Saving...' : 'Save changes'}
+                </button>
+                {saved && <span className="text-xs text-green-600">✓ Saved</span>}
               </div>
             </div>
 
-            {/* Stripe */}
+            {/* Stripe Connect */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Stripe payments</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Accept credit card payments from customers</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[#635BFF] flex items-center justify-center flex-shrink-0">
+                    <svg width="18" height="18" viewBox="0 0 60 25" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M59.64 14.28h-8.06c.19 1.93 1.6 2.55 3.2 2.55 1.64 0 2.96-.37 4.05-.95v3.32a12.08 12.08 0 0 1-4.56.83c-4.43 0-7.26-2.96-7.26-7.67 0-4.3 2.49-7.71 6.54-7.71 4.05 0 6.09 3.41 6.09 7.66 0 .67-.07 1.17-.1 1.97zm-6.07-5.03c-1.25 0-2.07.88-2.25 2.3h4.48c-.19-1.43-.99-2.3-2.23-2.3zm-20.16 5.03h-8.06c.19 1.93 1.6 2.55 3.2 2.55 1.64 0 2.96-.37 4.05-.95v3.32a12.08 12.08 0 0 1-4.56.83c-4.43 0-7.26-2.96-7.26-7.67 0-4.3 2.49-7.71 6.54-7.71 4.05 0 6.09 3.41 6.09 7.66 0 .67-.07 1.17-.1 1.97zm-6.07-5.03c-1.25 0-2.07.88-2.25 2.3h4.48c-.19-1.43-.99-2.3-2.23-2.3zM14.56.37l-3.76.8v3.14L7.04 5.2v-.12C7.04 2.22 5.49.72 3.3.72 1.48.72 0 2.13 0 4.4c0 2.45 1.68 3.49 3.3 4.12v.07c-1.44.5-3.3 1.68-3.3 4.28C0 15.6 2.1 17.4 4.9 17.4c2.1 0 3.73-.73 4.64-1.96l.22 1.65h3.37V.37h1.43zm-8.52 10.6c-.71-.34-1.41-.71-1.41-1.59 0-.77.52-1.22 1.41-1.22.77 0 1.3.37 1.63.88v2.6c-.33-.22-.89-.46-1.63-.67zm.22 3.95c-1.07 0-1.77-.6-1.77-1.56 0-.95.74-1.55 1.77-1.55.7 0 1.3.3 1.63.71v1.74c-.33.37-.93.66-1.63.66z" fill="white"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Stripe payments</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Accept online payments from your customers</p>
+                  </div>
                 </div>
                 {stripeConnected ? (
                   <div className="flex items-center gap-1.5 text-green-600 text-xs font-medium">
@@ -70,41 +178,56 @@ export default async function SettingsPage() {
                     Connected
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5 text-amber-600 text-xs font-medium">
-                    <AlertCircle className="w-4 h-4" />
-                    Not connected
-                  </div>
+                  <span className="text-xs text-gray-400 font-medium">Not connected</span>
                 )}
               </div>
 
-              {!stripeConnected && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
-                  <p className="text-sm text-amber-800 font-medium">To connect Stripe:</p>
-                  <ol className="text-xs text-amber-700 space-y-2 list-decimal list-inside">
-                    <li>Go to <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">dashboard.stripe.com</a> and sign in</li>
-                    <li>Click <strong>Developers → API keys</strong></li>
-                    <li>Copy your <strong>Publishable key</strong> and <strong>Secret key</strong></li>
-                    <li>Open your <code className="bg-amber-100 px-1 rounded">.env.local</code> file and paste them in</li>
-                    <li>Restart your server with <code className="bg-amber-100 px-1 rounded">npm run dev</code></li>
-                  </ol>
-                  <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900">
-                    Open Stripe API keys <ExternalLink className="w-3 h-3" />
-                  </a>
+              {!business ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400 py-1">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
                 </div>
-              )}
-
-              {stripeConnected && (
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>✅ Secret key configured</p>
-                  <p>✅ Publishable key configured</p>
-                  <p className="mt-3 text-gray-400">
-                    To set up webhooks for automatic payment confirmation, add your webhook secret to .env.local.
-                    <a href="https://dashboard.stripe.com/webhooks" target="_blank" rel="noopener noreferrer"
-                      className="ml-1 text-brand-600 hover:underline">
-                      Manage webhooks →
+              ) : stripeConnected ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-1">Charges</p>
+                      <p className="text-sm font-medium text-green-700">✓ Enabled</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-1">Payouts</p>
+                      <p className={`text-sm font-medium ${business.stripe_payouts_enabled ? 'text-green-700' : 'text-amber-700'}`}>
+                        {business.stripe_payouts_enabled ? '✓ Enabled' : '⚠ Pending'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-xs text-gray-400 font-mono">{business.stripe_account_id}</p>
+                    <a
+                      href="https://dashboard.stripe.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-brand-600 hover:underline"
+                    >
+                      Stripe Dashboard <ExternalLink className="w-3 h-3" />
                     </a>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Connect your Stripe account so customers can pay invoices and bookings online.
+                    Funds go directly to your bank — BookdIn never touches your money.
                   </p>
+                  <a
+                    href="/api/stripe/connect"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#635BFF] hover:bg-[#5449e8] text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Connect Stripe account
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                  </a>
                 </div>
               )}
             </div>
@@ -134,14 +257,18 @@ export default async function SettingsPage() {
               <p className="text-xs text-brand-600 mb-3">Share this link with customers to let them book online</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-xs bg-white border border-brand-200 px-3 py-2 rounded-lg font-mono text-brand-700 truncate">
-                  {process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/book/{business?.booking_url_slug}
+                  {process.env.NEXT_PUBLIC_APP_URL || 'https://bookd-in.vercel.app'}/book/{business?.booking_url_slug}
                 </code>
-                <a href={`/book/${business?.booking_url_slug}`} target="_blank"
-                  className="text-xs px-3 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors">
+                <a
+                  href={`/book/${business?.booking_url_slug}`}
+                  target="_blank"
+                  className="text-xs px-3 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
+                >
                   Open
                 </a>
               </div>
             </div>
+
           </div>
         </main>
       </div>
