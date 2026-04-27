@@ -210,8 +210,8 @@ export async function POST(request: NextRequest) {
         frequency: 'one_time',
         customer_notes: noteParts.join(' | ') || null,
         payment_method: row.payment_method === 'CC' ? 'card' : 'other',
-        payment_status: isPaid ? 'paid' : 'unpaid',
-        paid_at: isPaid ? scheduledAt : null,
+        payment_status: 'unpaid',
+        paid_at: null,
         stripe_payment_intent_id: row.stripe_payment_method_id || null,
         booking_source: 'import',
       })
