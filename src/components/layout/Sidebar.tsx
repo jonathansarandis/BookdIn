@@ -8,14 +8,15 @@ import type { Profile, Business } from '@/types/database'
 import {
   LayoutDashboard, Calendar, ClipboardList, Users,
   DollarSign, FileText, BarChart2, Settings, Zap,
-  Tag, Gift, Share2, ChevronRight
+  Tag, Gift, Share2, ChevronRight, MessageSquare
 } from 'lucide-react'
 
 const NAV = [
   { href: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard },
-  { href: '/calendar',    label: 'Calendar',   icon: Calendar,       badge: 3 },
+  { href: '/calendar',    label: 'Calendar',   icon: Calendar },
   { href: '/jobs',        label: 'Jobs',       icon: ClipboardList },
   { href: '/customers',   label: 'Customers',  icon: Users },
+  { href: '/crm',         label: 'CRM',        icon: MessageSquare },
   { section: 'Financials' },
   { href: '/invoices',    label: 'Invoices',   icon: DollarSign },
   { href: '/quotes',      label: 'Quotes',     icon: FileText },
@@ -43,11 +44,11 @@ export default function Sidebar({ profile, business }: SidebarProps) {
       <div className="h-14 flex items-center gap-2.5 px-4 border-b border-gray-200">
         <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center flex-shrink-0">
           <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/>
           </svg>
         </div>
         <div>
-          <div className="text-sm font-semibold text-gray-900 leading-tight">Cleanly</div>
+          <div className="text-sm font-semibold text-gray-900 leading-tight">BookdIn</div>
           <div className="text-[10px] text-gray-400 uppercase tracking-wide">Pro Plan</div>
         </div>
       </div>

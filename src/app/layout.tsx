@@ -6,8 +6,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  title: { default: 'Cleanly', template: '%s · Cleanly' },
-  description: 'All-in-one operating system for service businesses',
+  title: { default: 'BookdIn', template: '%s · BookdIn' },
+  description: 'All-in-one booking and operations platform for service businesses',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
