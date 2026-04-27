@@ -14,7 +14,7 @@ import {
 const NAV = [
   { href: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard },
   { href: '/calendar',    label: 'Calendar',   icon: Calendar },
-  { href: '/jobs',        label: 'Jobs',       icon: ClipboardList },
+  { href: '/jobs',        label: 'Bookings',   icon: ClipboardList },
   { href: '/customers',   label: 'Customers',  icon: Users },
   { href: '/crm',         label: 'CRM',        icon: MessageSquare },
   { href: '/providers',   label: 'Providers',  icon: UserCog },

@@ -16,29 +16,40 @@ function parsePrice(priceStr: string): number {
 function parseDate(dateStr: string): string | null {
   if (!dateStr) return null
   try {
-    const [datePart, timePart] = dateStr.trim().split(' ')
-    const [month, day, year] = datePart.split('-')
-    const d = new Date(`${year}-${month}-${day}T${convertTime(timePart)}`)
-    if (isNaN(d.getTime())) return null
-    return d.toISOString()
-  } catch { return null }
-}
+    // Format: "01-30-2026 11:00AM" or "01-30-2026 9:00AM"
+    const trimmed = dateStr.trim()
+    const spaceIdx = trimmed.lastIndexOf(' ')
+    const datePart = trimmed.substring(0, spaceIdx)
+    const timePart = trimmed.substring(spaceIdx + 1)
 
-function convertTime(timeStr: string): string {
-  if (!timeStr) return '09:00:00'
-  const isPM = timeStr.includes('PM')
-  const isAM = timeStr.includes('AM')
-  const clean = timeStr.replace('AM', '').replace('PM', '').trim()
-  const [hours, minutes] = clean.split(':')
-  let h = parseInt(hours)
-  if (isPM && h !== 12) h += 12
-  if (isAM && h === 12) h = 0
-  return `${h.toString().padStart(2, '0')}:${minutes || '00'}:00`
+    const [month, day, year] = datePart.split('-')
+    const isPM = timePart.toUpperCase().includes('PM')
+    const isAM = timePart.toUpperCase().includes('AM')
+    const cleanTime = timePart.replace(/AM|PM/gi, '').trim()
+    const [hoursStr, minutesStr] = cleanTime.split(':')
+    let hours = parseInt(hoursStr)
+    const minutes = parseInt(minutesStr || '0')
+
+    if (isPM && hours !== 12) hours += 12
+    if (isAM && hours === 12) hours = 0
+
+    // Create date in Melbourne timezone (AEST = UTC+10, AEDT = UTC+11)
+    // We store the local time as-is in UTC to avoid double conversion
+    const paddedMonth = month.padStart(2, '0')
+    const paddedDay = day.padStart(2, '0')
+    const paddedHours = hours.toString().padStart(2, '0')
+    const paddedMins = minutes.toString().padStart(2, '0')
+
+    // Store as local time string - the app displays in business timezone
+    return `${year}-${paddedMonth}-${paddedDay}T${paddedHours}:${paddedMins}:00.000Z`
+  } catch (e) {
+    return null
+  }
 }
 
 function parsePhone(phone: string): string | null {
   if (!phone) return null
-  return phone.replace(/^\+61/, '0').trim()
+  return phone.replace(/^\+61/, '0').replace(/\s/g, '').trim()
 }
 
 function parseCSVLine(line: string): string[] {
@@ -55,49 +66,42 @@ function parseCSVLine(line: string): string[] {
 }
 
 export async function POST(request: NextRequest) {
-  // Get token from Authorization header
   const authHeader = request.headers.get('authorization')
   const token = authHeader?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (!token) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Verify the token and get the user
   const { data: { user }, error: authError } = await serviceClient.auth.getUser(token)
+  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Get business_id
-  const { data: profile } = await serviceClient
-    .from('profiles')
-    .select('business_id')
-    .eq('id', user.id)
-    .single()
-
+  const { data: profile } = await serviceClient.from('profiles').select('business_id').eq('id', user.id).single()
   const businessId = profile?.business_id
-  if (!businessId) {
-    return NextResponse.json({ error: 'Business not found' }, { status: 404 })
-  }
+  if (!businessId) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
 
   const formData = await request.formData()
   const file = formData.get('file') as File
+  const batchStart = parseInt(formData.get('batch_start') as string || '1')
+  const batchSize = 50
 
-  if (!file) {
-    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-  }
+  if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
   const text = await file.text()
-  const lines = text.split('\n').filter(l => l.trim())
-  const headers = parseCSVLine(lines[0])
+  const allLines = text.split('\n').filter(l => l.trim())
+  const headers = parseCSVLine(allLines[0])
+  const dataLines = allLines.slice(1)
+  const totalRows = dataLines.length
+
+  // Process only this batch
+  const batchLines = dataLines.slice(batchStart - 1, batchStart - 1 + batchSize)
 
   const { data: services } = await serviceClient.from('services').select('id, name').eq('business_id', businessId)
   const { data: providers } = await serviceClient.from('providers').select('id, display_name').eq('business_id', businessId)
 
   const results = {
-    total: lines.length - 1,
+    total: totalRows,
+    batch_start: batchStart,
+    batch_size: batchLines.length,
+    has_more: batchStart - 1 + batchSize < totalRows,
+    next_batch_start: batchStart + batchSize,
     customers_created: 0,
     customers_existing: 0,
     jobs_created: 0,
@@ -105,9 +109,10 @@ export async function POST(request: NextRequest) {
     errors: [] as string[],
   }
 
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue
-    const values = parseCSVLine(lines[i])
+  for (let i = 0; i < batchLines.length; i++) {
+    const lineNum = batchStart + i
+    if (!batchLines[i].trim()) continue
+    const values = parseCSVLine(batchLines[i])
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => { row[h.trim()] = values[idx] || '' })
 
@@ -126,21 +131,21 @@ export async function POST(request: NextRequest) {
           customerId = existing.id
           results.customers_existing++
         } else {
-          const { data: newCustomer, error: ce } = await serviceClient
+          const { data: newCx, error: ce } = await serviceClient
             .from('customers')
             .insert({ business_id: businessId, full_name: fullName, email, phone: parsePhone(row.phone_number), stripe_customer_id: row.stripe_customer_id || null })
             .select('id').single()
-          if (ce || !newCustomer) { results.errors.push(`Row ${i}: ${ce?.message}`); continue }
-          customerId = newCustomer.id
+          if (ce || !newCx) { results.errors.push(`Row ${lineNum}: ${ce?.message}`); continue }
+          customerId = newCx.id
           results.customers_created++
         }
       } else {
-        const { data: newCustomer } = await serviceClient
+        const { data: newCx } = await serviceClient
           .from('customers')
           .insert({ business_id: businessId, full_name: fullName, phone: parsePhone(row.phone_number) })
           .select('id').single()
-        if (!newCustomer) continue
-        customerId = newCustomer.id
+        if (!newCx) continue
+        customerId = newCx.id
         results.customers_created++
       }
 
@@ -160,13 +165,13 @@ export async function POST(request: NextRequest) {
 
       // Match service
       let serviceId: string | null = null
-      const serviceField = row.services?.toLowerCase() || ''
+      const sf = row.services?.toLowerCase() || ''
       if (services?.length) {
         const match = services.find(s => {
-          const sName = s.name.toLowerCase()
-          if (sName.includes('end of lease') && (serviceField.includes('end') || serviceField.includes('lease'))) return true
-          if (sName.includes('move in') && serviceField.includes('move')) return true
-          if (sName.includes('deep') && serviceField.includes('deep')) return true
+          const sn = s.name.toLowerCase()
+          if (sn.includes('end of lease') && (sf.includes('end') || sf.includes('lease'))) return true
+          if (sn.includes('move in') && sf.includes('move')) return true
+          if (sn.includes('deep') && sf.includes('deep')) return true
           return false
         }) || services.find(s => s.name.toLowerCase().includes('general')) || services[0]
         serviceId = match?.id || null
@@ -175,17 +180,16 @@ export async function POST(request: NextRequest) {
       // Match provider
       let providerId: string | null = null
       if (row.assigned_to?.trim() && providers?.length) {
-        const provName = row.assigned_to.trim().toLowerCase()
+        const pn = row.assigned_to.trim().toLowerCase()
         const match = providers.find(p =>
-          p.display_name.toLowerCase().includes(provName.split(' ')[0]) ||
-          provName.includes(p.display_name.toLowerCase().split(' ')[0])
+          p.display_name.toLowerCase().includes(pn.split(' ')[0]) ||
+          pn.includes(p.display_name.toLowerCase().split(' ')[0])
         )
         providerId = match?.id || null
       }
 
       const totalPrice = parsePrice(row.price)
       const isPaid = row.status?.toLowerCase() === 'paid'
-
       const noteParts = []
       if (row.services) noteParts.push(`Service: ${row.services}`)
       if (row.extras) noteParts.push(`Extras: ${row.extras}`)
@@ -213,13 +217,13 @@ export async function POST(request: NextRequest) {
       })
 
       if (jobError) {
-        results.errors.push(`Row ${i}: ${jobError.message}`)
+        results.errors.push(`Row ${lineNum}: ${jobError.message}`)
         results.jobs_skipped++
       } else {
         results.jobs_created++
       }
     } catch (err: any) {
-      results.errors.push(`Row ${i}: ${err.message}`)
+      results.errors.push(`Row ${lineNum}: ${err.message}`)
     }
   }
 

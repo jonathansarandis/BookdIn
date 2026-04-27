@@ -12,7 +12,7 @@ import Link from 'next/link'
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard':    'Dashboard',
   '/calendar':     'Calendar',
-  '/jobs':         'Jobs',
+  '/jobs':         'Bookings',
   '/customers':    'Customers',
   '/invoices':     'Invoices',
   '/quotes':       'Quotes',

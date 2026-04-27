@@ -12,6 +12,7 @@ export default function ImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [fileName, setFileName] = useState('')
   const [accessToken, setAccessToken] = useState('')
+  const [progress, setProgress] = useState({ current: 0, total: 0, batch: 0 })
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -33,25 +34,60 @@ export default function ImportPage() {
     setError(null)
     setResults(null)
 
-    const formData = new FormData()
-    formData.append('file', file)
-
-    const res = await fetch('/api/import/bookings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: formData,
-    })
-
-    const data = await res.json()
-    setImporting(false)
-
-    if (!res.ok) {
-      setError(data.error || 'Import failed')
-    } else {
-      setResults(data)
+    const accumulated = {
+      total: 0,
+      customers_created: 0,
+      customers_existing: 0,
+      jobs_created: 0,
+      jobs_skipped: 0,
+      errors: [] as string[],
     }
+
+    let batchStart = 1
+    let hasMore = true
+
+    while (hasMore) {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('batch_start', batchStart.toString())
+
+      try {
+        const res = await fetch('/api/import/bookings', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          body: formData,
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          setError(data.error || 'Import failed')
+          break
+        }
+
+        accumulated.total = data.total
+        accumulated.customers_created += data.customers_created
+        accumulated.customers_existing += data.customers_existing
+        accumulated.jobs_created += data.jobs_created
+        accumulated.jobs_skipped += data.jobs_skipped
+        accumulated.errors.push(...(data.errors || []))
+
+        setProgress({
+          current: Math.min(batchStart + data.batch_size - 1, data.total),
+          total: data.total,
+          batch: Math.ceil(batchStart / 50),
+        })
+
+        hasMore = data.has_more
+        batchStart = data.next_batch_start
+      } catch (err: any) {
+        setError(err.message)
+        break
+      }
+    }
+
+    setImporting(false)
+    setResults(accumulated)
   }
 
   return (
@@ -66,7 +102,7 @@ export default function ImportPage() {
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-amber-800">Before importing</p>
-            <p className="text-sm text-amber-700 mt-1">Make sure you have added your services in the Services page first. The import will try to match jobs to your existing services.</p>
+            <p className="text-sm text-amber-700 mt-1">Make sure you have added your services in the Services page first. The import will try to match bookings to your existing services.</p>
           </div>
         </div>
       </div>
@@ -86,7 +122,7 @@ export default function ImportPage() {
           <p className="font-medium text-gray-700">What gets imported:</p>
           <p>✓ Customers (name, email, phone) — duplicates skipped</p>
           <p>✓ Service addresses</p>
-          <p>✓ Jobs with dates, prices, payment status</p>
+          <p>✓ Bookings with dates, prices, payment status</p>
           <p>✓ Provider assignments (matched by name)</p>
           <p>✓ Stripe customer IDs preserved</p>
         </div>
@@ -108,13 +144,28 @@ export default function ImportPage() {
           {fileName && <p className="text-xs text-brand-600 mt-2 font-medium">{fileName}</p>}
         </div>
 
+        {importing && progress.total > 0 && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Processing rows {progress.current} of {progress.total}</span>
+              <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-brand-500 rounded-full transition-all"
+                style={{ width: `${(progress.current / progress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <button
           onClick={handleImport}
           disabled={importing || !fileName || !ready}
           className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
           {importing && <Loader2 className="w-4 h-4 animate-spin" />}
-          {importing ? 'Importing... this may take a few minutes' : 'Start import'}
+          {importing ? `Importing batch ${progress.batch}...` : 'Start import'}
         </button>
       </div>
 
@@ -138,8 +189,8 @@ export default function ImportPage() {
               { label: 'Total rows', value: results.total },
               { label: 'Customers created', value: results.customers_created },
               { label: 'Existing customers', value: results.customers_existing },
-              { label: 'Jobs imported', value: results.jobs_created },
-              { label: 'Jobs skipped', value: results.jobs_skipped },
+              { label: 'Bookings imported', value: results.jobs_created },
+              { label: 'Bookings skipped', value: results.jobs_skipped },
               { label: 'Errors', value: results.errors?.length || 0 },
             ].map(stat => (
               <div key={stat.label} className="bg-gray-50 rounded-lg p-3">
@@ -152,9 +203,10 @@ export default function ImportPage() {
             <div>
               <p className="text-xs font-medium text-gray-700 mb-2">Errors ({results.errors.length})</p>
               <div className="bg-red-50 rounded-lg p-3 max-h-40 overflow-y-auto space-y-1">
-                {results.errors.map((err: string, i: number) => (
+                {results.errors.slice(0, 20).map((err: string, i: number) => (
                   <p key={i} className="text-xs text-red-700">{err}</p>
                 ))}
+                {results.errors.length > 20 && <p className="text-xs text-red-400">...and {results.errors.length - 20} more</p>}
               </div>
             </div>
           )}
