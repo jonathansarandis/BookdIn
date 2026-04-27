@@ -8,7 +8,7 @@ import type { Profile, Business } from '@/types/database'
 import {
   LayoutDashboard, Calendar, ClipboardList, Users,
   DollarSign, FileText, BarChart2, Settings, Zap,
-  Tag, Gift, Share2, ChevronRight, MessageSquare
+  Tag, Gift, Share2, ChevronRight, MessageSquare, Briefcase
 } from 'lucide-react'
 
 const NAV = [
@@ -17,6 +17,7 @@ const NAV = [
   { href: '/jobs',        label: 'Jobs',       icon: ClipboardList },
   { href: '/customers',   label: 'Customers',  icon: Users },
   { href: '/crm',         label: 'CRM',        icon: MessageSquare },
+  { href: '/services',    label: 'Services',   icon: Briefcase },
   { section: 'Financials' },
   { href: '/invoices',    label: 'Invoices',   icon: DollarSign },
   { href: '/quotes',      label: 'Quotes',     icon: FileText },
