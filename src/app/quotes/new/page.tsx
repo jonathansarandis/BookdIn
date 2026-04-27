@@ -12,12 +12,15 @@ export default function NewQuotePage() {
   const supabase = createClient()
   const [customers, setCustomers] = useState<any[]>([])
   const [services, setServices] = useState<any[]>([])
+  const [extras, setExtras] = useState<any[]>([])
+  const [selectedExtras, setSelectedExtras] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [businessId, setBusinessId] = useState('')
 
   const [form, setForm] = useState({
     customer_id: '',
-    subtotal: '',
+    service_id: '',
+    manual_subtotal: '',
     tax_amount: '',
     valid_until: '',
     notes: '',
@@ -38,7 +41,7 @@ export default function NewQuotePage() {
 
       const [{ data: custs }, { data: svcs }] = await Promise.all([
         supabase.from('customers').select('id, full_name').eq('business_id', profile?.business_id).order('full_name'),
-        supabase.from('services').select('id, name, base_price').eq('business_id', profile?.business_id).order('name'),
+        supabase.from('services').select('*').eq('business_id', profile?.business_id).eq('is_active', true).order('sort_order'),
       ])
 
       setCustomers(custs || [])
@@ -47,9 +50,33 @@ export default function NewQuotePage() {
     load()
   }, [])
 
-  const subtotalCents = Math.round(parseFloat(form.subtotal || '0') * 100)
+  useEffect(() => {
+    if (!form.service_id) { setExtras([]); setSelectedExtras([]); return }
+    async function loadExtras() {
+      const { data } = await supabase
+        .from('service_extras')
+        .select('*')
+        .eq('service_id', form.service_id)
+        .eq('is_active', true)
+        .order('sort_order')
+      setExtras(data || [])
+      setSelectedExtras([])
+    }
+    loadExtras()
+  }, [form.service_id])
+
+  const selectedService = services.find(s => s.id === form.service_id)
+  const serviceBasePriceCents = selectedService?.base_price || 0
+  const extrasTotalCents = extras.filter(e => selectedExtras.includes(e.id)).reduce((sum, e) => sum + (e.price || 0), 0)
+  const subtotalCents = form.service_id
+    ? serviceBasePriceCents + extrasTotalCents
+    : Math.round(parseFloat(form.manual_subtotal || '0') * 100)
   const taxCents = Math.round(parseFloat(form.tax_amount || '0') * 100)
   const totalCents = subtotalCents + taxCents
+
+  function toggleExtra(id: string) {
+    setSelectedExtras(prev => prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id])
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -72,9 +99,7 @@ export default function NewQuotePage() {
       .single()
 
     setSaving(false)
-    if (!error && data) {
-      router.push(`/quotes/${data.id}`)
-    }
+    if (!error && data) router.push(`/quotes/${data.id}`)
   }
 
   return (
@@ -87,62 +112,110 @@ export default function NewQuotePage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+
         {/* Customer */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <h2 className="font-semibold text-gray-900">Customer</h2>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Customer *</label>
-            <select
-              required
-              value={form.customer_id}
-              onChange={e => setForm({ ...form, customer_id: e.target.value })}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="">Select a customer...</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.full_name}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            required
+            value={form.customer_id}
+            onChange={e => setForm({ ...form, customer_id: e.target.value })}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">Select a customer...</option>
+            {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+          </select>
         </div>
 
-        {/* Pricing */}
+        {/* Service & Add-ons */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-          <h2 className="font-semibold text-gray-900">Pricing</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <h2 className="font-semibold text-gray-900">Service</h2>
+          <select
+            value={form.service_id}
+            onChange={e => setForm({ ...form, service_id: e.target.value })}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">Select a service...</option>
+            {services.map(s => (
+              <option key={s.id} value={s.id}>{s.name} — ${(s.base_price / 100).toFixed(2)}</option>
+            ))}
+          </select>
+
+          {extras.length > 0 && (
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Subtotal ($) *</label>
+              <p className="text-xs text-gray-500 mb-2">Add-ons</p>
+              <div className="space-y-2">
+                {extras.map(extra => (
+                  <label key={extra.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedExtras.includes(extra.id)}
+                        onChange={() => toggleExtra(extra.id)}
+                        className="w-4 h-4 text-brand-600 rounded border-gray-300"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{extra.name}</p>
+                        {extra.description && <p className="text-xs text-gray-500">{extra.description}</p>}
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">+${(extra.price / 100).toFixed(2)}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!form.service_id && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Or enter price manually ($) *</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                value={form.subtotal}
-                onChange={e => setForm({ ...form, subtotal: e.target.value })}
+                type="number" min="0" step="0.01"
+                value={form.manual_subtotal}
+                onChange={e => setForm({ ...form, manual_subtotal: e.target.value })}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 placeholder="0.00"
               />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Tax ($)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.tax_amount}
-                onChange={e => setForm({ ...form, tax_amount: e.target.value })}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-          {subtotalCents > 0 && (
-            <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-100">
-              <span>Total</span>
-              <span>${(totalCents / 100).toFixed(2)}</span>
             </div>
           )}
         </div>
+
+        {/* Pricing summary */}
+        {subtotalCents > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Pricing summary</h2>
+            {selectedService && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">{selectedService.name}</span>
+                <span>${(serviceBasePriceCents / 100).toFixed(2)}</span>
+              </div>
+            )}
+            {extras.filter(e => selectedExtras.includes(e.id)).map(e => (
+              <div key={e.id} className="flex justify-between text-sm">
+                <span className="text-gray-500">{e.name}</span>
+                <span>+${(e.price / 100).toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between text-sm pt-1 border-t border-gray-100">
+              <span className="text-gray-500">Subtotal</span>
+              <span>${(subtotalCents / 100).toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500">Tax ($)</span>
+              <input
+                type="number" min="0" step="0.01"
+                value={form.tax_amount}
+                onChange={e => setForm({ ...form, tax_amount: e.target.value })}
+                className="w-28 text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="0.00"
+              />
+            </div>
+            <div className="flex justify-between text-sm font-semibold pt-1 border-t border-gray-100">
+              <span>Total</span>
+              <span>${(totalCents / 100).toFixed(2)}</span>
+            </div>
+          </div>
+        )}
 
         {/* Details */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
@@ -150,8 +223,7 @@ export default function NewQuotePage() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Valid until</label>
             <input
-              type="date"
-              value={form.valid_until}
+              type="date" value={form.valid_until}
               onChange={e => setForm({ ...form, valid_until: e.target.value })}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
@@ -159,8 +231,7 @@ export default function NewQuotePage() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">Notes</label>
             <textarea
-              rows={3}
-              value={form.notes}
+              rows={3} value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
               placeholder="Any additional details..."
