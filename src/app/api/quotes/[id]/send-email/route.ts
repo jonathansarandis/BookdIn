@@ -33,28 +33,35 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: profile } = await supabase
+  // Get business_id from profile
+  const { data: profile } = await serviceClient
     .from('profiles')
-    .select('business_id')
+    .select('business_id, email, full_name')
     .eq('id', user.id)
     .single()
 
+  if (!profile?.business_id) {
+    return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+  }
+
+  // Get business name
+  const { data: business } = await serviceClient
+    .from('businesses')
+    .select('id, name')
+    .eq('id', profile.business_id)
+    .single()
+
+  // Get quote with customer
   const { data: quote, error: quoteError } = await serviceClient
     .from('quotes')
-    .select(`
-      *,
-      customer:customers(id, full_name, email),
-      business:businesses(id, name, email)
-    `)
+    .select('*, customer:customers(id, full_name, email)')
     .eq('id', params.id)
+    .eq('business_id', profile.business_id)
     .single()
 
   if (quoteError || !quote) {
+    console.error('Quote fetch error:', quoteError)
     return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
-  }
-
-  if (quote.business_id !== profile?.business_id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
   if (!quote.customer?.email) {
@@ -62,14 +69,8 @@ export async function POST(
   }
 
   const quoteRef = `QT-${quote.id.slice(0, 8).toUpperCase()}`
-  const businessName = quote.business?.name || 'BookdIn'
-  const tenantEmail = quote.business?.email || null
-
-  // From: business name via BookdIn's sending domain
-  // Reply-To: tenant's own email so customer replies go directly to them
-  const fromAddress = `${businessName} <info@cleanfreaks.au>`
-  // TODO: When BookdIn has its own domain, change to:
-  // const fromAddress = `${businessName} <quotes@bookdin.com>`
+  const businessName = business?.name || 'BookdIn'
+  const tenantEmail = profile.email // owner's email for reply-to
 
   const emailHtml = `
 <!DOCTYPE html>
@@ -172,9 +173,8 @@ export async function POST(
 
   try {
     await resend.emails.send({
-      from: fromAddress,
-      // Reply-To ensures customer replies go directly to the tenant, not to BookdIn
-      reply_to: tenantEmail || fromAddress,
+      from: `${businessName} <info@cleanfreaks.au>`,
+      reply_to: tenantEmail,
       to: quote.customer.email,
       subject: `Your quote from ${businessName} — ${quoteRef}`,
       html: emailHtml,
