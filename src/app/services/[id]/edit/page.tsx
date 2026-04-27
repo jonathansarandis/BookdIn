@@ -104,7 +104,6 @@ export default function EditServicePage() {
       if (roomPricing?.length) {
         const beds = roomPricing.filter(r => r.type === 'bedroom').sort((a, b) => a.count - b.count)
         const baths = roomPricing.filter(r => r.type === 'bathroom').sort((a, b) => a.count - b.count)
-
         if (beds.length) setBedroomPrices(beds.map(b => ({ count: b.count, price: (b.price / 100).toFixed(2) })))
         if (baths.length) setBathroomPrices(baths.map(b => ({ count: b.count, price: (b.price / 100).toFixed(2) })))
       }
@@ -114,9 +113,7 @@ export default function EditServicePage() {
     load()
   }, [serviceId])
 
-  function addExtra() {
-    setExtras(e => [...e, { name: '', price: '', duration: '0' }])
-  }
+  function addExtra() { setExtras(e => [...e, { name: '', price: '', duration: '0' }]) }
 
   function updateExtra(i: number, field: string, value: string) {
     setExtras(e => e.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex))
@@ -181,28 +178,15 @@ export default function EditServicePage() {
         }
       }
 
-      // Save room pricing if room_based
+      // Save room pricing via API route (uses service role to bypass RLS)
       if (form.pricing_type === 'room_based') {
-        await supabase.from('room_pricing').delete().eq('service_id', serviceId)
-
-        const roomRows = [
-          ...bedroomPrices.map(b => ({
-            service_id: serviceId,
-            business_id: businessId,
-            type: 'bedroom',
-            count: b.count,
-            price: Math.round(parseFloat(b.price || '0') * 100),
-          })),
-          ...bathroomPrices.map(b => ({
-            service_id: serviceId,
-            business_id: businessId,
-            type: 'bathroom',
-            count: b.count,
-            price: Math.round(parseFloat(b.price || '0') * 100),
-          })),
-        ]
-
-        await supabase.from('room_pricing').insert(roomRows)
+        const res = await fetch(`/api/services/${serviceId}/room-pricing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bedroomPrices, bathroomPrices }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to save room pricing')
       }
 
       router.push('/services')
@@ -265,18 +249,15 @@ export default function EditServicePage() {
         {/* Pricing */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <h3 className="text-sm font-semibold text-gray-900">Pricing</h3>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">Pricing type *</label>
-            <div className="grid grid-cols-2 gap-2">
-              {PRICING_TYPES.map(pt => (
-                <button key={pt.value} type="button" onClick={() => update('pricing_type', pt.value)}
-                  className={`p-3 rounded-lg border text-left transition-colors ${form.pricing_type === pt.value
-                    ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                  <div className={`text-xs font-medium ${form.pricing_type === pt.value ? 'text-brand-700' : 'text-gray-900'}`}>{pt.label}</div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">{pt.desc}</div>
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-2 gap-2">
+            {PRICING_TYPES.map(pt => (
+              <button key={pt.value} type="button" onClick={() => update('pricing_type', pt.value)}
+                className={`p-3 rounded-lg border text-left transition-colors ${form.pricing_type === pt.value
+                  ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <div className={`text-xs font-medium ${form.pricing_type === pt.value ? 'text-brand-700' : 'text-gray-900'}`}>{pt.label}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{pt.desc}</div>
+              </button>
+            ))}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -287,60 +268,50 @@ export default function EditServicePage() {
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
                 <input required type="number" min="0" step="0.01" value={form.base_price}
-                  onChange={e => update('base_price', e.target.value)}
-                  placeholder="0.00"
-                  className="w-full pl-7 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+                  onChange={e => update('base_price', e.target.value)} placeholder="0.00"
+                  className="w-full pl-7 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Duration (minutes) *</label>
               <input required type="number" min="15" step="15" value={form.duration_minutes}
-                onChange={e => update('duration_minutes', e.target.value)}
-                className={inputClass} />
+                onChange={e => update('duration_minutes', e.target.value)} className={inputClass} />
             </div>
           </div>
 
-          {/* Room-based pricing table */}
+          {/* Room-based pricing */}
           {form.pricing_type === 'room_based' && (
             <div className="space-y-4 pt-2 border-t border-gray-100">
-              <p className="text-xs text-gray-500">Set the additional price for each bedroom and bathroom count. Base price = 1 bed / 1 bath.</p>
-              
+              <p className="text-xs text-gray-500">Set the additional price added for each bedroom/bathroom count. Base price = 1 bed / 1 bath.</p>
               <div>
-                <p className="text-xs font-medium text-gray-700 mb-2">Bedroom pricing</p>
+                <p className="text-xs font-medium text-gray-700 mb-2">Bedroom pricing (additional cost)</p>
                 <div className="space-y-2">
                   {bedroomPrices.map((bp, i) => (
                     <div key={i} className="flex items-center gap-3">
                       <span className="text-sm text-gray-600 w-24 flex-shrink-0">{bp.count} bedroom{bp.count > 1 ? 's' : ''}</span>
                       <div className="relative flex-1">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                        <input
-                          type="number" min="0" step="0.01"
-                          value={bp.price}
+                        <input type="number" min="0" step="0.01" value={bp.price}
                           onChange={e => setBedroomPrices(prev => prev.map((p, idx) => idx === i ? { ...p, price: e.target.value } : p))}
                           className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                          placeholder="0.00"
-                        />
+                          placeholder="0.00" />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-
               <div>
-                <p className="text-xs font-medium text-gray-700 mb-2">Bathroom pricing</p>
+                <p className="text-xs font-medium text-gray-700 mb-2">Bathroom pricing (additional cost)</p>
                 <div className="space-y-2">
                   {bathroomPrices.map((bp, i) => (
                     <div key={i} className="flex items-center gap-3">
                       <span className="text-sm text-gray-600 w-24 flex-shrink-0">{bp.count} bathroom{bp.count > 1 ? 's' : ''}</span>
                       <div className="relative flex-1">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                        <input
-                          type="number" min="0" step="0.01"
-                          value={bp.price}
+                        <input type="number" min="0" step="0.01" value={bp.price}
                           onChange={e => setBathroomPrices(prev => prev.map((p, idx) => idx === i ? { ...p, price: e.target.value } : p))}
                           className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                          placeholder="0.00"
-                        />
+                          placeholder="0.00" />
                       </div>
                     </div>
                   ))}
@@ -360,9 +331,8 @@ export default function EditServicePage() {
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
                   <input type="number" min="0" step="0.01" value={form[f.field as keyof typeof form] as string}
-                    onChange={e => update(f.field, e.target.value)}
-                    placeholder="0"
-                    className="w-full pl-7 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent" />
+                    onChange={e => update(f.field, e.target.value)} placeholder="0"
+                    className="w-full pl-7 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 </div>
               </div>
             ))}
@@ -391,14 +361,12 @@ export default function EditServicePage() {
               <div className="col-span-3 relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
                 <input type="number" min="0" step="0.01" value={extra.price}
-                  onChange={e => updateExtra(i, 'price', e.target.value)}
-                  placeholder="0.00"
+                  onChange={e => updateExtra(i, 'price', e.target.value)} placeholder="0.00"
                   className="w-full pl-7 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <div className="col-span-2">
                 <input type="number" min="0" step="5" value={extra.duration}
-                  onChange={e => updateExtra(i, 'duration', e.target.value)}
-                  placeholder="min"
+                  onChange={e => updateExtra(i, 'duration', e.target.value)} placeholder="min"
                   className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <div className="col-span-1 flex justify-center">
