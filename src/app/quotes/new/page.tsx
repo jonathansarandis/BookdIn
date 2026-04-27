@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, UserPlus } from 'lucide-react'
 
 export default function NewQuotePage() {
   const router = useRouter()
@@ -15,7 +15,9 @@ export default function NewQuotePage() {
   const [extras, setExtras] = useState<any[]>([])
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  const [creatingCustomer, setCreatingCustomer] = useState(false)
   const [businessId, setBusinessId] = useState('')
+  const [showNewCustomer, setShowNewCustomer] = useState(false)
 
   const [form, setForm] = useState({
     customer_id: '',
@@ -24,6 +26,12 @@ export default function NewQuotePage() {
     tax_amount: '',
     valid_until: '',
     notes: '',
+  })
+
+  const [newCustomer, setNewCustomer] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
   })
 
   useEffect(() => {
@@ -64,6 +72,31 @@ export default function NewQuotePage() {
     }
     loadExtras()
   }, [form.service_id])
+
+  async function handleCreateCustomer() {
+    if (!newCustomer.full_name.trim()) return
+    setCreatingCustomer(true)
+
+    const { data, error } = await supabase
+      .from('customers')
+      .insert({
+        business_id: businessId,
+        full_name: newCustomer.full_name.trim(),
+        email: newCustomer.email.trim() || null,
+        phone: newCustomer.phone.trim() || null,
+      })
+      .select('id, full_name')
+      .single()
+
+    setCreatingCustomer(false)
+
+    if (!error && data) {
+      setCustomers(prev => [...prev, data].sort((a, b) => a.full_name.localeCompare(b.full_name)))
+      setForm(prev => ({ ...prev, customer_id: data.id }))
+      setNewCustomer({ full_name: '', email: '', phone: '' })
+      setShowNewCustomer(false)
+    }
+  }
 
   const selectedService = services.find(s => s.id === form.service_id)
   const serviceBasePriceCents = selectedService?.base_price || 0
@@ -116,15 +149,91 @@ export default function NewQuotePage() {
         {/* Customer */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <h2 className="font-semibold text-gray-900">Customer</h2>
+
           <select
-            required
             value={form.customer_id}
-            onChange={e => setForm({ ...form, customer_id: e.target.value })}
+            onChange={e => {
+              if (e.target.value === '__new__') {
+                setShowNewCustomer(true)
+                setForm(prev => ({ ...prev, customer_id: '' }))
+              } else {
+                setShowNewCustomer(false)
+                setForm(prev => ({ ...prev, customer_id: e.target.value }))
+              }
+            }}
             className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="">Select a customer...</option>
+            <option value="__new__">+ New customer</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
           </select>
+
+          {/* New customer inline form */}
+          {showNewCustomer && (
+            <div className="border border-brand-200 bg-brand-50 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <UserPlus className="w-4 h-4 text-brand-600" />
+                <p className="text-sm font-medium text-brand-700">New customer details</p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Full name *</label>
+                <input
+                  type="text"
+                  value={newCustomer.full_name}
+                  onChange={e => setNewCustomer(prev => ({ ...prev, full_name: e.target.value }))}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  placeholder="Jane Smith"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={newCustomer.email}
+                    onChange={e => setNewCustomer(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    placeholder="jane@email.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newCustomer.phone}
+                    onChange={e => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    placeholder="04xx xxx xxx"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleCreateCustomer}
+                  disabled={creatingCustomer || !newCustomer.full_name.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {creatingCustomer && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {creatingCustomer ? 'Adding...' : 'Add customer'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowNewCustomer(false); setNewCustomer({ full_name: '', email: '', phone: '' }) }}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Show selected customer confirmation */}
+          {form.customer_id && !showNewCustomer && (
+            <p className="text-xs text-green-600 font-medium">
+              ✓ {customers.find(c => c.id === form.customer_id)?.full_name}
+            </p>
+          )}
         </div>
 
         {/* Service & Add-ons */}
@@ -168,7 +277,7 @@ export default function NewQuotePage() {
 
           {!form.service_id && (
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Or enter price manually ($) *</label>
+              <label className="block text-xs text-gray-500 mb-1">Or enter price manually ($)</label>
               <input
                 type="number" min="0" step="0.01"
                 value={form.manual_subtotal}
