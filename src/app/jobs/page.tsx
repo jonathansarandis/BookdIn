@@ -5,7 +5,7 @@ import { Plus, ClipboardList } from 'lucide-react'
 import { formatCurrency, formatDate, JOB_STATUS_COLORS, JOB_STATUS_LABELS, getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
-export const metadata = { title: 'Jobs' }
+export const metadata = { title: 'Bookings' }
 
 export default async function JobsPage({
   searchParams,
@@ -42,7 +42,7 @@ export default async function JobsPage({
   const { data: jobs } = await query.limit(50)
 
   const FILTERS = [
-    { label: 'All jobs', value: '' },
+    { label: 'All bookings', value: '' },
     { label: 'Today', value: 'today' },
     { label: 'This week', value: 'upcoming' },
     { label: 'Unassigned', value: 'unassigned' },
@@ -61,7 +61,7 @@ export default async function JobsPage({
     <div className="max-w-6xl mx-auto space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Jobs</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Bookings</h2>
           <p className="text-sm text-gray-500 mt-0.5">{jobs?.length || 0} jobs</p>
         </div>
         <Link href="/booking"

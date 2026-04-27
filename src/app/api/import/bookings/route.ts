@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
         address_id: addressId,
         service_id: serviceId,
         provider_id: providerId,
-        status: isPaid ? 'completed' : 'pending',
+        status: isPaid && new Date(scheduledAt) < new Date() ? 'completed' : 'pending',
         scheduled_at: scheduledAt,
         duration_minutes: 120,
         price: totalPrice,
