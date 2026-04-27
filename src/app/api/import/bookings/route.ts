@@ -1,11 +1,9 @@
 // @ts-nocheck
 // src/app/api/import/bookings/route.ts
-// Upload the ConvertLabs bookings CSV to import customers and jobs
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
+const serviceClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
@@ -18,74 +16,85 @@ function parsePrice(priceStr: string): number {
 function parseDate(dateStr: string): string | null {
   if (!dateStr) return null
   try {
-    // Format: "01-30-2026 11:00AM"
-    const [datePart, timePart] = dateStr.split(' ')
+    const [datePart, timePart] = dateStr.trim().split(' ')
     const [month, day, year] = datePart.split('-')
-    const timeStr = timePart?.replace('AM', ' AM').replace('PM', ' PM')
-    const d = new Date(`${year}-${month}-${day} ${timeStr}`)
+    const d = new Date(`${year}-${month}-${day}T${convertTime(timePart)}`)
     if (isNaN(d.getTime())) return null
     return d.toISOString()
-  } catch {
-    return null
-  }
+  } catch { return null }
+}
+
+function convertTime(timeStr: string): string {
+  if (!timeStr) return '09:00:00'
+  const isPM = timeStr.includes('PM')
+  const isAM = timeStr.includes('AM')
+  const clean = timeStr.replace('AM', '').replace('PM', '').trim()
+  const [hours, minutes] = clean.split(':')
+  let h = parseInt(hours)
+  if (isPM && h !== 12) h += 12
+  if (isAM && h === 12) h = 0
+  return `${h.toString().padStart(2, '0')}:${minutes || '00'}:00`
 }
 
 function parsePhone(phone: string): string | null {
   if (!phone) return null
-  // Convert +614XXXXXXXX to 04XXXXXXXX
   return phone.replace(/^\+61/, '0').trim()
 }
 
-function parseStatus(status: string): string {
-  const s = status?.toLowerCase()
-  if (s === 'paid') return 'completed'
-  if (s === 'pending') return 'pending'
-  if (s === 'cancelled' || s === 'canceled') return 'cancelled'
-  return 'completed'
-}
-
-function parsePaymentStatus(status: string): string {
-  return status?.toLowerCase() === 'paid' ? 'paid' : 'unpaid'
-}
-
-// Parse CSV line respecting quoted fields
 function parseCSVLine(line: string): string[] {
   const result: string[] = []
   let current = ''
   let inQuotes = false
-
   for (let i = 0; i < line.length; i++) {
-    if (line[i] === '"') {
-      inQuotes = !inQuotes
-    } else if (line[i] === ',' && !inQuotes) {
-      result.push(current.trim())
-      current = ''
-    } else {
-      current += line[i]
-    }
+    if (line[i] === '"') { inQuotes = !inQuotes }
+    else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = '' }
+    else { current += line[i] }
   }
   result.push(current.trim())
   return result
 }
 
 export async function POST(request: NextRequest) {
-  // Auth check
+  // Get token from Authorization header
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Verify the token and get the user
+  const { data: { user }, error: authError } = await serviceClient.auth.getUser(token)
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Get business_id
+  const { data: profile } = await serviceClient
+    .from('profiles')
+    .select('business_id')
+    .eq('id', user.id)
+    .single()
+
+  const businessId = profile?.business_id
+  if (!businessId) {
+    return NextResponse.json({ error: 'Business not found' }, { status: 404 })
   }
 
   const formData = await request.formData()
   const file = formData.get('file') as File
-  const businessId = formData.get('business_id') as string
 
-  if (!file || !businessId) {
-    return NextResponse.json({ error: 'Missing file or business_id' }, { status: 400 })
+  if (!file) {
+    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
   const text = await file.text()
   const lines = text.split('\n').filter(l => l.trim())
   const headers = parseCSVLine(lines[0])
+
+  const { data: services } = await serviceClient.from('services').select('id, name').eq('business_id', businessId)
+  const { data: providers } = await serviceClient.from('providers').select('id, display_name').eq('business_id', businessId)
 
   const results = {
     total: lines.length - 1,
@@ -97,152 +106,114 @@ export async function POST(request: NextRequest) {
   }
 
   for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue
     const values = parseCSVLine(lines[i])
     const row: Record<string, string> = {}
-    headers.forEach((h, idx) => { row[h] = values[idx] || '' })
+    headers.forEach((h, idx) => { row[h.trim()] = values[idx] || '' })
 
     try {
       const email = row.email?.toLowerCase().trim()
-      const fullName = `${row.first_name} ${row.last_name}`.trim()
+      const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim()
+      if (!fullName) continue
 
-      if (!email && !fullName) continue
-
-      // Find or create customer
       let customerId: string
 
       if (email) {
-        const { data: existing } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('business_id', businessId)
-          .eq('email', email)
-          .single()
+        const { data: existing } = await serviceClient
+          .from('customers').select('id').eq('business_id', businessId).eq('email', email).maybeSingle()
 
         if (existing) {
           customerId = existing.id
           results.customers_existing++
         } else {
-          const { data: newCustomer, error: customerError } = await supabase
+          const { data: newCustomer, error: ce } = await serviceClient
             .from('customers')
-            .insert({
-              business_id: businessId,
-              full_name: fullName,
-              email,
-              phone: parsePhone(row.phone_number),
-              stripe_customer_id: row.stripe_customer_id || null,
-            })
-            .select('id')
-            .single()
-
-          if (customerError) {
-            results.errors.push(`Row ${i}: Customer error — ${customerError.message}`)
-            continue
-          }
+            .insert({ business_id: businessId, full_name: fullName, email, phone: parsePhone(row.phone_number), stripe_customer_id: row.stripe_customer_id || null })
+            .select('id').single()
+          if (ce || !newCustomer) { results.errors.push(`Row ${i}: ${ce?.message}`); continue }
           customerId = newCustomer.id
           results.customers_created++
         }
       } else {
-        // No email — create by name
-        const { data: newCustomer } = await supabase
+        const { data: newCustomer } = await serviceClient
           .from('customers')
-          .insert({
-            business_id: businessId,
-            full_name: fullName,
-            phone: parsePhone(row.phone_number),
-          })
-          .select('id')
-          .single()
+          .insert({ business_id: businessId, full_name: fullName, phone: parsePhone(row.phone_number) })
+          .select('id').single()
         if (!newCustomer) continue
         customerId = newCustomer.id
         results.customers_created++
       }
 
-      // Create address if we have one
+      // Address
       let addressId: string | null = null
-      if (row.street_address && row.city && row.state) {
-        const { data: addr } = await supabase
+      const streetAddr = row.street_address && row.street_address !== 'N/A' ? row.street_address : null
+      if (streetAddr && row.city && row.state) {
+        const { data: addr } = await serviceClient
           .from('addresses')
-          .insert({
-            business_id: businessId,
-            customer_id: customerId,
-            line1: row.street_address !== 'N/A' ? row.street_address : row.address,
-            city: row.city,
-            state: row.state,
-            postcode: row.zipcode,
-            country: 'AU',
-            is_default: true,
-          })
-          .select('id')
-          .single()
+          .insert({ business_id: businessId, customer_id: customerId, line1: streetAddr, city: row.city, state: row.state, postcode: row.zipcode, country: 'AU', is_default: true })
+          .select('id').single()
         addressId = addr?.id || null
       }
 
-      // Parse scheduled date
       const scheduledAt = parseDate(row.service_date)
-      if (!scheduledAt) {
-        results.jobs_skipped++
-        continue
+      if (!scheduledAt) { results.jobs_skipped++; continue }
+
+      // Match service
+      let serviceId: string | null = null
+      const serviceField = row.services?.toLowerCase() || ''
+      if (services?.length) {
+        const match = services.find(s => {
+          const sName = s.name.toLowerCase()
+          if (sName.includes('end of lease') && (serviceField.includes('end') || serviceField.includes('lease'))) return true
+          if (sName.includes('move in') && serviceField.includes('move')) return true
+          if (sName.includes('deep') && serviceField.includes('deep')) return true
+          return false
+        }) || services.find(s => s.name.toLowerCase().includes('general')) || services[0]
+        serviceId = match?.id || null
       }
 
-      // Find matching service (best effort by bedroom/bathroom count in service field)
-      const { data: services } = await supabase
-        .from('services')
-        .select('id, name')
-        .eq('business_id', businessId)
-        .eq('is_active', true)
-        .limit(1)
-
-      const serviceId = services?.[0]?.id || null
-
-      // Find provider by name
+      // Match provider
       let providerId: string | null = null
-      if (row.assigned_to) {
-        const { data: provider } = await supabase
-          .from('providers')
-          .select('id')
-          .eq('business_id', businessId)
-          .ilike('display_name', `%${row.assigned_to.trim()}%`)
-          .single()
-        providerId = provider?.id || null
+      if (row.assigned_to?.trim() && providers?.length) {
+        const provName = row.assigned_to.trim().toLowerCase()
+        const match = providers.find(p =>
+          p.display_name.toLowerCase().includes(provName.split(' ')[0]) ||
+          provName.includes(p.display_name.toLowerCase().split(' ')[0])
+        )
+        providerId = match?.id || null
       }
 
       const totalPrice = parsePrice(row.price)
-      const status = parseStatus(row.status)
-      const paymentStatus = parsePaymentStatus(row.status)
+      const isPaid = row.status?.toLowerCase() === 'paid'
 
-      // Build notes
       const noteParts = []
       if (row.services) noteParts.push(`Service: ${row.services}`)
       if (row.extras) noteParts.push(`Extras: ${row.extras}`)
       if (row.notes) noteParts.push(row.notes)
-      if (row.frequency) noteParts.push(`Frequency: ${row.frequency}`)
-      const combinedNotes = noteParts.join(' | ')
 
-      const { error: jobError } = await supabase
-        .from('jobs')
-        .insert({
-          business_id: businessId,
-          customer_id: customerId,
-          address_id: addressId,
-          service_id: serviceId,
-          provider_id: providerId,
-          status,
-          scheduled_at: scheduledAt,
-          duration_minutes: 120,
-          price: totalPrice,
-          total_price: totalPrice,
-          tax_amount: 0,
-          frequency: row.frequency?.toLowerCase().replace(' ', '_') || 'one_time',
-          customer_notes: combinedNotes || null,
-          payment_method: row.payment_method === 'CC' ? 'card' : 'other',
-          payment_status: paymentStatus,
-          paid_at: paymentStatus === 'paid' ? scheduledAt : null,
-          stripe_payment_intent_id: row.stripe_payment_method_id || null,
-          booking_source: 'import',
-        })
+      const { error: jobError } = await serviceClient.from('jobs').insert({
+        business_id: businessId,
+        customer_id: customerId,
+        address_id: addressId,
+        service_id: serviceId,
+        provider_id: providerId,
+        status: isPaid ? 'completed' : 'pending',
+        scheduled_at: scheduledAt,
+        duration_minutes: 120,
+        price: totalPrice,
+        total_price: totalPrice,
+        tax_amount: 0,
+        frequency: 'one_time',
+        customer_notes: noteParts.join(' | ') || null,
+        payment_method: row.payment_method === 'CC' ? 'card' : 'other',
+        payment_status: isPaid ? 'paid' : 'unpaid',
+        paid_at: isPaid ? scheduledAt : null,
+        stripe_payment_intent_id: row.stripe_payment_method_id || null,
+        booking_source: 'import',
+      })
 
       if (jobError) {
-        results.errors.push(`Row ${i}: Job error — ${jobError.message}`)
+        results.errors.push(`Row ${i}: ${jobError.message}`)
         results.jobs_skipped++
       } else {
         results.jobs_created++

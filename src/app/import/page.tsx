@@ -6,26 +6,28 @@ import { createClient } from '@/lib/supabase/client'
 import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 
 export default function ImportPage() {
-  const [businessId, setBusinessId] = useState('')
+  const [ready, setReady] = useState(false)
   const [importing, setImporting] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [fileName, setFileName] = useState('')
+  const [accessToken, setAccessToken] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { window.location.href = '/auth/login'; return }
-      const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
-      setBusinessId(profile?.business_id)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { window.location.href = '/auth/login'; return }
+      setAccessToken(session.access_token)
+      setReady(true)
     }
     load()
   }, [])
 
   async function handleImport() {
     const file = fileRef.current?.files?.[0]
-    if (!file || !businessId) return
+    if (!file || !accessToken) return
 
     setImporting(true)
     setError(null)
@@ -33,12 +35,11 @@ export default function ImportPage() {
 
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('business_id', businessId)
 
     const res = await fetch('/api/import/bookings', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'import'}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
       body: formData,
     })
@@ -70,7 +71,6 @@ export default function ImportPage() {
         </div>
       </div>
 
-      {/* Bookings import */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-brand-50 rounded-lg flex items-center justify-center">
@@ -103,20 +103,14 @@ export default function ImportPage() {
             type="file"
             accept=".csv"
             className="hidden"
-            onChange={e => {
-              const name = e.target.files?.[0]?.name
-              if (name) {
-                const label = document.getElementById('file-label')
-                if (label) label.textContent = name
-              }
-            }}
+            onChange={e => setFileName(e.target.files?.[0]?.name || '')}
           />
-          <p id="file-label" className="text-xs text-brand-600 mt-2 font-medium"></p>
+          {fileName && <p className="text-xs text-brand-600 mt-2 font-medium">{fileName}</p>}
         </div>
 
         <button
           onClick={handleImport}
-          disabled={importing || !businessId}
+          disabled={importing || !fileName || !ready}
           className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
         >
           {importing && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -124,7 +118,6 @@ export default function ImportPage() {
         </button>
       </div>
 
-      {/* Results */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
           <div className="flex gap-3">
@@ -140,7 +133,6 @@ export default function ImportPage() {
             <CheckCircle2 className="w-5 h-5 text-green-600" />
             <h2 className="font-semibold text-gray-900">Import complete</h2>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: 'Total rows', value: results.total },
@@ -156,7 +148,6 @@ export default function ImportPage() {
               </div>
             ))}
           </div>
-
           {results.errors?.length > 0 && (
             <div>
               <p className="text-xs font-medium text-gray-700 mb-2">Errors ({results.errors.length})</p>
