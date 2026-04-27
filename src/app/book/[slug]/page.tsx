@@ -13,9 +13,6 @@ const FREQUENCIES = [
   { value: 'monthly',     label: 'Monthly',     discount: 10 },
 ]
 
-const ROOM_PRICES: Record<number, number> = { 1: 0, 2: 3000, 3: 5500, 4: 8000, 5: 11000 }
-const BATH_PRICES: Record<number, number> = { 1: 0, 2: 2500, 3: 5000 }
-
 export default function PublicBookingPage() {
   const params = useParams()
   const slug = params.slug as string
@@ -23,6 +20,7 @@ export default function PublicBookingPage() {
 
   const [business, setBusiness] = useState<any>(null)
   const [services, setServices] = useState<any[]>([])
+  const [roomPricing, setRoomPricing] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -33,7 +31,7 @@ export default function PublicBookingPage() {
   const [form, setForm] = useState({
     service_id: '',
     frequency: 'one_time',
-    bedrooms: 2,
+    bedrooms: 1,
     bathrooms: 1,
     scheduled_date: '',
     scheduled_time: '09:00',
@@ -76,19 +74,51 @@ export default function PublicBookingPage() {
     load()
   }, [slug])
 
+  // Load room pricing when service changes
+  useEffect(() => {
+    if (!form.service_id) return
+    async function loadRoomPricing() {
+      const { data } = await supabase
+        .from('room_pricing')
+        .select('*')
+        .eq('service_id', form.service_id)
+      setRoomPricing(data || [])
+      setSelectedExtras([])
+    }
+    loadRoomPricing()
+  }, [form.service_id])
+
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency)!
+
+  function getRoomPrice(type: string, count: number): number {
+    const match = roomPricing.find(r => r.type === type && r.count === count)
+    return match?.price || 0
+  }
+
+  function getBedroomCounts(): number[] {
+    const beds = roomPricing.filter(r => r.type === 'bedroom').map(r => r.count).sort((a, b) => a - b)
+    return beds.length > 0 ? beds : [1, 2, 3, 4, 5]
+  }
+
+  function getBathroomCounts(): number[] {
+    const baths = roomPricing.filter(r => r.type === 'bathroom').map(r => r.count).sort((a, b) => a - b)
+    return baths.length > 0 ? baths : [1, 2, 3]
+  }
 
   function calcPrice() {
     if (!selectedService) return 0
     let base = selectedService.base_price
+
     if (selectedService.pricing_type === 'room_based') {
-      base += ROOM_PRICES[form.bedrooms] || 0
-      base += BATH_PRICES[form.bathrooms] || 0
+      base += getRoomPrice('bedroom', form.bedrooms)
+      base += getRoomPrice('bathroom', form.bathrooms)
     }
+
     const extrasTotal = selectedService.service_extras
       ?.filter((ex: any) => selectedExtras.includes(ex.id))
       .reduce((sum: number, ex: any) => sum + ex.price, 0) || 0
+
     const subtotal = base + extrasTotal
     const discount = selectedFreq.discount > 0 ? Math.round(subtotal * selectedFreq.discount / 100) : 0
     return subtotal - discount
@@ -133,7 +163,6 @@ export default function PublicBookingPage() {
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Booking failed')
-
       setSuccess(true)
     } catch (err: any) {
       setError(err.message)
@@ -238,7 +267,7 @@ export default function PublicBookingPage() {
                         {s.description && <p className="text-xs text-gray-500">{s.description}</p>}
                       </div>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900">${(s.base_price / 100).toFixed(0)}</span>
+                    <span className="text-sm font-semibold text-gray-900">from ${(s.base_price / 100).toFixed(0)}</span>
                   </label>
                 ))}
               </div>
@@ -257,20 +286,25 @@ export default function PublicBookingPage() {
               </div>
             </div>
 
+            {/* Room-based pricing from DB */}
             {selectedService?.pricing_type === 'room_based' && (
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Property size</h3>
+              <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+                <h3 className="text-sm font-semibold text-gray-900">Property size</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={labelClass}>Bedrooms</label>
                     <select value={form.bedrooms} onChange={e => update('bedrooms', parseInt(e.target.value))} className={inputClass}>
-                      {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} bedroom{n > 1 ? 's' : ''}</option>)}
+                      {getBedroomCounts().map(n => (
+                        <option key={n} value={n}>{n} bedroom{n > 1 ? 's' : ''}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
                     <label className={labelClass}>Bathrooms</label>
                     <select value={form.bathrooms} onChange={e => update('bathrooms', parseInt(e.target.value))} className={inputClass}>
-                      {[1,2,3].map(n => <option key={n} value={n}>{n} bathroom{n > 1 ? 's' : ''}</option>)}
+                      {getBathroomCounts().map(n => (
+                        <option key={n} value={n}>{n} bathroom{n > 1 ? 's' : ''}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -424,6 +458,10 @@ export default function PublicBookingPage() {
                 { label: 'Frequency', value: selectedFreq.label },
                 { label: 'Date', value: form.scheduled_date ? new Date(`${form.scheduled_date}T12:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '' },
                 { label: 'Time', value: new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }) },
+                ...(selectedService?.pricing_type === 'room_based' ? [
+                  { label: 'Bedrooms', value: `${form.bedrooms}` },
+                  { label: 'Bathrooms', value: `${form.bathrooms}` },
+                ] : []),
                 { label: 'Address', value: `${form.line1}, ${form.city} ${form.state} ${form.postcode}` },
                 { label: 'Name', value: form.full_name },
                 { label: 'Email', value: form.email },
