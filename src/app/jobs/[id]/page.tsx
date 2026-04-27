@@ -177,7 +177,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`}
               />
             )}
-            {isPaid && (
+            {isPaid && job.status === 'completed' && (
               <p className="text-xs text-green-600 text-center">✓ Payment received</p>
             )}
           </div>
