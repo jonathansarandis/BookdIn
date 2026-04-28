@@ -84,7 +84,7 @@ export default function Sidebar({ profile, business }: SidebarProps) {
                 className="w-4 h-4 flex-shrink-0"
                 style={{ color: isActive ? '#4D8CFF' : '#9ABCD8' }}
               />
-              <span style={{ fontSize: '13px', fontWeight: isActive ? 500 : 400, flex: 1 }}>
+              <span style={{ fontSize: '14px', fontWeight: isActive ? 600 : 500, flex: 1 }}>
                 {item.label}
               </span>
               {isActive && (
