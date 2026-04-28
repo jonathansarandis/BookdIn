@@ -59,7 +59,7 @@ export default function Sidebar({ profile, business }: SidebarProps) {
           if ('section' in item) {
             return (
               <div key={i} style={{ paddingTop: '16px', paddingBottom: '6px', paddingLeft: '10px' }}>
-                <span style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(150,190,255,0.6)', textTransform: 'uppercase', letterSpacing: '2.5px' }}>
+                <span style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(180,210,255,0.8)', textTransform: 'uppercase', letterSpacing: '2.5px' }}>
                   {item.section}
                 </span>
               </div>
@@ -76,13 +76,13 @@ export default function Sidebar({ profile, business }: SidebarProps) {
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-0.5"
               style={{
                 background: isActive ? 'rgba(37,99,255,0.12)' : 'transparent',
-                color: isActive ? '#FFFFFF' : '#C8D8F0',
+                color: isActive ? '#FFFFFF' : '#E8EEF8',
                 textDecoration: 'none',
               }}
             >
               <Icon
                 className="w-4 h-4 flex-shrink-0"
-                style={{ color: isActive ? '#4D8CFF' : '#7A9DC0' }}
+                style={{ color: isActive ? '#4D8CFF' : '#9ABCD8' }}
               />
               <span style={{ fontSize: '13px', fontWeight: isActive ? 500 : 400, flex: 1 }}>
                 {item.label}

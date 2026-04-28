@@ -75,3 +75,24 @@ a:active, button:active, [role="button"]:active {
 aside a:hover {
   transform: scale(1.02) translateX(2px);
 }
+
+/* Hover grow + bold effect */
+a, button, [role="button"] {
+  transition: transform 0.15s ease, font-weight 0.1s ease, box-shadow 0.15s ease;
+}
+a:hover, button:hover, [role="button"]:hover {
+  transform: scale(1.06);
+  font-weight: 600;
+}
+a:active, button:active {
+  transform: scale(0.96);
+}
+
+aside a {
+  transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+aside a:hover {
+  transform: scale(1.05) translateX(3px);
+  font-weight: 600;
+  color: #FFFFFF !important;
+}
