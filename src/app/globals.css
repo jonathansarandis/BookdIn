@@ -23,9 +23,7 @@
   --amber: #F59E0B;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   font-family: 'DM Sans', sans-serif;
@@ -61,33 +59,3 @@ body {
   border: 1px solid rgba(37,99,255,0.15);
   border-radius: 12px;
 }
-
-.input-dark {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(37,99,255,0.2);
-  border-radius: 8px;
-  color: #111827;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
-  padding: 8px 12px;
-  outline: none;
-  width: 100%;
-  transition: border-color 0.15s;
-}
-.input-dark:focus { border-color: #2563FF; }
-.input-dark::placeholder { color: rgba(200,212,240,0.3); }
-
-/* Ensure all page headings and text are legible on dark backgrounds */
-h1, h2, h3, h4, h5, h6 {
-  color: #111827;
-}
-
-p {
-  color: #8BA4C8;
-}
-
-.text-gray-900 { color: #F0F2FF !important; }
-.text-gray-800 { color: #D4E0F0 !important; }
-.text-gray-700 { color: #B8CCE4 !important; }
-.text-gray-600 { color: #8BA4C8 !important; }
-.text-gray-500 { color: #6B8CAE !important; }
