@@ -115,7 +115,7 @@ export default function Topbar({ profile, business }: TopbarProps) {
 
   return (
     <header
-      className="h-14 flex items-center gap-3 px-5 flex-shrink-0"
+      className="h-16 flex items-center gap-3 px-5 flex-shrink-0"
       style={{ background: '#111827', borderBottom: '1px solid rgba(37,99,255,0.12)' }}
     >
       {/* Page title */}

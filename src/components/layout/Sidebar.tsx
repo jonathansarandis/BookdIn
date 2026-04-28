@@ -47,7 +47,7 @@ export default function Sidebar({ profile, business }: SidebarProps) {
       style={{ background: '#0A0F1E', borderRight: '1px solid rgba(37,99,255,0.15)' }}
     >
       {/* Wordmark logo */}
-      <div className="h-14 flex items-center px-5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(37,99,255,0.15)' }}>
+      <div className="h-16 flex items-center justify-center flex-shrink-0" style={{ borderBottom: '1px solid rgba(37,99,255,0.15)' }}>
         <span style={{ fontFamily: "'NeueKabel', 'Arial Black', sans-serif", fontWeight: 800, fontSize: '22px', color: '#F0F2FF', letterSpacing: '-0.5px' }}>
           Bookd<span style={{ color: '#2563FF' }}>In</span>
         </span>
