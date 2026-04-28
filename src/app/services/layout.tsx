@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     : profile?.businesses
 
   return (
-    <div className="flex h-screen overflow-hidden bg-navy">
+    <div className="flex h-screen overflow-hidden bg-gray-100">
       <Sidebar profile={profile} business={business} />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Topbar profile={profile} business={business} />
