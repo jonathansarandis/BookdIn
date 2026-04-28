@@ -59,7 +59,7 @@ export default function Sidebar({ profile, business }: SidebarProps) {
           if ('section' in item) {
             return (
               <div key={i} style={{ paddingTop: '16px', paddingBottom: '6px', paddingLeft: '10px' }}>
-                <span style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(77,140,255,0.5)', textTransform: 'uppercase', letterSpacing: '2.5px' }}>
+                <span style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(150,190,255,0.6)', textTransform: 'uppercase', letterSpacing: '2.5px' }}>
                   {item.section}
                 </span>
               </div>
@@ -76,13 +76,13 @@ export default function Sidebar({ profile, business }: SidebarProps) {
               className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-0.5"
               style={{
                 background: isActive ? 'rgba(37,99,255,0.12)' : 'transparent',
-                color: isActive ? '#F0F2FF' : '#8BA4C8',
+                color: isActive ? '#FFFFFF' : '#C8D8F0',
                 textDecoration: 'none',
               }}
             >
               <Icon
                 className="w-4 h-4 flex-shrink-0"
-                style={{ color: isActive ? '#4D8CFF' : '#5A7DA0' }}
+                style={{ color: isActive ? '#4D8CFF' : '#7A9DC0' }}
               />
               <span style={{ fontSize: '13px', fontWeight: isActive ? 500 : 400, flex: 1 }}>
                 {item.label}
@@ -109,14 +109,14 @@ export default function Sidebar({ profile, business }: SidebarProps) {
             {business?.name ? getInitials(business.name) : 'B'}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '12px', fontWeight: 500, color: '#D4E0F0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {business?.name || 'My Business'}
             </div>
-            <div style={{ fontSize: '10px', color: '#5A7DA0' }}>
+            <div style={{ fontSize: '10px', color: '#8BAAC8' }}>
               {profile?.role === 'owner' ? 'Owner' : profile?.role || 'Member'}
             </div>
           </div>
-          <ChevronRight style={{ width: '14px', height: '14px', color: '#3A5A7A', flexShrink: 0 }} />
+          <ChevronRight style={{ width: '14px', height: '14px', color: '#7A9DC0', flexShrink: 0 }} />
         </Link>
       </div>
     </aside>

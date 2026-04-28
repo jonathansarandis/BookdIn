@@ -128,9 +128,9 @@ export default function Topbar({ profile, business }: TopbarProps) {
         className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-colors"
         style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(37,99,255,0.15)' }}
       >
-        <Search style={{ width: '14px', height: '14px', color: 'rgba(200,212,240,0.4)' }} />
-        <span style={{ fontSize: '12px', color: 'rgba(200,212,240,0.4)' }}>Search...</span>
-        <kbd style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', color: 'rgba(200,212,240,0.3)', padding: '2px 6px', borderRadius: '4px', marginLeft: '24px', fontFamily: 'monospace' }}>⌘K</kbd>
+        <Search style={{ width: '14px', height: '14px', color: '#9ABCD8' }} />
+        <span style={{ fontSize: '12px', color: '#9ABCD8' }}>Search...</span>
+        <kbd style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', color: '#7A9DC0', padding: '2px 6px', borderRadius: '4px', marginLeft: '24px', fontFamily: 'monospace' }}>⌘K</kbd>
       </div>
 
       {/* New booking */}
@@ -150,7 +150,7 @@ export default function Topbar({ profile, business }: TopbarProps) {
           className="relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
           style={{ background: showNotifs ? 'rgba(37,99,255,0.15)' : 'transparent', border: '1px solid rgba(37,99,255,0.15)' }}
         >
-          <Bell style={{ width: '15px', height: '15px', color: 'rgba(200,212,240,0.6)' }} />
+          <Bell style={{ width: '15px', height: '15px', color: '#C8D8F0' }} />
           {unreadCount > 0 && (
             <span
               className="absolute flex items-center justify-center"
@@ -177,7 +177,7 @@ export default function Topbar({ profile, business }: TopbarProps) {
             {notifications.length === 0 ? (
               <div className="px-4 py-8 text-center">
                 <CheckCircle2 style={{ width: '28px', height: '28px', color: 'rgba(200,212,240,0.2)', margin: '0 auto 8px' }} />
-                <p style={{ fontSize: '13px', color: 'rgba(200,212,240,0.4)' }}>All caught up</p>
+                <p style={{ fontSize: '13px', color: '#9ABCD8' }}>All caught up</p>
               </div>
             ) : (
               <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
@@ -239,7 +239,7 @@ export default function Topbar({ profile, business }: TopbarProps) {
           >
             <div className="px-3 py-2.5" style={{ borderBottom: '1px solid rgba(37,99,255,0.1)', marginBottom: '4px' }}>
               <p style={{ fontSize: '12px', fontWeight: 600, color: '#F0F2FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name}</p>
-              <p style={{ fontSize: '10px', color: 'rgba(200,212,240,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.email}</p>
+              <p style={{ fontSize: '10px', color: '#9ABCD8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.email}</p>
             </div>
             <button
               onClick={handleSignOut}
