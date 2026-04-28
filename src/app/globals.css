@@ -96,3 +96,11 @@ aside a:hover {
   font-weight: 600;
   color: #FFFFFF !important;
 }
+
+/* Input text should always be dark/black */
+input, textarea, select {
+  color: #111827 !important;
+}
+input::placeholder, textarea::placeholder {
+  color: #9ca3af !important;
+}
