@@ -2,9 +2,10 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { ArrowLeft, MapPin, Calendar, Clock, User, Briefcase, FileText, DollarSign } from 'lucide-react'
+import { ArrowLeft, MapPin, Calendar, Clock, User, Briefcase, FileText } from 'lucide-react'
 import JobStatusUpdater from '@/app/jobs/JobStatusUpdater'
 import PayButton from '@/components/payments/PayButton'
+import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -33,18 +34,26 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     .eq('id', user.id)
     .single()
 
-  const { data: job } = await supabase
-    .from('jobs')
-    .select(`
-      *,
-      customer:customers(id, full_name, email, phone),
-      service:services(id, name, base_price),
-      provider:providers(id, display_name, color),
-      address:addresses(line1, city, state, postcode)
-    `)
-    .eq('id', params.id)
-    .eq('business_id', profile?.business_id)
-    .single()
+  const [{ data: job }, { data: providers }] = await Promise.all([
+    supabase
+      .from('jobs')
+      .select(`
+        *,
+        customer:customers(id, full_name, email, phone),
+        service:services(id, name, base_price),
+        provider:providers(id, display_name, color),
+        address:addresses(line1, city, state, postcode)
+      `)
+      .eq('id', params.id)
+      .eq('business_id', profile?.business_id)
+      .single(),
+    supabase
+      .from('providers')
+      .select('id, display_name, color')
+      .eq('business_id', profile?.business_id)
+      .eq('is_active', true)
+      .order('display_name'),
+  ])
 
   if (!job) redirect('/jobs')
 
@@ -62,7 +71,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             <ArrowLeft className="w-5 h-5 text-gray-500" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Job #{job.id.slice(0, 8).toUpperCase()}</h1>
+            <h1 className="text-xl font-bold text-gray-900">Booking #{job.id.slice(0, 8).toUpperCase()}</h1>
             <p className="text-sm text-gray-500">{job.service?.name || 'Service'}</p>
           </div>
         </div>
@@ -85,10 +94,10 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 {scheduledAt.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </div>
             )}
-            {job.scheduled_time && (
+            {scheduledAt && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Clock className="w-4 h-4 text-gray-400" />
-                {new Date(`2000-01-01T${job.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                {scheduledAt.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}
               </div>
             )}
             {job.duration_minutes && (
@@ -130,23 +139,24 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           )}
 
           {/* Provider */}
-          {job.provider && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
-              <h2 className="font-semibold text-gray-900">Assigned provider</h2>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Briefcase className="w-4 h-4 text-gray-400" />
-                <span>{job.provider.display_name}</span>
-              </div>
-            </div>
-          )}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Service provider</h2>
+            <ProviderAssigner
+              jobId={job.id}
+              currentProviderId={job.provider_id || null}
+              currentProviderName={job.provider?.display_name || null}
+              currentProviderColor={job.provider?.color || null}
+              providers={providers || []}
+            />
+          </div>
 
           {/* Notes */}
-          {job.notes && (
+          {(job.notes || job.customer_notes) && (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
               <h2 className="font-semibold text-gray-900">Notes</h2>
               <div className="flex items-start gap-2 text-sm text-gray-600">
                 <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                <p>{job.notes}</p>
+                <p>{job.notes || job.customer_notes}</p>
               </div>
             </div>
           )}
