@@ -25,22 +25,23 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Public routes — no auth needed
   const publicPaths = [
     '/auth/login',
     '/auth/signup',
     '/book',
     '/booking-confirmed',
     '/',
+    '/pricing',
+    '/features',
+    '/about',
     '/api/webhooks',
     '/api/import',
     '/provider/login',
     '/provider/accept',
   ]
-  const isPublic = publicPaths.some(p => pathname.startsWith(p))
+  const isPublic = publicPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
 
   if (!user && !isPublic) {
-    // Provider portal routes redirect to provider login
     if (pathname.startsWith('/provider')) {
       const url = request.nextUrl.clone()
       url.pathname = '/provider/login'
