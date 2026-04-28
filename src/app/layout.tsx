@@ -9,14 +9,21 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: "bookdIn — Run your business. We'll handle the bookings.",
+  title: "BookdIn — Run your business. We'll handle the bookings.",
   description: 'Booking, scheduling and CRM software for service businesses.',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={dmSans.className}>{children}</body>
+      <body className={dmSans.className} style={{ background: '#0A0F1E', color: '#F0F2FF' }}>
+        {children}
+      </body>
     </html>
   )
 }
