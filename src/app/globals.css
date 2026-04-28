@@ -1,4 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap');
+@font-face {
+  font-family: 'NeueKabel';
+  src: url('/fonts/NeueKabelBlack.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -27,32 +35,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(37,99,255,0.3);
-  border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(37,99,255,0.5);
-}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(37,99,255,0.3); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(37,99,255,0.5); }
 
-/* Animations */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-in {
-  animation: fade-in 0.2s ease-out;
-}
+.animate-fade-in { animation: fade-in 0.2s ease-out; }
 
-/* Status pills */
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -63,14 +56,12 @@ body {
   white-space: nowrap;
 }
 
-/* Brand card style */
 .brand-card {
   background: #111827;
   border: 1px solid rgba(37,99,255,0.15);
   border-radius: 12px;
 }
 
-/* Input base style for dark theme */
 .input-dark {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(37,99,255,0.2);
@@ -83,9 +74,5 @@ body {
   width: 100%;
   transition: border-color 0.15s;
 }
-.input-dark:focus {
-  border-color: #2563FF;
-}
-.input-dark::placeholder {
-  color: rgba(200,212,240,0.3);
-}
+.input-dark:focus { border-color: #2563FF; }
+.input-dark::placeholder { color: rgba(200,212,240,0.3); }

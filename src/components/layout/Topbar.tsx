@@ -119,7 +119,7 @@ export default function Topbar({ profile, business }: TopbarProps) {
       style={{ background: '#111827', borderBottom: '1px solid rgba(37,99,255,0.12)' }}
     >
       {/* Page title */}
-      <h1 className="flex-1" style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '16px', color: '#F0F2FF', letterSpacing: '-0.2px' }}>
+      <h1 className="flex-1" style={{ fontFamily: "'NeueKabel', 'Arial Black', sans-serif", fontWeight: 900, fontSize: '16px', color: '#F0F2FF', letterSpacing: '-0.2px' }}>
         {title}
       </h1>
 
