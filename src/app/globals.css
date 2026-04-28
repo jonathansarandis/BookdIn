@@ -1,56 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --radius: 0.5rem;
-    --brand: 142 75% 26%;
-    --brand-foreground: 0 0% 100%;
-  }
-
-  body {
-    @apply bg-gray-50 text-gray-900;
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-
-  /* Smooth scrolling */
-  html { scroll-behavior: smooth; }
-
-  /* Better focus styles */
-  :focus-visible {
-    @apply outline-none ring-2 ring-brand-500 ring-offset-2;
-  }
+:root {
+  --navy: #0A0F1E;
+  --navy-mid: #111827;
+  --navy-light: #1E2A45;
+  --electric: #2563FF;
+  --electric-bright: #4D8CFF;
+  --electric-glow: #7EB0FF;
+  --silver: #C8D4F0;
+  --white: #F0F2FF;
+  --amber: #F59E0B;
 }
 
-@layer components {
-  /* Status pill base */
-  .status-pill {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border;
-  }
-
-  /* Card base */
-  .card {
-    @apply bg-white border border-gray-200 rounded-xl;
-  }
-
-  /* Sidebar nav item */
-  .nav-item {
-    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600
-           hover:bg-gray-100 hover:text-gray-900 transition-colors cursor-pointer;
-  }
-  .nav-item.active {
-    @apply bg-brand-50 text-brand-700 font-medium;
-  }
+* {
+  box-sizing: border-box;
 }
 
-@layer utilities {
-  .text-balance { text-wrap: balance; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: #0A0F1E;
+  color: #F0F2FF;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-  /* Hide scrollbar but keep scrollability */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar { display: none; }
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(37,99,255,0.3);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(37,99,255,0.5);
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Status pills */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Brand card style */
+.brand-card {
+  background: #111827;
+  border: 1px solid rgba(37,99,255,0.15);
+  border-radius: 12px;
+}
+
+/* Input base style for dark theme */
+.input-dark {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(37,99,255,0.2);
+  border-radius: 8px;
+  color: #F0F2FF;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.input-dark:focus {
+  border-color: #2563FF;
+}
+.input-dark::placeholder {
+  color: rgba(200,212,240,0.3);
 }
