@@ -59,3 +59,19 @@ body {
   border: 1px solid rgba(37,99,255,0.15);
   border-radius: 12px;
 }
+
+/* Hover grow effect on interactive elements */
+a, button, [role="button"] {
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+a:hover, button:hover, [role="button"]:hover {
+  transform: scale(1.03);
+}
+a:active, button:active, [role="button"]:active {
+  transform: scale(0.97);
+}
+
+/* Sidebar nav links - slightly more subtle grow */
+aside a:hover {
+  transform: scale(1.02) translateX(2px);
+}
