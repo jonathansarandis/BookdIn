@@ -13,7 +13,7 @@ export default async function ReportsLayout({ children }: { children: React.Reac
   const { data: profile } = await supabase.from('profiles').select('*, businesses(*)').eq('id', user.id).single()
   const business = Array.isArray(profile?.businesses) ? profile.businesses[0] : profile?.businesses
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-navy">
       <Sidebar profile={profile} business={business} />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Topbar profile={profile} business={business} />
