@@ -2,6 +2,7 @@
 import type { Metadata } from 'next'
 import { DM_Sans } from 'next/font/google'
 import './globals.css'
+import DemoWrapper from '@/components/demo/DemoWrapper'
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={dmSans.className} style={{ background: '#0A0F1E', color: '#F0F2FF' }}>
-        {children}
+        <DemoWrapper>{children}</DemoWrapper>
       </body>
     </html>
   )
