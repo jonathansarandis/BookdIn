@@ -55,7 +55,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && (pathname === '/auth/login' || pathname === '/auth/signup')) {
+  const isDemoUser = user?.email === 'demo@bookdin.co'
+  if (user && !isDemoUser && (pathname === '/auth/login' || pathname === '/auth/signup')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
