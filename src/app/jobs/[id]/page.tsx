@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ArrowLeft, MapPin, Calendar, Clock, User, Briefcase, FileText } from 'lucide-react'
 import JobStatusUpdater from '@/app/jobs/JobStatusUpdater'
 import PayButton from '@/components/payments/PayButton'
+import JobPhotos from '@/app/jobs/[id]/JobPhotos'
 import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 
 const STATUS_STYLES = {
