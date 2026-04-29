@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const cookieStore = cookies()
     const supabase = createClient()
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -16,8 +18,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Demo login failed', details: error?.message }, { status: 500 })
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bookdin.co'
-    return NextResponse.redirect(`${appUrl}/dashboard?demo=true`)
+    const requestUrl = new URL(request.url)
+    const origin = requestUrl.origin
+
+    return NextResponse.redirect(`${origin}/dashboard?demo=true`)
 
   } catch (err: any) {
     console.error('Demo login exception:', err)
