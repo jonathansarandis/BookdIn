@@ -183,7 +183,7 @@ export default async function CalendarPage({
       {/* Jobs this month summary */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total jobs', value: jobs?.length || 0 },
+          { label: 'Total bookings', value: jobs?.length || 0 },
           { label: 'Completed', value: jobs?.filter(j => j.status === 'completed').length || 0 },
           { label: 'Pending', value: jobs?.filter(j => j.status === 'pending').length || 0 },
           { label: 'Revenue', value: `$${((jobs?.filter(j => j.status === 'completed').reduce((sum, j) => sum + j.price, 0) || 0) / 100).toFixed(0)}` },

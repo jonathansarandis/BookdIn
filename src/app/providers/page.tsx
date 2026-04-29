@@ -155,7 +155,7 @@ export default function ProvidersPage() {
             <div className="flex items-center gap-6">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.accept_jobs} onChange={e => setForm(f => ({ ...f, accept_jobs: e.target.checked }))} className="w-4 h-4" />
-                <span className="text-sm text-gray-700">Can accept jobs</span>
+                <span className="text-sm text-gray-700">Can accept bookings</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4" />
@@ -181,7 +181,7 @@ export default function ProvidersPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">No providers yet</p>
-          <p className="text-sm text-gray-400 mt-1">Add your staff members to start assigning jobs</p>
+          <p className="text-sm text-gray-400 mt-1">Add your staff members to start assigning bookings</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

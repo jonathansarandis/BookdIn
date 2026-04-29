@@ -119,7 +119,7 @@ export default function RecurringPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Recurring Jobs</h1>
+          <h1 className="text-xl font-bold text-gray-900">Recurring Bookings</h1>
           <p className="text-sm text-gray-500 mt-0.5">Manage scheduled recurring services</p>
         </div>
         <button
@@ -242,7 +242,7 @@ export default function RecurringPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <RefreshCw className="w-10 h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">No recurring schedules yet</p>
-          <p className="text-sm text-gray-400 mt-1">Set up recurring jobs for your regular customers</p>
+          <p className="text-sm text-gray-400 mt-1">Set up recurring bookings for your regular customers</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

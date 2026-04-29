@@ -202,7 +202,7 @@ export default function ReportsPage() {
             color: 'text-green-600 bg-green-50',
           },
           {
-            label: 'Jobs',
+            label: 'Bookings',
             value: stats.totalJobs,
             change: jobsChange,
             icon: Calendar,
@@ -293,15 +293,15 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Recent jobs */}
+      {/* Recent bookings */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900 text-sm">Recent jobs</h2>
+          <h2 className="font-semibold text-gray-900 text-sm">Recent bookings</h2>
         </div>
         {loading ? (
           <div className="p-5 text-gray-400 text-sm">Loading...</div>
         ) : recentJobs.length === 0 ? (
-          <div className="p-5 text-gray-400 text-sm">No jobs in this period</div>
+          <div className="p-5 text-gray-400 text-sm">No bookings in this period</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
