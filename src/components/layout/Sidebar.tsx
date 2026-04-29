@@ -8,7 +8,7 @@ import type { Profile, Business } from '@/types/database'
 import {
   LayoutDashboard, Calendar, ClipboardList, Users,
   DollarSign, FileText, BarChart2, Settings, Zap,
-  Tag, Gift, Share2, ChevronRight, MessageSquare, Briefcase, UserCog, RefreshCw
+  Tag, Gift, Share2, ChevronRight, MessageSquare, Briefcase, UserCog, RefreshCw, Upload
 } from 'lucide-react'
 
 const NAV = [
@@ -31,6 +31,7 @@ const NAV = [
   { section: 'System' },
   { href: '/settings',     label: 'Settings',     icon: Settings },
   { href: '/integrations', label: 'Integrations', icon: Zap },
+  { href: '/import',       label: 'Import Data',  icon: Upload },
 ]
 
 interface SidebarProps {
