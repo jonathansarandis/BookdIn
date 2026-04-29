@@ -16,7 +16,7 @@ export default function MarketingNav() {
     <nav
       style={{
         position: "fixed",
-        top: 0,
+        top: 36,
         left: 0,
         right: 0,
         zIndex: 200,
