@@ -13,88 +13,71 @@ export default function MarketingNav() {
   }, []);
 
   return (
-    <nav
-      style={{
-        position: "fixed",
-        top: 36,
-        left: 0,
-        right: 0,
-        zIndex: 200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
+    }}>
+      {/* Announcement bar */}
+      <div style={{
+        background: "linear-gradient(90deg, #1e3a8a, #2563FF, #1e3a8a)",
+        padding: "0.5rem 1.5rem", textAlign: "center",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem",
+        fontSize: "0.82rem", color: "#e0f2fe", fontWeight: 500,
+      }}>
+        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+          Explore BookdIn in real-time — no sign-up needed
+        </span>
+        <a href="/api/demo/login" style={{
+          background: "#fff", color: "#1d4ed8", padding: "0.2rem 0.9rem",
+          borderRadius: 100, fontSize: "0.78rem", fontWeight: 700, textDecoration: "none",
+        }}>
+          Live Demo →
+        </a>
+      </div>
+
+      {/* Nav */}
+      <nav style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "1rem 3rem",
-        background: scrolled ? "rgba(10,15,30,0.95)" : "rgba(10,15,30,0.85)",
+        background: scrolled ? "rgba(10,15,30,0.97)" : "rgba(10,15,30,0.92)",
         backdropFilter: "blur(16px)",
         borderBottom: "1px solid rgba(255,255,255,0.07)",
         transition: "background 0.3s",
-      }}
-    >
-      <Link
-        href="/"
-        style={{
-          fontSize: "1.45rem",
-          fontWeight: 700,
-          letterSpacing: "-0.5px",
-          color: "#F0F2FF",
-          textDecoration: "none",
-          fontFamily: "'DM Sans', sans-serif",
-        }}
-      >
-        Bookd<span style={{ color: "#2563FF" }}>I</span>n
-      </Link>
+      }}>
+        <Link href="/" style={{
+          fontSize: "1.45rem", fontWeight: 700, letterSpacing: "-0.5px",
+          color: "#F0F2FF", textDecoration: "none", fontFamily: "'DM Sans', sans-serif",
+        }}>
+          Bookd<span style={{ color: "#2563FF" }}>I</span>n
+        </Link>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "2rem" }}>
-        <Link href="/#compare" style={navLink}>Features</Link>
-        <Link href="/#revenue" style={navLink}>Revenue</Link>
-        <Link href="/pricing" style={navLink}>Pricing</Link>
-        <Link href="/about" style={navLink}>About</Link>
-
-        {/* Live Demo button */}
-        <Link
-          href="/api/demo/login"
-          style={{
-            background: "transparent",
-            color: "#F0F2FF",
-            padding: "0.5rem 1.2rem",
-            borderRadius: "8px",
-            textDecoration: "none",
-            fontSize: "0.88rem",
-            fontWeight: 600,
+        <div style={{ display: "flex", alignItems: "center", gap: "2rem" }}>
+          <Link href="/#compare" style={navLink}>Features</Link>
+          <Link href="/#revenue" style={navLink}>Revenue</Link>
+          <Link href="/pricing" style={navLink}>Pricing</Link>
+          <Link href="/about" style={navLink}>About</Link>
+          <a href="/api/demo/login" style={{
+            background: "transparent", color: "#F0F2FF",
+            padding: "0.5rem 1.2rem", borderRadius: "8px",
+            textDecoration: "none", fontSize: "0.88rem", fontWeight: 600,
             border: "1px solid rgba(255,255,255,0.2)",
-            transition: "border-color 0.2s",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.4rem",
-          }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-          Live demo
-        </Link>
-
-        <Link
-          href="/auth/signup"
-          style={{
-            background: "#2563FF",
-            color: "#fff",
-            padding: "0.5rem 1.3rem",
-            borderRadius: "8px",
-            textDecoration: "none",
-            fontSize: "0.88rem",
-            fontWeight: 600,
-            transition: "background 0.2s",
-          }}
-        >
-          Start free trial
-        </Link>
-      </div>
-    </nav>
+            display: "flex", alignItems: "center", gap: "0.4rem",
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+            Live demo
+          </a>
+          <Link href="/auth/signup" style={{
+            background: "#2563FF", color: "#fff", padding: "0.5rem 1.3rem",
+            borderRadius: "8px", textDecoration: "none", fontSize: "0.88rem", fontWeight: 600,
+          }}>
+            Start free trial
+          </Link>
+        </div>
+      </nav>
+    </div>
   );
 }
 
 const navLink: React.CSSProperties = {
-  color: "#8892A4",
-  textDecoration: "none",
-  fontSize: "0.88rem",
-  transition: "color 0.2s",
+  color: "#8892A4", textDecoration: "none", fontSize: "0.88rem", transition: "color 0.2s",
 };

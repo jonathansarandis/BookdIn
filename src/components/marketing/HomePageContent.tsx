@@ -39,31 +39,12 @@ export default function HomePageContent() {
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", overflowX: "hidden", background: "#0A0F1E" }}>
 
-      {/* ── ANNOUNCEMENT BAR ── */}
-      <div style={{
-        background: "linear-gradient(90deg, #1e3a8a, #2563FF, #1e3a8a)",
-        padding: "0.55rem 1.5rem", textAlign: "center",
-        display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem",
-        fontSize: "0.82rem", color: "#e0f2fe", fontWeight: 500,
-      }}>
-        <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block", animation: "pulse 2s infinite" }} />
-          Explore BookdIn in real-time — no sign-up needed
-        </span>
-        <Link href="/api/demo/login" style={{
-          background: "#fff", color: "#1d4ed8", padding: "0.2rem 0.9rem",
-          borderRadius: 100, fontSize: "0.78rem", fontWeight: 700, textDecoration: "none",
-        }}>
-          Live Demo →
-        </Link>
-      </div>
-
       <MarketingNav />
 
       {/* ── HERO ── */}
       <section style={{
-        minHeight: "calc(100vh - 36px)", display: "flex", alignItems: "center",
-        padding: "7rem 3rem 4rem", maxWidth: 1200, margin: "0 auto",
+        minHeight: "100vh", display: "flex", alignItems: "center",
+        padding: "10rem 3rem 4rem", maxWidth: 1200, margin: "0 auto",
         gap: "5rem", position: "relative",
       }}>
         <div style={{
