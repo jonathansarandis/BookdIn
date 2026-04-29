@@ -15,14 +15,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', user.id)
     .single()
 
+  const business = Array.isArray(profile?.businesses)
+    ? profile.businesses[0]
+    : profile?.businesses
+
   const isDemoUser = business?.id === 'a0000000-0000-0000-0000-000000000001'
   if (!isDemoUser && !profile?.onboarding_complete && profile?.businesses === null) {
     redirect('/onboarding')
   }
-
-  const business = Array.isArray(profile?.businesses)
-    ? profile.businesses[0]
-    : profile?.businesses
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#F3F4F6' }}>
