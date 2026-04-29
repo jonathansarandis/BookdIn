@@ -48,7 +48,7 @@ function LoginPageInner() {
             </svg>
           </div>
           <h1 className="text-2xl font-semibold text-gray-900">Welcome back</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to your Cleanly account</p>
+          <p className="text-sm text-gray-500 mt-1">Sign in to your BookdIn account</p>
         </div>
 
         {/* Form */}
