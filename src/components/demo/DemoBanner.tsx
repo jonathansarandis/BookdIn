@@ -24,7 +24,7 @@ export default function DemoBanner() {
         </span>
       </div>
       <Link
-        href="/auth/signup"
+        href="/api/demo/logout"
         style={{
           background: '#fff',
           color: '#1d4ed8',
