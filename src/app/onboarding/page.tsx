@@ -96,7 +96,7 @@ export default function OnboardingPage() {
           <p className="text-xs font-medium text-brand-700 mb-1">Your booking link is ready</p>
           <div className="flex items-center gap-2">
             <code className="text-xs text-brand-800 bg-brand-100 px-2 py-1 rounded font-mono flex-1 truncate">
-              your-business.cleanly.app/book
+              bookdin.co/book/your-slug
             </code>
             <button className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-800 font-medium">
               <ExternalLink className="w-3 h-3" /> Preview

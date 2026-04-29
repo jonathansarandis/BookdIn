@@ -15,7 +15,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', user.id)
     .single()
 
-  if (!profile?.onboarding_complete && profile?.businesses === null) {
+  const isDemoUser = business?.id === 'a0000000-0000-0000-0000-000000000001'
+  if (!isDemoUser && !profile?.onboarding_complete && profile?.businesses === null) {
     redirect('/onboarding')
   }
 
