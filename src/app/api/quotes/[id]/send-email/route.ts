@@ -173,7 +173,7 @@ export async function POST(
 
   try {
     await resend.emails.send({
-      from: `${businessName} <info@cleanfreaks.au>`,
+      from: `${businessName} <hello@bookdin.co>`,
       reply_to: tenantEmail,
       to: quote.customer.email,
       subject: `Your quote from ${businessName} — ${quoteRef}`,

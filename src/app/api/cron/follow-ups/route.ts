@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
     if (quote.customer?.email) {
       const quoteRef = `QT-${quote.id.slice(0, 8).toUpperCase()}`
       await resend.emails.send({
-        from: `${quote.business?.name} <info@cleanfreaks.au>`,
+        from: `${quote.business?.name} <hello@bookdin.co>`,
         reply_to: staff?.[0]?.email,
         to: quote.customer.email,
         subject: `Following up on your quote — ${quoteRef}`,
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
       for (const s of staff) {
         if (!s.email) continue
         await resend.emails.send({
-          from: `BookdIn <info@cleanfreaks.au>`,
+          from: `BookdIn <hello@bookdin.co>`,
           to: s.email,
           subject: `📞 Follow up with ${contact.full_name} now`,
           html: `

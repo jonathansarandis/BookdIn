@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       for (const staff of staffProfiles) {
         if (staff.email) {
           await resend.emails.send({
-            from: `BookdIn <info@cleanfreaks.au>`,
+            from: `BookdIn <hello@bookdin.co>`,
             to: staff.email,
             subject: `📞 New booking — call ${customer.full_name} now`,
             html: `
@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
     const cardSaveUrl = `${appUrl}/api/bookings/${job.id}/card-setup`
 
     await resend.emails.send({
-      from: `${business.name} <info@cleanfreaks.au>`,
+      from: `${business.name} <hello@bookdin.co>`,
       reply_to: staffProfiles?.[0]?.email,
       to: customer.email,
       subject: `Booking confirmed — ${service?.name} on ${formatDate(scheduled_date)}`,
