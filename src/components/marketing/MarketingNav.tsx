@@ -45,7 +45,7 @@ export default function MarketingNav() {
       {/* Nav */}
       <nav style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "1rem 3rem",
+        padding: "1rem 2rem",
         background: scrolled ? "rgba(10,15,30,0.97)" : "rgba(10,15,30,0.88)",
         backdropFilter: "blur(16px)",
         borderBottom: scrolled ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
@@ -59,7 +59,7 @@ export default function MarketingNav() {
           Bookd<span style={{ color: "#2563FF" }}>I</span>n
         </Link>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1.2rem" }}>
           <Link href="/#compare" style={navLink}>Features</Link>
           <Link href="/#revenue" style={navLink}>Revenue</Link>
           <Link href="/pricing" style={navLink}>Pricing</Link>
