@@ -1,13 +1,10 @@
 // @ts-nocheck
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = createClient()
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: 'demo@bookdin.co',
@@ -15,31 +12,15 @@ export async function GET() {
     })
 
     if (error || !data.session) {
-      return NextResponse.json({ error: 'Demo login failed' }, { status: 500 })
+      console.error('Demo login error:', error)
+      return NextResponse.json({ error: 'Demo login failed', details: error?.message }, { status: 500 })
     }
 
-    const response = NextResponse.redirect(
-      new URL('/dashboard?demo=true', process.env.NEXT_PUBLIC_APP_URL || 'https://bookdin.co')
-    )
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bookdin.co'
+    return NextResponse.redirect(`${appUrl}/dashboard?demo=true`)
 
-    // Set the session cookies
-    response.cookies.set('sb-access-token', data.session.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      maxAge: 60 * 60, // 1 hour demo session
-      path: '/',
-    })
-    response.cookies.set('sb-refresh-token', data.session.refresh_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      maxAge: 60 * 60,
-      path: '/',
-    })
-
-    return response
-  } catch (err) {
-    return NextResponse.json({ error: 'Demo unavailable' }, { status: 500 })
+  } catch (err: any) {
+    console.error('Demo login exception:', err)
+    return NextResponse.json({ error: 'Demo unavailable', details: err.message }, { status: 500 })
   }
 }
