@@ -1,6 +1,7 @@
 // @ts-nocheck
 'use client'
 import PaymentSection from '@/components/payments/PaymentSection'
+import ManualSourceSelector from '@/components/ManualSourceSelector'
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -59,6 +60,10 @@ export default function BookingPage() {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
 
+  const [leadSource, setLeadSource] = useState('')
+  const [campaignLabel, setCampaignLabel] = useState('')
+  const [existingCampaigns, setExistingCampaigns] = useState<string[]>([])
+
   function update(field: string, value: any) {
     setForm(f => ({ ...f, [field]: value }))
   }
@@ -70,14 +75,17 @@ export default function BookingPage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
       const bid = profile!.business_id!
 
-      const [{ data: svcs }, { data: cxs }, { data: prvs }] = await Promise.all([
+      const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }] = await Promise.all([
         supabase.from('services').select('*, service_extras(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
+        supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
       ])
       setServices(svcs || [])
       setCustomers(cxs || [])
       setProviders(prvs || [])
+      const uniqueCampaigns = [...new Set((campaigns || []).map((r: any) => r.manual_campaign_label).filter(Boolean))]
+      setExistingCampaigns(uniqueCampaigns)
       if (svcs?.[0]) update('service_id', svcs[0].id)
     }
     load()
@@ -166,6 +174,23 @@ export default function BookingPage() {
         booking_source: 'admin',
       }).select().single()
       if (jobErr) throw new Error('Failed to create job: ' + jobErr.message)
+
+      // Save lead source attribution if selected
+      if (leadSource) {
+        await fetch('/api/attribution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            booking_id: job.id,
+            business_id: bid,
+            customer_id: customerId,
+            source_type: leadSource,
+            manually_entered: true,
+            manual_campaign_label: campaignLabel || null,
+            booking_value_cents: totalPrice,
+          }),
+        })
+      }
 
       // Handle card payment - create payment intent with manual capture
       if (paymentMethod === 'card' && getCardPaymentMethod) {
@@ -434,6 +459,17 @@ export default function BookingPage() {
                 rows={2} placeholder="Staff notes (not visible to customer)..."
                 className={`${inputClass} resize-none`} />
             </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">Lead source</h3>
+            <ManualSourceSelector
+              value={leadSource}
+              onChange={setLeadSource}
+              campaignLabel={campaignLabel}
+              onCampaignLabelChange={setCampaignLabel}
+              campaigns={existingCampaigns}
+            />
           </div>
 
           <div className="flex gap-3">

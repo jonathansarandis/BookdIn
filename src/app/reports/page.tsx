@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { DollarSign, Calendar, Users, TrendingUp, ArrowUp, ArrowDown } from 'lucide-react'
+import { DollarSign, Calendar, Users, TrendingUp, ArrowUp, ArrowDown, BarChart2 } from 'lucide-react'
+import Link from 'next/link'
 
 function formatCurrency(cents: number) {
   return `$${(cents / 100).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -292,6 +293,20 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
+
+      {/* Attribution link */}
+      <Link href="/reports/attribution" className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:bg-brand-50 transition-colors group">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center">
+            <BarChart2 className="w-4.5 h-4.5 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Lead attribution</p>
+            <p className="text-xs text-gray-500">See where your bookings are coming from</p>
+          </div>
+        </div>
+        <span className="text-sm text-gray-400 group-hover:text-brand-600 transition-colors">View report →</span>
+      </Link>
 
       {/* Recent bookings */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
