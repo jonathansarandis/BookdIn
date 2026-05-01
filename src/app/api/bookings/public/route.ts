@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     customer,
     address,
     customer_notes,
+    utm_data,
   } = body
 
   try {
@@ -341,6 +342,27 @@ export async function POST(request: NextRequest) {
       }).catch(console.error)
     }
 
+    if (utm_data) {
+      await supabase.from('lead_sources').insert({
+        booking_id: job.id,
+        business_id,
+        customer_id: customerId,
+        utm_source: utm_data.utm_source,
+        utm_medium: utm_data.utm_medium,
+        utm_campaign: utm_data.utm_campaign,
+        utm_ad_group: utm_data.utm_ad_group,
+        utm_term: utm_data.utm_term,
+        utm_content: utm_data.utm_content,
+        gclid: utm_data.gclid,
+        referrer_url: utm_data.referrer_url,
+        landing_page: utm_data.landing_page,
+        source_type: utm_data.source_type || 'direct',
+        session_id: utm_data.session_id,
+        booking_value_cents: total_price,
+        lead_status: 'booked',
+        converted_at: new Date().toISOString(),
+      }).catch(console.error)
+    }
     return NextResponse.json({ success: true, job_id: job.id })
   } catch (err: any) {
     console.error('Public booking error:', err)
