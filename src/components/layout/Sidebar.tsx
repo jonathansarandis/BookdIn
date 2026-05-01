@@ -8,7 +8,7 @@ import type { Profile, Business } from '@/types/database'
 import {
   LayoutDashboard, Calendar, ClipboardList, Users,
   DollarSign, FileText, BarChart2, Settings, Zap,
-  Tag, Gift, Share2, ChevronRight, MessageSquare, Briefcase, UserCog, RefreshCw, Upload
+  Tag, Gift, Share2, ChevronRight, MessageSquare, Briefcase, UserCog, RefreshCw, Upload, Target
 } from 'lucide-react'
 
 const NAV = [
@@ -25,6 +25,7 @@ const NAV = [
   { href: '/quotes',       label: 'Quotes',       icon: FileText },
   { href: '/discounts',    label: 'Discounts',    icon: Tag },
   { href: '/reports',      label: 'Reports',      icon: BarChart2 },
+  { href: '/reports/attribution', label: 'Attribution',   icon: Target },
   { section: 'Growth' },
   { href: '/gift-cards',   label: 'Gift Cards',   icon: Gift },
   { href: '/referrals',    label: 'Referrals',    icon: Share2 },
