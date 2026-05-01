@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
+import { useUTMCapture } from '@/lib/useUTMCapture'
 
 const FREQUENCIES = [
   { value: 'one_time',    label: 'One-time',   discount: 0 },
@@ -18,6 +19,7 @@ export default function PublicBookingPage() {
   const slug = params.slug as string
   const supabase = createClient()
 
+  const utmData = useUTMCapture()
   const [business, setBusiness] = useState<any>(null)
   const [services, setServices] = useState<any[]>([])
   const [roomPricing, setRoomPricing] = useState<any[]>([])
@@ -158,6 +160,7 @@ export default function PublicBookingPage() {
             postcode: form.postcode,
           },
           customer_notes: form.customer_notes,
+          utm_data: utmData,
         }),
       })
 
