@@ -35,6 +35,11 @@ export default function ReportsPage() {
   const [topServices, setTopServices] = useState<any[]>([])
   const [monthlyRevenue, setMonthlyRevenue] = useState<any[]>([])
 
+  const [attrLoading, setAttrLoading] = useState(true)
+  const [attrLeads, setAttrLeads] = useState(0)
+  const [attrBookings, setAttrBookings] = useState(0)
+  const [attrTopCampaigns, setAttrTopCampaigns] = useState<{ label: string; revenue: number; count: number }[]>([])
+
   const supabase = createClient()
 
   useEffect(() => {
@@ -48,8 +53,44 @@ export default function ReportsPage() {
   }, [])
 
   useEffect(() => {
-    if (businessId) fetchStats()
+    if (businessId) {
+      fetchStats()
+      fetchAttribution()
+    }
   }, [businessId, period])
+
+  async function fetchAttribution() {
+    setAttrLoading(true)
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+    const { data: leads } = await supabase
+      .from('lead_sources')
+      .select('booking_id, manual_campaign_label, booking_value_cents, lead_status')
+      .eq('business_id', businessId)
+      .gte('created_at', monthStart)
+
+    const rows = leads || []
+    const totalLeads = rows.length
+    const totalBookings = rows.filter(r => r.lead_status === 'booked' || r.booking_id).length
+
+    const campaignMap: Record<string, { revenue: number; count: number }> = {}
+    for (const r of rows) {
+      if (!r.manual_campaign_label) continue
+      if (!campaignMap[r.manual_campaign_label]) campaignMap[r.manual_campaign_label] = { revenue: 0, count: 0 }
+      campaignMap[r.manual_campaign_label].revenue += r.booking_value_cents || 0
+      campaignMap[r.manual_campaign_label].count++
+    }
+    const topCampaigns = Object.entries(campaignMap)
+      .map(([label, v]) => ({ label, ...v }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 3)
+
+    setAttrLeads(totalLeads)
+    setAttrBookings(totalBookings)
+    setAttrTopCampaigns(topCampaigns)
+    setAttrLoading(false)
+  }
 
   async function fetchStats() {
     setLoading(true)
@@ -190,6 +231,56 @@ export default function ReportsPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Attribution summary — this month */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-900">Lead attribution — this month</h2>
+          <Link href="/reports/attribution" className="text-xs text-brand-600 hover:underline">Full report →</Link>
+        </div>
+        {attrLoading ? (
+          <div className="text-sm text-gray-400">Loading...</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* KPI row */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-gray-900">{attrLeads}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">Leads</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-gray-900">{attrBookings}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">Bookings</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <p className="text-xl font-bold text-brand-600">
+                  {attrLeads > 0 ? Math.round((attrBookings / attrLeads) * 100) : 0}%
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">Conversion</p>
+              </div>
+            </div>
+            {/* Top campaigns */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">Top campaigns by revenue</p>
+              {attrTopCampaigns.length === 0 ? (
+                <p className="text-xs text-gray-400">No campaign data this month</p>
+              ) : (
+                <div className="space-y-2">
+                  {attrTopCampaigns.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700 truncate max-w-[160px]">{c.label}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] text-gray-400">{c.count} lead{c.count !== 1 ? 's' : ''}</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(c.revenue)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Stat cards */}

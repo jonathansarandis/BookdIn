@@ -1,5 +1,5 @@
 // @ts-nocheck
-// Auto-generated types for Cleanly database schema
+// Auto-generated types for BookdIn database schema
 // Run `npm run db:generate` to regenerate after schema changes
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
