@@ -2,11 +2,12 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { ArrowLeft, MapPin, Calendar, Clock, User, Briefcase, FileText } from 'lucide-react'
 import JobStatusUpdater from '@/app/jobs/JobStatusUpdater'
 import PayButton from '@/components/payments/PayButton'
-import JobPhotos from '@/app/jobs/[id]/JobPhotos'
 import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
+import JobMessages from '@/app/jobs/[id]/JobMessages'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -24,14 +25,37 @@ const STATUS_LABELS = {
   cancelled:   'Cancelled',
 }
 
+async function listPhotos(adminClient: any, businessId: string, jobId: string, folder: string) {
+  try {
+    const prefix = `${businessId}/${jobId}/${folder}`
+    const { data: files } = await adminClient.storage.from('job-photos').list(prefix)
+    if (!files?.length) return []
+    const urls = await Promise.all(
+      files
+        .filter((f: any) => f.name && f.name !== '.emptyFolderPlaceholder')
+        .map(async (f: any) => {
+          const { data } = await adminClient.storage
+            .from('job-photos')
+            .createSignedUrl(`${prefix}/${f.name}`, 7 * 24 * 3600)
+          return data?.signedUrl ?? null
+        })
+    )
+    return urls.filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+  const supabase    = createClient()
+  const adminClient = createAdminClient()
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('business_id')
+    .select('business_id, full_name')
     .eq('id', user.id)
     .single()
 
@@ -58,9 +82,40 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
   if (!job) redirect('/jobs')
 
+  const businessId = profile?.business_id ?? ''
+
+  // Photos
+  const [beforePhotos, afterPhotos] = await Promise.all([
+    listPhotos(adminClient, businessId, job.id, 'before'),
+    listPhotos(adminClient, businessId, job.id, 'after'),
+  ])
+
+  // Messages
+  const { data: messages } = await supabase
+    .from('messages')
+    .select('id, created_at, sender_name, sender_role, content')
+    .eq('job_id', job.id)
+    .order('created_at', { ascending: true })
+
+  // Provider location
+  let providerLocation = null
+  if (job.provider_id) {
+    const { data: loc } = await supabase
+      .from('provider_locations')
+      .select('status, updated_at')
+      .eq('provider_id', job.provider_id)
+      .single()
+    if (loc) {
+      const ageMs = Date.now() - new Date(loc.updated_at).getTime()
+      if (ageMs < 5 * 60 * 1000 && loc.status !== 'offline') {
+        providerLocation = { ...loc, ageMin: Math.floor(ageMs / 60000) }
+      }
+    }
+  }
+
   const scheduledAt = job.scheduled_at ? new Date(job.scheduled_at) : null
-  const isPaid = job.payment_status === 'paid'
-  const canPay = !isPaid && job.status !== 'cancelled' && job.total_price > 0
+  const isPaid  = job.payment_status === 'paid'
+  const canPay  = !isPaid && job.status !== 'cancelled' && job.total_price > 0
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -130,18 +185,28 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   {job.customer.full_name}
                 </Link>
               </div>
-              {job.customer.email && (
-                <p className="text-sm text-gray-500 ml-6">{job.customer.email}</p>
-              )}
-              {job.customer.phone && (
-                <p className="text-sm text-gray-500 ml-6">{job.customer.phone}</p>
-              )}
+              {job.customer.email && <p className="text-sm text-gray-500 ml-6">{job.customer.email}</p>}
+              {job.customer.phone && <p className="text-sm text-gray-500 ml-6">{job.customer.phone}</p>}
             </div>
           )}
 
           {/* Provider */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">Service provider</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Service provider</h2>
+              {providerLocation && (
+                <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                  providerLocation.status === 'on_site'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-blue-100 text-blue-700'
+                }`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current inline-block" />
+                  {providerLocation.status === 'on_site' ? 'Provider on site' : 'Provider en route'}
+                  {' · '}
+                  {providerLocation.ageMin === 0 ? 'just now' : `${providerLocation.ageMin}m ago`}
+                </span>
+              )}
+            </div>
             <ProviderAssigner
               jobId={job.id}
               currentProviderId={job.provider_id || null}
@@ -171,9 +236,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             <h2 className="font-semibold text-gray-900">Payment</h2>
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Total</span>
-              <span className="font-semibold text-gray-900">
-                ${((job.total_price || 0) / 100).toFixed(2)} AUD
-              </span>
+              <span className="font-semibold text-gray-900">${((job.total_price || 0) / 100).toFixed(2)} AUD</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Status</span>
@@ -182,11 +245,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               </span>
             </div>
             {canPay && (
-              <PayButton
-                jobId={job.id}
-                amount={job.total_price}
-                label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`}
-              />
+              <PayButton jobId={job.id} amount={job.total_price}
+                label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`} />
             )}
             {isPaid && job.status === 'completed' && (
               <p className="text-xs text-green-600 text-center">✓ Payment received</p>
@@ -198,6 +258,51 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             <h2 className="font-semibold text-gray-900">Update status</h2>
             <JobStatusUpdater jobId={job.id} currentStatus={job.status} providers={[]} currentProviderId={job.provider_id || null} />
           </div>
+
+          {/* Photos — Before */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Photos</h2>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Before</p>
+              {beforePhotos.length === 0 ? (
+                <p className="text-xs text-gray-400">No photos yet</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {beforePhotos.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      className="aspect-square rounded-lg overflow-hidden bg-gray-100 block">
+                      <img src={url} alt="Before" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">After</p>
+              {afterPhotos.length === 0 ? (
+                <p className="text-xs text-gray-400">No photos yet</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {afterPhotos.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      className="aspect-square rounded-lg overflow-hidden bg-gray-100 block">
+                      <img src={url} alt="After" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Messages */}
+          <JobMessages
+            jobId={job.id}
+            businessId={businessId}
+            senderName={profile?.full_name ?? 'Owner'}
+            initialMessages={messages ?? []}
+          />
 
         </div>
       </div>
