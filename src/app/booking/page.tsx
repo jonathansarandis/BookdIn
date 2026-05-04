@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
-import { calcJobPrice, type RoomPricingRow } from '@/lib/pricing'
+import { calcJobPrice } from '@/lib/pricing'
 
 const FREQUENCIES = [
   { value: 'one_time',    label: 'One-time',         discount: 0 },
@@ -32,8 +32,6 @@ export default function BookingPage() {
   const [services, setServices] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [providers, setProviders] = useState<any[]>([])
-  const [roomPricing, setRoomPricing] = useState<RoomPricingRow[]>([])
-
   const [form, setForm] = useState({
     service_id: '',
     frequency: 'one_time',
@@ -78,7 +76,7 @@ export default function BookingPage() {
       const bid = profile!.business_id!
 
       const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }] = await Promise.all([
-        supabase.from('services').select('*, service_extras(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
+        supabase.from('services').select('*, service_extras(*), room_pricing(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
@@ -93,17 +91,6 @@ export default function BookingPage() {
     }
     load()
   }, [])
-
-  // Fetch room_pricing whenever the selected service changes
-  useEffect(() => {
-    if (!form.service_id) return
-    const supabase = createClient()
-    supabase
-      .from('room_pricing')
-      .select('*')
-      .eq('service_id', form.service_id)
-      .then(({ data }) => setRoomPricing(data || []))
-  }, [form.service_id])
 
   // Prefill form from existing job when ?edit= is present
   useEffect(() => {
@@ -157,14 +144,14 @@ export default function BookingPage() {
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency) ?? FREQUENCIES[0]
 
-  // Derive room counts from room_pricing DB rows; fall back to sensible defaults while loading
+  // Derive room counts from room_pricing embedded in the service row
   const bedroomCounts = (() => {
-    const counts = roomPricing.filter(r => r.type === 'bedroom').map(r => r.count).sort((a, b) => a - b)
+    const counts = (selectedService?.room_pricing || []).filter((r: any) => r.type === 'bedroom').map((r: any) => r.count).sort((a: number, b: number) => a - b)
     return counts.length > 0 ? counts : [1, 2, 3, 4, 5]
   })()
 
   const bathroomCounts = (() => {
-    const counts = roomPricing.filter(r => r.type === 'bathroom').map(r => r.count).sort((a, b) => a - b)
+    const counts = (selectedService?.room_pricing || []).filter((r: any) => r.type === 'bathroom').map((r: any) => r.count).sort((a: number, b: number) => a - b)
     return counts.length > 0 ? counts : [1, 2, 3]
   })()
 
@@ -182,7 +169,7 @@ export default function BookingPage() {
       selectedExtras: (selectedService.service_extras || [])
         .filter((ex: any) => selectedExtras.includes(ex.id))
         .map((ex: any) => ({ price: ex.price })),
-      roomPricing,
+      roomPricing: selectedService?.room_pricing || [],
     })
     const discount = selectedFreq.discount > 0 ? Math.round(breakdown.total * selectedFreq.discount / 100) : 0
     return breakdown.total - discount
