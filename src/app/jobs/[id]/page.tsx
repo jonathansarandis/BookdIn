@@ -3,12 +3,14 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ArrowLeft, MapPin, Calendar, Clock, User, Briefcase, FileText } from 'lucide-react'
+import { ArrowLeft, MapPin, User, FileText } from 'lucide-react'
 import JobStatusUpdater from '@/app/jobs/JobStatusUpdater'
 import PayButton from '@/components/payments/PayButton'
 import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 import JobMessages from '@/app/jobs/[id]/JobMessages'
 import CardSetupButton from '@/app/jobs/[id]/CardSetupButton'
+import NotesEditor from '@/app/jobs/[id]/NotesEditor'
+import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -68,7 +70,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         customer:customers(id, full_name, email, phone),
         service:services(id, name, base_price),
         provider:providers(id, display_name, color),
-        address:addresses(line1, city, state, postcode)
+        address:addresses(line1, city, state, postcode),
+        job_extras(id, name, price)
       `)
       .eq('id', params.id)
       .eq('business_id', profile?.business_id)
@@ -119,7 +122,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     }
   }
 
-  const scheduledAt = job.scheduled_at ? new Date(job.scheduled_at) : null
   const isPaid  = job.payment_status === 'paid'
   const canPay  = !isPaid && job.status !== 'cancelled' && job.total_price > 0
 
@@ -158,27 +160,11 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         <div className="md:col-span-2 space-y-5">
 
           {/* Schedule */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">Schedule</h2>
-            {scheduledAt && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                {scheduledAt.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </div>
-            )}
-            {scheduledAt && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Clock className="w-4 h-4 text-gray-400" />
-                {scheduledAt.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}
-              </div>
-            )}
-            {job.duration_minutes && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Clock className="w-4 h-4 text-gray-400" />
-                {job.duration_minutes} minutes
-              </div>
-            )}
-          </div>
+          <ScheduleEditor
+            jobId={job.id}
+            initialScheduledAt={job.scheduled_at}
+            durationMinutes={job.duration_minutes ?? null}
+          />
 
           {/* Address */}
           {job.address && (
@@ -233,13 +219,18 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </div>
 
           {/* Notes */}
-          {job.notes && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
-              <h2 className="font-semibold text-gray-900">Notes</h2>
-              <div className="flex items-start gap-2 text-sm text-gray-600">
-                <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                <p>{job.notes}</p>
-              </div>
+          <NotesEditor jobId={job.id} initialNotes={job.notes ?? null} />
+
+          {/* Add-ons — structured extras saved via job_extras join table */}
+          {job.job_extras?.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+              <h2 className="font-semibold text-gray-900">Add-ons</h2>
+              {job.job_extras.map((extra: any) => (
+                <div key={extra.id} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">{extra.name}</span>
+                  <span className="text-gray-900 font-medium">+${(extra.price / 100).toFixed(2)}</span>
+                </div>
+              ))}
             </div>
           )}
 
