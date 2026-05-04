@@ -170,6 +170,8 @@ export default function BookingPage() {
         frequency: form.frequency,
         notes: form.notes || null,
         booking_source: 'admin',
+        bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
+        bathrooms: selectedService?.pricing_type === 'room_based' ? form.bathrooms : null,
       }).select().single()
       if (jobErr) throw new Error('Failed to create job: ' + jobErr.message)
 

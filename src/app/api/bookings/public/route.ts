@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
     address,
     customer_notes,
     utm_data,
+    bedrooms,
+    bathrooms,
   } = body
 
   try {
@@ -121,6 +123,8 @@ export async function POST(request: NextRequest) {
         payment_status: 'unpaid',
         payment_method: 'card',
         booking_source: 'online',
+        bedrooms: service?.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
+        bathrooms: service?.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
       })
       .select('id')
       .single()

@@ -2,6 +2,11 @@
 -- CLEANLY — Full Database Schema
 -- Paste this into Supabase → SQL Editor → Run
 -- ============================================================
+--
+-- TODO: schema.sql is currently out of sync with the live DB. The following
+-- columns exist in production but are not recorded here:
+--   jobs: total_price, payment_status, payment_method, paid_at, bedrooms, bathrooms
+-- A reconciliation pass is needed before this file can be used as a reliable reference.
 
 -- Enable UUID generation
 create extension if not exists "uuid-ossp";
@@ -155,7 +160,9 @@ create table if not exists jobs (
   recurring_schedule_id   uuid,
   stripe_payment_intent_id text,
   invoice_id              uuid,
-  completed_at            timestamptz
+  completed_at            timestamptz,
+  bedrooms                integer,
+  bathrooms               integer
 );
 
 -- ─── JOB EXTRAS ────────────────────────────────────────────

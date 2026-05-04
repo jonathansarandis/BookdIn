@@ -190,6 +190,8 @@ export interface Database {
           stripe_payment_intent_id: string | null
           invoice_id: string | null
           completed_at: string | null
+          bedrooms: number | null
+          bathrooms: number | null
         }
         Insert: Omit<Database['public']['Tables']['jobs']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['jobs']['Insert']>

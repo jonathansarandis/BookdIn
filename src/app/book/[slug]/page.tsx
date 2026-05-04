@@ -161,6 +161,8 @@ export default function PublicBookingPage() {
           },
           customer_notes: form.customer_notes,
           utm_data: utmData,
+          bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
+          bathrooms: selectedService?.pricing_type === 'room_based' ? form.bathrooms : null,
         }),
       })
 
