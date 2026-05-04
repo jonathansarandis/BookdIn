@@ -11,6 +11,7 @@ import JobMessages from '@/app/jobs/[id]/JobMessages'
 import CardSetupButton from '@/app/jobs/[id]/CardSetupButton'
 import NotesEditor from '@/app/jobs/[id]/NotesEditor'
 import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
+import ServiceEditor from '@/app/jobs/[id]/ServiceEditor'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -68,10 +69,10 @@ export default async function JobDetailPage({ params }: { params: { id: string }
       .select(`
         *,
         customer:customers(id, full_name, email, phone),
-        service:services(id, name, base_price),
+        service:services(*),
         provider:providers(id, display_name, color),
         address:addresses(line1, city, state, postcode),
-        job_extras(id, name, price)
+        job_extras(id, extra_id, name, price)
       `)
       .eq('id', params.id)
       .eq('business_id', profile?.business_id)
@@ -164,6 +165,18 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             jobId={job.id}
             initialScheduledAt={job.scheduled_at}
             durationMinutes={job.duration_minutes ?? null}
+          />
+
+          {/* Service */}
+          <ServiceEditor
+            jobId={job.id}
+            businessId={businessId}
+            initialService={job.service}
+            initialBedrooms={job.bedrooms ?? null}
+            initialBathrooms={job.bathrooms ?? null}
+            initialExtras={job.job_extras ?? []}
+            isPaid={isPaid}
+            isCancelled={job.status === 'cancelled'}
           />
 
           {/* Address */}
