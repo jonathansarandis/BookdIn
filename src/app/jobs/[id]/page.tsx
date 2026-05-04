@@ -8,6 +8,7 @@ import JobStatusUpdater from '@/app/jobs/JobStatusUpdater'
 import PayButton from '@/components/payments/PayButton'
 import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 import JobMessages from '@/app/jobs/[id]/JobMessages'
+import CardSetupButton from '@/app/jobs/[id]/CardSetupButton'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -59,7 +60,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     .eq('id', user.id)
     .single()
 
-  const [{ data: job }, { data: providers }] = await Promise.all([
+  const [{ data: job }, { data: providers }, { data: business }] = await Promise.all([
     supabase
       .from('jobs')
       .select(`
@@ -78,6 +79,11 @@ export default async function JobDetailPage({ params }: { params: { id: string }
       .eq('business_id', profile?.business_id)
       .eq('is_active', true)
       .order('display_name'),
+    supabase
+      .from('businesses')
+      .select('tax_rate, tax_name, show_tax')
+      .eq('id', profile?.business_id)
+      .single(),
   ])
 
   if (!job) redirect('/jobs')
@@ -117,13 +123,23 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   const isPaid  = job.payment_status === 'paid'
   const canPay  = !isPaid && job.status !== 'cancelled' && job.total_price > 0
 
+  // Currently assumes tax-inclusive pricing (correct for AU/UK B2C).
+  // For US/exclusive markets we'll add a businesses.tax_inclusive boolean
+  // and branch the math accordingly.
+  const taxRate = business?.tax_rate ?? 0
+  const taxName = business?.tax_name?.trim() || 'Tax'
+  const showTaxBreakdown = taxRate > 0 && (business?.show_tax ?? false)
+  const totalCents = job.total_price || 0
+  const taxCents = showTaxBreakdown ? Math.round(totalCents * taxRate / (100 + taxRate)) : 0
+  const subtotalCents = totalCents - taxCents
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/jobs" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+          <Link href="/calendar" className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <ArrowLeft className="w-5 h-5 text-gray-500" />
           </Link>
           <div>
@@ -245,10 +261,27 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           {/* Payment */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <h2 className="font-semibold text-gray-900">Payment</h2>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Total</span>
-              <span className="font-semibold text-gray-900">${((job.total_price || 0) / 100).toFixed(2)} AUD</span>
-            </div>
+            {showTaxBreakdown ? (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-900">${(subtotalCents / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">{taxName} ({taxRate}%)</span>
+                  <span className="text-gray-900">${(taxCents / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm border-t border-gray-100 pt-2">
+                  <span className="text-gray-500">Total</span>
+                  <span className="font-semibold text-gray-900">${(totalCents / 100).toFixed(2)} AUD</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Total</span>
+                <span className="font-semibold text-gray-900">${((job.total_price || 0) / 100).toFixed(2)} AUD</span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Status</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isPaid ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -258,6 +291,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             {canPay && (
               <PayButton jobId={job.id} amount={job.total_price}
                 label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`} />
+            )}
+            {!isPaid && job.status !== 'cancelled' && (
+              <CardSetupButton jobId={job.id} />
             )}
             {isPaid && job.status === 'completed' && (
               <p className="text-xs text-green-600 text-center">✓ Payment received</p>
