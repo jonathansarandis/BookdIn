@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
+import { calcJobPrice, type RoomPricingRow } from '@/lib/pricing'
 
 const FREQUENCIES = [
   { value: 'one_time',    label: 'One-time',         discount: 0 },
@@ -15,13 +16,13 @@ const FREQUENCIES = [
   { value: 'monthly',     label: 'Monthly',           discount: 10 },
 ]
 
-const ROOM_PRICES: Record<number, number> = { 1: 0, 2: 3000, 3: 5500, 4: 8000, 5: 11000 }
-const BATH_PRICES: Record<number, number> = { 1: 0, 2: 2500, 3: 5000 }
+const TIME_SLOTS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00']
 
 export default function BookingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const preCustomerId = searchParams.get('customer')
+  const editJobId = searchParams.get('edit')
 
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -31,6 +32,7 @@ export default function BookingPage() {
   const [services, setServices] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [providers, setProviders] = useState<any[]>([])
+  const [roomPricing, setRoomPricing] = useState<RoomPricingRow[]>([])
 
   const [form, setForm] = useState({
     service_id: '',
@@ -67,6 +69,7 @@ export default function BookingPage() {
     setForm(f => ({ ...f, [field]: value }))
   }
 
+  // Load reference data (services, customers, providers, campaigns)
   useEffect(() => {
     async function load() {
       const supabase = createClient()
@@ -85,27 +88,104 @@ export default function BookingPage() {
       setProviders(prvs || [])
       const uniqueCampaigns = [...new Set((campaigns || []).map((r: any) => r.manual_campaign_label).filter(Boolean))]
       setExistingCampaigns(uniqueCampaigns)
-      if (svcs?.[0]) update('service_id', svcs[0].id)
+      // In edit mode, the prefill useEffect sets service_id from the job — don't override it here
+      if (!editJobId && svcs?.[0]) update('service_id', svcs[0].id)
     }
     load()
   }, [])
 
+  // Fetch room_pricing whenever the selected service changes
+  useEffect(() => {
+    if (!form.service_id) return
+    const supabase = createClient()
+    supabase
+      .from('room_pricing')
+      .select('*')
+      .eq('service_id', form.service_id)
+      .then(({ data }) => setRoomPricing(data || []))
+  }, [form.service_id])
+
+  // Prefill form from existing job when ?edit= is present
+  useEffect(() => {
+    if (!editJobId) return
+    async function prefill() {
+      const supabase = createClient()
+      const { data: job } = await supabase
+        .from('jobs')
+        .select(`
+          *,
+          customer:customers(id, full_name, email, phone),
+          address:addresses(id, line1, city, state, postcode),
+          job_extras(id, extra_id, name, price)
+        `)
+        .eq('id', editJobId)
+        .single()
+      if (!job) return
+
+      const d = new Date(job.scheduled_at)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const scheduledDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      const scheduledTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+      setForm(f => ({
+        ...f,
+        service_id: job.service_id,
+        frequency: job.frequency,
+        bedrooms: job.bedrooms ?? 2,
+        bathrooms: job.bathrooms ?? 1,
+        scheduled_date: scheduledDate,
+        scheduled_time: scheduledTime,
+        customer_id: job.customer_id,
+        new_customer: false,
+        customer_name: job.customer?.full_name || '',
+        customer_email: job.customer?.email || '',
+        customer_phone: job.customer?.phone || '',
+        line1: job.address?.line1 || '',
+        city: job.address?.city || '',
+        state: job.address?.state || '',
+        postcode: job.address?.postcode || '',
+        provider_id: job.provider_id || '',
+        notes: job.notes || '',
+      }))
+      setSelectedExtras(
+        (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
+      )
+    }
+    prefill()
+  }, [editJobId])
+
   const selectedService = services.find(s => s.id === form.service_id)
-  const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency)!
+  const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency) ?? FREQUENCIES[0]
+
+  // Derive room counts from room_pricing DB rows; fall back to sensible defaults while loading
+  const bedroomCounts = (() => {
+    const counts = roomPricing.filter(r => r.type === 'bedroom').map(r => r.count).sort((a, b) => a - b)
+    return counts.length > 0 ? counts : [1, 2, 3, 4, 5]
+  })()
+
+  const bathroomCounts = (() => {
+    const counts = roomPricing.filter(r => r.type === 'bathroom').map(r => r.count).sort((a, b) => a - b)
+    return counts.length > 0 ? counts : [1, 2, 3]
+  })()
 
   function calcPrice() {
     if (!selectedService) return 0
-    let base = selectedService.base_price
-    if (selectedService.pricing_type === 'room_based') {
-      base += ROOM_PRICES[form.bedrooms] || 0
-      base += BATH_PRICES[form.bathrooms] || 0
-    }
-    const extrasTotal = selectedService.service_extras
-      ?.filter((ex: any) => selectedExtras.includes(ex.id))
-      .reduce((sum: number, ex: any) => sum + ex.price, 0) || 0
-    const subtotal = base + extrasTotal
-    const discount = selectedFreq.discount > 0 ? Math.round(subtotal * selectedFreq.discount / 100) : 0
-    return subtotal - discount
+    const breakdown = calcJobPrice({
+      service: {
+        id: selectedService.id,
+        base_price: selectedService.base_price,
+        pricing_type: selectedService.pricing_type,
+        duration_minutes: selectedService.duration_minutes,
+      },
+      bedrooms: form.bedrooms,
+      bathrooms: form.bathrooms,
+      selectedExtras: (selectedService.service_extras || [])
+        .filter((ex: any) => selectedExtras.includes(ex.id))
+        .map((ex: any) => ({ price: ex.price })),
+      roomPricing,
+    })
+    const discount = selectedFreq.discount > 0 ? Math.round(breakdown.total * selectedFreq.discount / 100) : 0
+    return breakdown.total - discount
   }
 
   const totalPrice = calcPrice()
@@ -117,6 +197,13 @@ export default function BookingPage() {
   async function handleSubmit() {
     setLoading(true)
     setError(null)
+
+    // Edit save logic — implemented in next commit
+    if (editJobId) {
+      setError('Edit save not yet implemented.')
+      setLoading(false)
+      return
+    }
 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -255,8 +342,8 @@ export default function BookingPage() {
   return (
     <div className="max-w-2xl mx-auto animate-fade-in">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">New booking</h2>
-        <p className="text-sm text-gray-500">Create a job manually for a customer</p>
+        <h2 className="text-lg font-semibold text-gray-900">{editJobId ? 'Edit booking' : 'New booking'}</h2>
+        <p className="text-sm text-gray-500">{editJobId ? 'Update the details for this booking' : 'Create a job manually for a customer'}</p>
       </div>
 
       {/* Step indicator */}
@@ -306,13 +393,13 @@ export default function BookingPage() {
                 <div>
                   <label className={labelClass}>Bedrooms</label>
                   <select value={form.bedrooms} onChange={e => update('bedrooms', parseInt(e.target.value))} className={inputClass}>
-                    {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} bedroom{n > 1 ? 's' : ''}</option>)}
+                    {bedroomCounts.map(n => <option key={n} value={n}>{n} bedroom{n > 1 ? 's' : ''}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={labelClass}>Bathrooms</label>
                   <select value={form.bathrooms} onChange={e => update('bathrooms', parseInt(e.target.value))} className={inputClass}>
-                    {[1,2,3].map(n => <option key={n} value={n}>{n} bathroom{n > 1 ? 's' : ''}</option>)}
+                    {bathroomCounts.map(n => <option key={n} value={n}>{n} bathroom{n > 1 ? 's' : ''}</option>)}
                   </select>
                 </div>
               </div>
@@ -345,13 +432,20 @@ export default function BookingPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Date *</label>
-                <input type="date" required value={form.scheduled_date} min={new Date().toISOString().split('T')[0]}
+                <input type="date" required value={form.scheduled_date}
+                  min={editJobId ? undefined : new Date().toISOString().split('T')[0]}
                   onChange={e => update('scheduled_date', e.target.value)} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Time *</label>
                 <select value={form.scheduled_time} onChange={e => update('scheduled_time', e.target.value)} className={inputClass}>
-                  {['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
+                  {/* Render a custom option for times not in the standard slot list (e.g. prefilled from a public booking) */}
+                  {!TIME_SLOTS.includes(form.scheduled_time) && form.scheduled_time && (
+                    <option value={form.scheduled_time}>
+                      {new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </option>
+                  )}
+                  {TIME_SLOTS.map(t => (
                     <option key={t} value={t}>{new Date(`2000-01-01T${t}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</option>
                   ))}
                 </select>
@@ -389,19 +483,11 @@ export default function BookingPage() {
         <div className="space-y-5">
           <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Customer</h3>
-            {customers.length > 0 && (
-              <div>
-                <label className={labelClass}>Existing customer</label>
-                <select value={form.customer_id}
-                  onChange={e => { update('customer_id', e.target.value); update('new_customer', !e.target.value) }}
-                  className={inputClass}>
-                  <option value="">+ New customer</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.full_name} — {c.email}</option>)}
-                </select>
-              </div>
-            )}
-            {(!form.customer_id || form.new_customer) && (
+
+            {editJobId ? (
+              // Edit mode: show fields directly, no customer-switching dropdown
               <>
+                <p className="text-xs text-gray-400">Changes here update this customer's profile across all their bookings.</p>
                 <div>
                   <label className={labelClass}>Full name *</label>
                   <input required value={form.customer_name} onChange={e => update('customer_name', e.target.value)}
@@ -419,6 +505,42 @@ export default function BookingPage() {
                       placeholder="+61 4xx xxx xxx" className={inputClass} />
                   </div>
                 </div>
+              </>
+            ) : (
+              // Create mode: existing-customer dropdown + new-customer fields
+              <>
+                {customers.length > 0 && (
+                  <div>
+                    <label className={labelClass}>Existing customer</label>
+                    <select value={form.customer_id}
+                      onChange={e => { update('customer_id', e.target.value); update('new_customer', !e.target.value) }}
+                      className={inputClass}>
+                      <option value="">+ New customer</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.full_name} — {c.email}</option>)}
+                    </select>
+                  </div>
+                )}
+                {(!form.customer_id || form.new_customer) && (
+                  <>
+                    <div>
+                      <label className={labelClass}>Full name *</label>
+                      <input required value={form.customer_name} onChange={e => update('customer_name', e.target.value)}
+                        placeholder="Jane Smith" className={inputClass} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>Email *</label>
+                        <input required type="email" value={form.customer_email} onChange={e => update('customer_email', e.target.value)}
+                          placeholder="jane@email.com" className={inputClass} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Phone</label>
+                        <input value={form.customer_phone} onChange={e => update('customer_phone', e.target.value)}
+                          placeholder="+61 4xx xxx xxx" className={inputClass} />
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -455,16 +577,19 @@ export default function BookingPage() {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Lead source</h3>
-            <ManualSourceSelector
-              value={leadSource}
-              onChange={setLeadSource}
-              campaignLabel={campaignLabel}
-              onCampaignLabelChange={setCampaignLabel}
-              campaigns={existingCampaigns}
-            />
-          </div>
+          {/* Lead source — create mode only; attribution is captured once at booking creation */}
+          {!editJobId && (
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">Lead source</h3>
+              <ManualSourceSelector
+                value={leadSource}
+                onChange={setLeadSource}
+                campaignLabel={campaignLabel}
+                onCampaignLabelChange={setCampaignLabel}
+                campaigns={existingCampaigns}
+              />
+            </div>
+          )}
 
           <div className="flex gap-3">
             <button onClick={() => setStep(1)}
@@ -472,7 +597,12 @@ export default function BookingPage() {
               Back
             </button>
             <button onClick={() => setStep(3)}
-              disabled={!form.line1 || !form.city || !form.state || !form.postcode || (form.new_customer && (!form.customer_name || !form.customer_email))}
+              disabled={
+                !form.line1 || !form.city || !form.state || !form.postcode ||
+                (editJobId
+                  ? !form.customer_name || !form.customer_email
+                  : form.new_customer && (!form.customer_name || !form.customer_email))
+              }
               className="flex-1 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
               Review booking →
             </button>
@@ -488,9 +618,9 @@ export default function BookingPage() {
             {[
               { label: 'Service', value: selectedService?.name },
               { label: 'Frequency', value: selectedFreq.label },
-              { label: 'Date & time', value: `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} at ${new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` },
+              { label: 'Date & time', value: form.scheduled_date ? `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} at ${new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '—' },
               { label: 'Address', value: `${form.line1}, ${form.city} ${form.state} ${form.postcode}` },
-              { label: 'Customer', value: form.customer_id && !form.new_customer ? customers.find(c => c.id === form.customer_id)?.full_name : form.customer_name },
+              { label: 'Customer', value: editJobId ? form.customer_name : (form.customer_id && !form.new_customer ? customers.find(c => c.id === form.customer_id)?.full_name : form.customer_name) },
               { label: 'Total', value: `$${(totalPrice / 100).toFixed(2)}`, bold: true },
             ].map(item => (
               <div key={item.label} className="flex justify-between text-sm">
@@ -500,13 +630,16 @@ export default function BookingPage() {
             ))}
           </div>
 
-          <PaymentSection
-          paymentMethod={paymentMethod}
-          onPaymentMethodChange={setPaymentMethod}
-          onCardReady={(fn) => setGetCardPaymentMethod(() => fn)}
-        />
+          {/* Payment section — create mode only */}
+          {!editJobId && (
+            <PaymentSection
+              paymentMethod={paymentMethod}
+              onPaymentMethodChange={setPaymentMethod}
+              onCardReady={(fn) => setGetCardPaymentMethod(() => fn)}
+            />
+          )}
 
-        <div className="flex gap-3 pb-8">
+          <div className="flex gap-3 pb-8">
             <button onClick={() => setStep(2)}
               className="flex-1 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
               Back
@@ -514,7 +647,9 @@ export default function BookingPage() {
             <button onClick={handleSubmit} disabled={loading}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? 'Creating booking...' : 'Confirm booking'}
+              {loading
+                ? (editJobId ? 'Saving...' : 'Creating booking...')
+                : (editJobId ? 'Save changes' : 'Confirm booking')}
             </button>
           </div>
         </div>
