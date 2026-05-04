@@ -217,12 +217,23 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </div>
 
           {/* Notes */}
-          {(job.notes || job.customer_notes) && (
+          {job.notes && (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
               <h2 className="font-semibold text-gray-900">Notes</h2>
               <div className="flex items-start gap-2 text-sm text-gray-600">
                 <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                <p>{job.notes || job.customer_notes}</p>
+                <p>{job.notes}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Legacy customer notes — only shows for historical records */}
+          {job.customer_notes && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
+              <h2 className="font-semibold text-gray-900 text-sm">Booking notes <span className="text-gray-400 font-normal">(legacy)</span></h2>
+              <div className="flex items-start gap-2 text-sm text-gray-600">
+                <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                <p>{job.customer_notes}</p>
               </div>
             </div>
           )}

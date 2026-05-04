@@ -50,7 +50,6 @@ export default function BookingPage() {
     city: '',
     state: '',
     postcode: '',
-    customer_notes: '',
     // Assignment
     provider_id: '',
     notes: '',
@@ -169,7 +168,6 @@ export default function BookingPage() {
       total_price: totalPrice,
         tax_amount: 0,
         frequency: form.frequency,
-        customer_notes: form.customer_notes || null,
         notes: form.notes || null,
         booking_source: 'admin',
       }).select().single()
@@ -448,15 +446,9 @@ export default function BookingPage() {
               </div>
             </div>
             <div>
-              <label className={labelClass}>Customer notes / access instructions</label>
-              <textarea value={form.customer_notes} onChange={e => update('customer_notes', e.target.value)}
-                rows={2} placeholder="Key under mat, gate code, pet at home..."
-                className={`${inputClass} resize-none`} />
-            </div>
-            <div>
-              <label className={labelClass}>Internal notes</label>
+              <label className={labelClass}>Notes</label>
               <textarea value={form.notes} onChange={e => update('notes', e.target.value)}
-                rows={2} placeholder="Staff notes (not visible to customer)..."
+                rows={2} placeholder="Staff notes, access instructions, anything relevant..."
                 className={`${inputClass} resize-none`} />
             </div>
           </div>
