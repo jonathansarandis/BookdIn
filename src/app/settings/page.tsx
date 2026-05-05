@@ -37,6 +37,8 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [currency, setCurrency] = useState('')
   const [timezone, setTimezone] = useState('')
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState('')
   const [flashMessage, setFlashMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const supabase = createClient()
 
@@ -69,6 +71,34 @@ export default function SettingsPage() {
     setBusiness(biz)
     setCurrency(biz?.currency || 'AUD')
     setTimezone(biz?.timezone || 'Australia/Melbourne')
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !business) return
+    setLogoUploading(true)
+    const MAX_BYTES = 2 * 1024 * 1024
+    if (file.size > MAX_BYTES) {
+      setLogoError(`Logo file is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 2MB.`)
+      setLogoUploading(false)
+      e.target.value = ''
+      return
+    }
+    setLogoError('')
+    const path = `${business.id}/logo`
+    await supabase.storage.from('logos').upload(path, file, { upsert: true })
+    const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
+    const urlWithBust = `${publicUrl}?t=${Date.now()}`
+    await supabase.from('businesses').update({ logo_url: urlWithBust }).eq('id', business.id)
+    setBusiness({ ...business, logo_url: urlWithBust })
+    setLogoUploading(false)
+  }
+
+  async function handleLogoRemove() {
+    if (!business) return
+    await supabase.from('businesses').update({ logo_url: null }).eq('id', business.id)
+    await supabase.storage.from('logos').remove([`${business.id}/logo`])
+    setBusiness({ ...business, logo_url: null })
   }
 
   async function handleSaveBusinessInfo() {
@@ -111,6 +141,33 @@ export default function SettingsPage() {
             {/* Business info */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Business info</h3>
+
+              {/* Logo */}
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                  {business?.logo_url ? (
+                    <img src={business.logo_url} alt="Business logo" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-xl font-bold text-gray-400">{business?.name?.[0] || '?'}</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors">
+                    {logoUploading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {logoUploading ? 'Uploading...' : 'Upload logo'}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
+                  </label>
+                  {business?.logo_url && (
+                    <button onClick={handleLogoRemove} className="text-xs text-red-500 hover:text-red-700 text-left transition-colors">
+                      Remove logo
+                    </button>
+                  )}
+                  {logoError && (
+                    <p className="text-xs text-red-600">{logoError}</p>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Business name</p>

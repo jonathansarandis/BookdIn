@@ -143,6 +143,13 @@ export default function Topbar({ profile, business }: TopbarProps) {
         New booking
       </a>
 
+      {/* Business logo */}
+      {business?.logo_url && (
+        <div className="w-7 h-7 rounded-md overflow-hidden flex-shrink-0" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          <img src={business.logo_url} alt="" className="w-full h-full object-contain" />
+        </div>
+      )}
+
       {/* Notifications */}
       <div className="relative" ref={notifsRef}>
         <button
