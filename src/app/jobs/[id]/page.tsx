@@ -122,7 +122,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     }
   }
 
-  const isPaid  = job.payment_status === 'paid'
+  const isPaid  = job.payment_status === 'paid' || !!job.stripe_payment_intent_id
   const canPay  = !isPaid && job.status !== 'cancelled' && job.total_price > 0
 
   // Currently assumes tax-inclusive pricing (correct for AU/UK B2C).
@@ -149,9 +149,26 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             <p className="text-sm text-gray-500">{job.service?.name || 'Service'}</p>
           </div>
         </div>
-        <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_STYLES[job.status] || 'bg-gray-100 text-gray-700'}`}>
-          {STATUS_LABELS[job.status] || job.status}
-        </span>
+        <div className="flex items-center gap-3">
+          {isPaid || job.status === 'cancelled' ? (
+            <span
+              title="Cannot edit a paid or cancelled booking. Refund or rebook instead."
+              className="px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-400 cursor-not-allowed select-none"
+            >
+              Edit booking
+            </span>
+          ) : (
+            <Link
+              href={`/booking?edit=${job.id}`}
+              className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+            >
+              Edit booking
+            </Link>
+          )}
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_STYLES[job.status] || 'bg-gray-100 text-gray-700'}`}>
+            {STATUS_LABELS[job.status] || job.status}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

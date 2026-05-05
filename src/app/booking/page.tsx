@@ -59,6 +59,8 @@ export default function BookingPage() {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
 
+  const [editAddressId, setEditAddressId] = useState('')
+
   const [leadSource, setLeadSource] = useState('')
   const [campaignLabel, setCampaignLabel] = useState('')
   const [existingCampaigns, setExistingCampaigns] = useState<string[]>([])
@@ -137,6 +139,7 @@ export default function BookingPage() {
       setSelectedExtras(
         (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
       )
+      setEditAddressId(job.address_id)
     }
     prefill()
   }, [editJobId])
@@ -185,10 +188,76 @@ export default function BookingPage() {
     setLoading(true)
     setError(null)
 
-    // Edit save logic — implemented in next commit
+    // Edit flow
     if (editJobId) {
-      setError('Edit save not yet implemented.')
-      setLoading(false)
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
+      const bid = profile!.business_id!
+
+      try {
+        // Step 1: customer
+        const { error: cxErr } = await supabase.from('customers').update({
+          full_name: form.customer_name,
+          email: form.customer_email,
+          phone: form.customer_phone || null,
+        }).eq('id', form.customer_id)
+        if (cxErr) throw new Error('Failed to update customer: ' + cxErr.message)
+
+        // Step 2: address
+        const { error: addrErr } = await supabase.from('addresses').update({
+          line1: form.line1,
+          city: form.city,
+          state: form.state,
+          postcode: form.postcode,
+        }).eq('id', editAddressId)
+        if (addrErr) throw new Error('Failed to update address: ' + addrErr.message)
+
+        // Step 3: job
+        const scheduledAt = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`)
+        const { error: jobErr } = await supabase.from('jobs').update({
+          service_id: form.service_id,
+          price: totalPrice,
+          total_price: totalPrice,
+          duration_minutes: selectedService?.duration_minutes || 120,
+          bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
+          bathrooms: selectedService?.pricing_type === 'room_based' ? form.bathrooms : null,
+          scheduled_at: scheduledAt.toISOString(),
+          frequency: form.frequency,
+          notes: form.notes || null,
+          provider_id: form.provider_id || null,
+        }).eq('id', editJobId)
+        if (jobErr) throw new Error('Failed to update booking: ' + jobErr.message)
+
+        // Step 4: clear existing extras
+        const { error: delErr } = await supabase.from('job_extras').delete().eq('job_id', editJobId)
+        if (delErr) throw new Error('Failed to clear extras: ' + delErr.message)
+
+        // Step 5: insert selected extras
+        if (selectedExtras.length > 0) {
+          const extrasToInsert = selectedService?.service_extras
+            .filter((ex: any) => selectedExtras.includes(ex.id))
+            .map((ex: any) => ({ job_id: editJobId, extra_id: ex.id, name: ex.name, price: ex.price }))
+          if (extrasToInsert?.length) {
+            const { error: extErr } = await supabase.from('job_extras').insert(extrasToInsert)
+            if (extErr) throw new Error('Failed to save extras: ' + extErr.message)
+          }
+        }
+
+        // Activity log
+        await supabase.from('activity_logs').insert({
+          business_id: bid,
+          event_type: 'booking_updated',
+          description: `Booking updated for ${form.customer_name}`,
+          entity_type: 'job',
+          entity_id: editJobId,
+        })
+
+        router.push('/calendar')
+      } catch (err: any) {
+        setError(err.message)
+        setLoading(false)
+      }
       return
     }
 
