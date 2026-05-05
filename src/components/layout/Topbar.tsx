@@ -1,11 +1,10 @@
 // @ts-nocheck
 'use client'
 
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Bell, Search, LogOut, Plus, Phone, FileText, Calendar, CheckCircle2 } from 'lucide-react'
-import { getInitials } from '@/lib/utils'
+import { Bell, Search, Plus, Phone, FileText, Calendar, CheckCircle2 } from 'lucide-react'
 import type { Profile, Business } from '@/types/database'
 import Link from 'next/link'
 
@@ -54,13 +53,10 @@ interface TopbarProps {
 
 export default function Topbar({ profile, business }: TopbarProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const supabase = createClient()
   const [notifications, setNotifications] = useState<any[]>([])
   const [showNotifs, setShowNotifs] = useState(false)
-  const [showUser, setShowUser] = useState(false)
   const notifsRef = useRef<HTMLDivElement>(null)
-  const userRef = useRef<HTMLDivElement>(null)
 
   const title = Object.entries(PAGE_TITLES).find(([path]) =>
     pathname === path || (path !== '/dashboard' && pathname.startsWith(path))
@@ -75,7 +71,6 @@ export default function Topbar({ profile, business }: TopbarProps) {
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (notifsRef.current && !notifsRef.current.contains(e.target as Node)) setShowNotifs(false)
-      if (userRef.current && !userRef.current.contains(e.target as Node)) setShowUser(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -104,11 +99,6 @@ export default function Topbar({ profile, business }: TopbarProps) {
     if (!user) return
     await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', user.id).is('read_at', null)
     setNotifications([])
-  }
-
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-    router.push('/auth/login')
   }
 
   const unreadCount = notifications.length
@@ -142,13 +132,6 @@ export default function Topbar({ profile, business }: TopbarProps) {
         <Plus style={{ width: '14px', height: '14px' }} />
         New booking
       </a>
-
-      {/* Business logo */}
-      {business?.logo_url && (
-        <div className="w-7 h-7 rounded-md overflow-hidden flex-shrink-0" style={{ background: 'rgba(255,255,255,0.05)' }}>
-          <img src={business.logo_url} alt="" className="w-full h-full object-contain" />
-        </div>
-      )}
 
       {/* Notifications */}
       <div className="relative" ref={notifsRef}>
@@ -229,36 +212,15 @@ export default function Topbar({ profile, business }: TopbarProps) {
         )}
       </div>
 
-      {/* Avatar */}
-      <div className="relative" ref={userRef}>
-        <button
-          onClick={() => setShowUser(!showUser)}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white transition-all"
-          style={{ background: '#2563FF', fontSize: '12px', fontWeight: 700, border: '2px solid rgba(37,99,255,0.4)' }}
-        >
-          {profile?.full_name ? getInitials(profile.full_name) : 'U'}
-        </button>
-
-        {showUser && (
-          <div
-            className="absolute right-0 top-11 z-50"
-            style={{ width: '200px', background: '#111827', border: '1px solid rgba(37,99,255,0.2)', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', padding: '4px' }}
-          >
-            <div className="px-3 py-2.5" style={{ borderBottom: '1px solid rgba(37,99,255,0.1)', marginBottom: '4px' }}>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: '#F0F2FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name}</p>
-              <p style={{ fontSize: '10px', color: '#9ABCD8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.email}</p>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff6b6b', fontSize: '13px' }}
-            >
-              <LogOut style={{ width: '13px', height: '13px' }} />
-              Sign out
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Business logo */}
+      {business?.logo_url && (
+        <img
+          src={business.logo_url}
+          alt=""
+          className="h-8 w-auto rounded-md object-contain flex-shrink-0"
+          style={{ background: 'rgba(255,255,255,0.05)' }}
+        />
+      )}
     </header>
   )
 }

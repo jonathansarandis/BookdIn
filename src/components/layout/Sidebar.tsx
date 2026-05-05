@@ -1,14 +1,16 @@
 // @ts-nocheck
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/utils'
 import type { Profile, Business } from '@/types/database'
 import {
   LayoutDashboard, Calendar, ClipboardList, Users,
   DollarSign, FileText, BarChart2, Settings, Zap,
-  Tag, Gift, Share2, ChevronRight, MessageSquare, Briefcase, UserCog, RefreshCw, Upload, Target
+  Tag, Gift, Share2, ChevronUp, MessageSquare, Briefcase, UserCog, RefreshCw, Upload, Target, LogOut
 } from 'lucide-react'
 
 const NAV = [
@@ -42,6 +44,23 @@ interface SidebarProps {
 
 export default function Sidebar({ profile, business }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const footerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (footerRef.current && !footerRef.current.contains(e.target as Node)) setShowUserMenu(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+  }
 
   return (
     <aside
@@ -98,11 +117,34 @@ export default function Sidebar({ profile, business }: SidebarProps) {
       </nav>
 
       {/* Business footer */}
-      <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(37,99,255,0.15)' }}>
-        <Link
-          href="/settings"
-          className="flex items-center gap-2.5 px-2 py-2 rounded-lg transition-all"
-          style={{ textDecoration: 'none' }}
+      <div className="p-3 flex-shrink-0 relative" style={{ borderTop: '1px solid rgba(37,99,255,0.15)' }} ref={footerRef}>
+
+        {/* User popup — opens above */}
+        {showUserMenu && (
+          <div
+            className="absolute left-3 right-3 bottom-full mb-2"
+            style={{ background: '#111827', border: '1px solid rgba(37,99,255,0.2)', borderRadius: '12px', boxShadow: '0 -8px 32px rgba(0,0,0,0.4)', padding: '4px' }}
+          >
+            <div className="px-3 py-2.5" style={{ borderBottom: '1px solid rgba(37,99,255,0.1)', marginBottom: '4px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: '#F0F2FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name}</p>
+              <p style={{ fontSize: '10px', color: '#9ABCD8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.email}</p>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff6b6b', fontSize: '13px' }}
+            >
+              <LogOut style={{ width: '13px', height: '13px' }} />
+              Sign out
+            </button>
+          </div>
+        )}
+
+        {/* Footer trigger */}
+        <button
+          onClick={() => setShowUserMenu(!showUserMenu)}
+          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg transition-all"
+          style={{ background: showUserMenu ? 'rgba(37,99,255,0.08)' : 'transparent', border: 'none', cursor: 'pointer' }}
         >
           <div
             className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
@@ -110,7 +152,7 @@ export default function Sidebar({ profile, business }: SidebarProps) {
           >
             {business?.name ? getInitials(business.name) : 'B'}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
             <div style={{ fontSize: '12px', fontWeight: 500, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {business?.name || 'My Business'}
             </div>
@@ -118,8 +160,8 @@ export default function Sidebar({ profile, business }: SidebarProps) {
               {profile?.role === 'owner' ? 'Owner' : profile?.role || 'Member'}
             </div>
           </div>
-          <ChevronRight style={{ width: '14px', height: '14px', color: '#7A9DC0', flexShrink: 0 }} />
-        </Link>
+          <ChevronUp style={{ width: '14px', height: '14px', color: showUserMenu ? '#4D8CFF' : '#7A9DC0', flexShrink: 0, transition: 'transform 0.15s', transform: showUserMenu ? 'rotate(0deg)' : 'rotate(180deg)' }} />
+        </button>
       </div>
     </aside>
   )
