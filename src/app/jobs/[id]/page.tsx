@@ -122,7 +122,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     }
   }
 
-  const isPaid  = job.payment_status === 'paid' || !!job.stripe_payment_intent_id
+  const isPaid  = job.payment_status === 'paid'
   const canPay  = !isPaid && job.status !== 'cancelled' && job.total_price > 0
 
   // Currently assumes tax-inclusive pricing (correct for AU/UK B2C).
