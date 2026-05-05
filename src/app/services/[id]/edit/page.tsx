@@ -8,7 +8,7 @@ import { Plus, Trash2, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 const PRICING_TYPES = [
-  { value: 'flat',       label: 'Flat rate',    desc: 'One fixed price' },
+  { value: 'fixed',      label: 'Flat rate',    desc: 'One fixed price' },
   { value: 'room_based', label: 'Room-based',   desc: 'Price based on bedrooms/bathrooms' },
   { value: 'hourly',     label: 'Hourly',       desc: 'Charge per hour' },
   { value: 'sqft_based', label: 'Per sq ft',    desc: 'Based on property size' },
@@ -47,7 +47,7 @@ export default function EditServicePage() {
   const [form, setForm] = useState({
     name: '',
     description: '',
-    pricing_type: 'flat',
+    pricing_type: 'fixed',
     base_price: '',
     duration_minutes: '120',
     same_day_fee: '0',

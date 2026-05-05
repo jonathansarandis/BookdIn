@@ -11,7 +11,7 @@ export type JobStatus =
 export type QuoteStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired'
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void'
 export type UserRole = 'owner' | 'admin' | 'staff' | 'provider' | 'customer'
-export type PricingType = 'flat' | 'hourly' | 'room_based' | 'sqft_based' | 'custom'
+export type PricingType = 'fixed' | 'hourly' | 'room_based' | 'sqft_based' | 'custom'
 export type FrequencyType = 'one_time' | 'weekly' | 'fortnightly' | 'monthly' | 'custom'
 export type PaymentMethod = 'charge_now' | 'hold_card' | 'deposit' | 'pay_later' | 'invoice'
 

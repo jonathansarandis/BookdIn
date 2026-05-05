@@ -13,7 +13,7 @@
  *   without field remapping.
  */
 
-export type PricingType = 'flat' | 'room_based' | 'hourly' | 'sqft_based' | 'custom'
+export type PricingType = 'fixed' | 'room_based' | 'hourly' | 'sqft_based' | 'custom'
 
 export type RoomPricingRow = {
   id: string
@@ -70,7 +70,7 @@ export function calcJobPrice(input: PriceInput): PriceBreakdown {
   const base = service.base_price
 
   // room_based: add per-bedroom and per-bathroom adders from the room_pricing table.
-  // flat / hourly / sqft_based / custom: rooms = 0.
+  // fixed / hourly / sqft_based / custom: rooms = 0.
   // Both existing booking forms fall through to base_price for non-room_based types;
   // we maintain that behaviour here.
   let rooms = 0
@@ -95,7 +95,7 @@ export function calcJobPrice(input: PriceInput): PriceBreakdown {
 /**
  * @example Flat pricing — no room adders, no extras
  * calcJobPrice({
- *   service: { id: 'svc1', base_price: 15000, pricing_type: 'flat', duration_minutes: 120 },
+ *   service: { id: 'svc1', base_price: 15000, pricing_type: 'fixed', duration_minutes: 120 },
  *   bedrooms: null, bathrooms: null,
  *   selectedExtras: [],
  *   roomPricing: [],
@@ -138,7 +138,7 @@ export function calcJobPrice(input: PriceInput): PriceBreakdown {
  *
  * @example Flat pricing with extras
  * calcJobPrice({
- *   service: { id: 'svc1', base_price: 15000, pricing_type: 'flat', duration_minutes: 120 },
+ *   service: { id: 'svc1', base_price: 15000, pricing_type: 'fixed', duration_minutes: 120 },
  *   bedrooms: null, bathrooms: null,
  *   selectedExtras: [{ price: 3500 }],
  *   roomPricing: [],
