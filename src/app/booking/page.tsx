@@ -23,6 +23,7 @@ export default function BookingPage() {
   const searchParams = useSearchParams()
   const preCustomerId = searchParams.get('customer')
   const editJobId = searchParams.get('edit')
+  const rebookJobId = searchParams.get('rebook')
 
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -60,6 +61,7 @@ export default function BookingPage() {
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
 
   const [editAddressId, setEditAddressId] = useState('')
+  const [rebookCustomerName, setRebookCustomerName] = useState('')
 
   const [leadSource, setLeadSource] = useState('')
   const [campaignLabel, setCampaignLabel] = useState('')
@@ -143,6 +145,51 @@ export default function BookingPage() {
     }
     prefill()
   }, [editJobId])
+
+  // Prefill form from source job when ?rebook= is present (leaves date/time blank for fresh scheduling)
+  useEffect(() => {
+    if (!rebookJobId) return
+    async function prefill() {
+      const supabase = createClient()
+      const { data: job } = await supabase
+        .from('jobs')
+        .select(`
+          *,
+          customer:customers(id, full_name, email, phone),
+          address:addresses(id, line1, city, state, postcode),
+          job_extras(id, extra_id, name, price)
+        `)
+        .eq('id', rebookJobId)
+        .single()
+      if (!job) return
+
+      setForm(f => ({
+        ...f,
+        service_id: job.service_id,
+        frequency: job.frequency,
+        bedrooms: job.bedrooms ?? 2,
+        bathrooms: job.bathrooms ?? 1,
+        // scheduled_date and scheduled_time intentionally left at defaults — VA picks a fresh date
+        customer_id: job.customer_id,
+        new_customer: false,
+        customer_name: job.customer?.full_name || '',
+        customer_email: job.customer?.email || '',
+        customer_phone: job.customer?.phone || '',
+        line1: job.address?.line1 || '',
+        city: job.address?.city || '',
+        state: job.address?.state || '',
+        postcode: job.address?.postcode || '',
+        provider_id: job.provider_id || '',
+        notes: job.notes || '',
+      }))
+      setSelectedExtras(
+        (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
+      )
+      setEditAddressId(job.address_id)
+      setRebookCustomerName(job.customer?.full_name || '')
+    }
+    prefill()
+  }, [rebookJobId])
 
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency) ?? FREQUENCIES[0]
@@ -282,19 +329,23 @@ export default function BookingPage() {
         customerId = newCx.id
       }
 
-      // Create address
-      const { data: addr, error: addrErr } = await supabase.from('addresses').insert({
-        business_id: bid,
-        customer_id: customerId,
-        line1: form.line1,
-        city: form.city,
-        state: form.state,
-        postcode: form.postcode,
-        country: 'AU',
-        is_default: true,
-      }).select().single()
-      if (addrErr) throw new Error('Failed to save address: ' + addrErr.message)
-      addressId = addr.id
+      // Create address — skip for rebook and reuse the source job's address_id
+      if (rebookJobId) {
+        addressId = editAddressId
+      } else {
+        const { data: addr, error: addrErr } = await supabase.from('addresses').insert({
+          business_id: bid,
+          customer_id: customerId,
+          line1: form.line1,
+          city: form.city,
+          state: form.state,
+          postcode: form.postcode,
+          country: 'AU',
+          is_default: true,
+        }).select().single()
+        if (addrErr) throw new Error('Failed to save address: ' + addrErr.message)
+        addressId = addr.id
+      }
 
       // Create job
       const scheduledAt = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`)
@@ -359,10 +410,11 @@ export default function BookingPage() {
       // Log activity
       await supabase.from('activity_logs').insert({
         business_id: bid,
-        event_type: 'booking_created',
-        description: `New booking created for ${form.new_customer ? form.customer_name : customers.find(c => c.id === customerId)?.full_name}`,
+        event_type: rebookJobId ? 'booking_rebooked' : 'booking_created',
+        description: `Booking ${rebookJobId ? 'rebooked' : 'created'} for ${form.new_customer ? form.customer_name : customers.find(c => c.id === customerId)?.full_name}`,
         entity_type: 'job',
         entity_id: job.id,
+        ...(rebookJobId ? { metadata: { source_job_id: rebookJobId } } : {}),
       })
 
       // Update customer stats
@@ -398,8 +450,12 @@ export default function BookingPage() {
   return (
     <div className="max-w-2xl mx-auto animate-fade-in">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">{editJobId ? 'Edit booking' : 'New booking'}</h2>
-        <p className="text-sm text-gray-500">{editJobId ? 'Update the details for this booking' : 'Create a job manually for a customer'}</p>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {editJobId ? 'Edit booking' : rebookJobId ? (rebookCustomerName ? `Rebook for ${rebookCustomerName}` : 'Rebook booking') : 'New booking'}
+        </h2>
+        <p className="text-sm text-gray-500">
+          {editJobId ? 'Update the details for this booking' : rebookJobId ? 'Prefilled from previous booking — choose a new date' : 'Create a job manually for a customer'}
+        </p>
       </div>
 
       {/* Step indicator */}

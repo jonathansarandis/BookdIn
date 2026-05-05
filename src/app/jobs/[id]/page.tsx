@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ArrowLeft, MapPin, User, FileText } from 'lucide-react'
-import JobStatusUpdater from '@/app/jobs/JobStatusUpdater'
+import JobStatusUpdater, { CancelBookingButton } from '@/app/jobs/JobStatusUpdater'
 import PayButton from '@/components/payments/PayButton'
 import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 import JobMessages from '@/app/jobs/[id]/JobMessages'
@@ -150,6 +150,13 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <CancelBookingButton jobId={job.id} status={job.status} />
+          <Link
+            href={`/booking?rebook=${job.id}`}
+            className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+          >
+            Rebook
+          </Link>
           {isPaid || job.status === 'cancelled' ? (
             <span
               title="Cannot edit a paid or cancelled booking. Refund or rebook instead."

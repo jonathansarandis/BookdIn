@@ -8,9 +8,9 @@ import { ChevronDown, Loader2 } from 'lucide-react'
 import { JOB_STATUS_LABELS } from '@/lib/utils'
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  pending:     ['confirmed', 'cancelled'],
-  confirmed:   ['assigned', 'cancelled', 'rescheduled'],
-  assigned:    ['on_the_way', 'cancelled', 'rescheduled'],
+  pending:     ['confirmed'],
+  confirmed:   ['assigned', 'rescheduled'],
+  assigned:    ['on_the_way', 'rescheduled'],
   on_the_way:  ['in_progress'],
   in_progress: ['completed', 'no_show'],
   completed:   [],
@@ -24,6 +24,48 @@ interface Props {
   currentStatus: string
   providers: { id: string; display_name: string }[]
   currentProviderId: string | null
+}
+
+export function CancelBookingButton({ jobId, status }: { jobId: string; status: string }) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+
+  const isDisabled = ['completed', 'cancelled'].includes(status)
+
+  async function handleCancel() {
+    if (!window.confirm('Cancel this booking? This will mark it as cancelled and cannot be undone here.')) return
+    setLoading(true)
+    const supabase = createClient()
+    await supabase.from('jobs').update({ status: 'cancelled' }).eq('id', jobId)
+    const { data: job } = await supabase.from('jobs').select('business_id').eq('id', jobId).single()
+    await supabase.from('activity_logs').insert({
+      business_id: job?.business_id,
+      event_type: 'booking_cancelled',
+      description: 'Booking cancelled',
+      entity_type: 'job',
+      entity_id: jobId,
+    })
+    setLoading(false)
+    router.refresh()
+  }
+
+  if (isDisabled) {
+    return (
+      <span className="px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-400 cursor-not-allowed select-none">
+        Cancel
+      </span>
+    )
+  }
+
+  return (
+    <button
+      onClick={handleCancel}
+      disabled={loading}
+      className="px-3 py-1.5 text-sm font-medium border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+    >
+      {loading ? 'Cancelling...' : 'Cancel'}
+    </button>
+  )
 }
 
 export default function JobStatusUpdater({ jobId, currentStatus, providers, currentProviderId }: Props) {
