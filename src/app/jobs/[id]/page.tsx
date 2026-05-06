@@ -84,7 +84,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
       .order('display_name'),
     supabase
       .from('businesses')
-      .select('tax_rate, tax_name, show_tax')
+      .select('tax_rate, tax_name, show_tax, timezone')
       .eq('id', profile?.business_id)
       .single(),
   ])
@@ -188,6 +188,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             jobId={job.id}
             initialScheduledAt={job.scheduled_at}
             durationMinutes={job.duration_minutes ?? null}
+            businessTimezone={business?.timezone || 'Australia/Melbourne'}
           />
 
           {/* Address */}

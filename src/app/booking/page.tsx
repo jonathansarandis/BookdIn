@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { calcJobPrice } from '@/lib/pricing'
+import { toBusinessDateTime, fromBusinessDateTime } from '@/lib/datetime'
 
 const FREQUENCIES = [
   { value: 'one_time',    label: 'One-time',         discount: 0 },
@@ -62,6 +63,7 @@ export default function BookingPage() {
 
   const [editAddressId, setEditAddressId] = useState('')
   const [rebookCustomerName, setRebookCustomerName] = useState('')
+  const [businessTimezone, setBusinessTimezone] = useState('Australia/Melbourne')
 
   const [leadSource, setLeadSource] = useState('')
   const [campaignLabel, setCampaignLabel] = useState('')
@@ -79,17 +81,19 @@ export default function BookingPage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
       const bid = profile!.business_id!
 
-      const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }] = await Promise.all([
+      const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }, { data: biz }] = await Promise.all([
         supabase.from('services').select('*, service_extras(*), room_pricing(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
+        supabase.from('businesses').select('timezone').eq('id', bid).single(),
       ])
       setServices(svcs || [])
       setCustomers(cxs || [])
       setProviders(prvs || [])
       const uniqueCampaigns = [...new Set((campaigns || []).map((r: any) => r.manual_campaign_label).filter(Boolean))]
       setExistingCampaigns(uniqueCampaigns)
+      if (biz?.timezone) setBusinessTimezone(biz.timezone)
       // In edit mode, the prefill useEffect sets service_id from the job — don't override it here
       if (!editJobId && svcs?.[0]) update('service_id', svcs[0].id)
     }
@@ -113,7 +117,7 @@ export default function BookingPage() {
         .single()
       if (!job) return
 
-      const d = new Date(job.scheduled_at)
+      const d = toBusinessDateTime(job.scheduled_at, businessTimezone)
       const pad = (n: number) => String(n).padStart(2, '0')
       const scheduledDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
       const scheduledTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -261,7 +265,7 @@ export default function BookingPage() {
         if (addrErr) throw new Error('Failed to update address: ' + addrErr.message)
 
         // Step 3: job
-        const scheduledAt = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`)
+        const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, form.scheduled_time, businessTimezone)
         const { error: jobErr } = await supabase.from('jobs').update({
           service_id: form.service_id,
           price: totalPrice,
@@ -269,7 +273,7 @@ export default function BookingPage() {
           duration_minutes: selectedService?.duration_minutes || 120,
           bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
           bathrooms: selectedService?.pricing_type === 'room_based' ? form.bathrooms : null,
-          scheduled_at: scheduledAt.toISOString(),
+          scheduled_at: scheduledAtIso,
           frequency: form.frequency,
           notes: form.notes || null,
           provider_id: form.provider_id || null,
@@ -348,7 +352,7 @@ export default function BookingPage() {
       }
 
       // Create job
-      const scheduledAt = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`)
+      const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, form.scheduled_time, businessTimezone)
       const { data: job, error: jobErr } = await supabase.from('jobs').insert({
         business_id: bid,
         customer_id: customerId,
@@ -356,7 +360,7 @@ export default function BookingPage() {
         service_id: form.service_id,
         provider_id: form.provider_id || null,
         status: form.provider_id ? 'assigned' : 'pending',
-        scheduled_at: scheduledAt.toISOString(),
+        scheduled_at: scheduledAtIso,
         duration_minutes: selectedService?.duration_minutes || 120,
         price: totalPrice,
       total_price: totalPrice,

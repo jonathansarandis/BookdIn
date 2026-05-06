@@ -3,15 +3,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Calendar, Clock, Pencil, Check, X, Loader2 } from 'lucide-react'
+import { toBusinessDateTime, fromBusinessDateTime, formatBusinessDateTime } from '@/lib/datetime'
 
 interface Props {
   jobId: string
   initialScheduledAt: string | null
   durationMinutes: number | null
+  businessTimezone: string
 }
 
-function toDateInput(iso: string): string {
-  const d = new Date(iso)
+function toDateInput(iso: string, tz: string): string {
+  const d = toBusinessDateTime(iso, tz)
   return [
     d.getFullYear(),
     String(d.getMonth() + 1).padStart(2, '0'),
@@ -19,36 +21,36 @@ function toDateInput(iso: string): string {
   ].join('-')
 }
 
-function toTimeInput(iso: string): string {
-  const d = new Date(iso)
+function toTimeInput(iso: string, tz: string): string {
+  const d = toBusinessDateTime(iso, tz)
   return [
     String(d.getHours()).padStart(2, '0'),
     String(d.getMinutes()).padStart(2, '0'),
   ].join(':')
 }
 
-export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinutes }: Props) {
+export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinutes, businessTimezone }: Props) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [scheduledAt, setScheduledAt] = useState(initialScheduledAt)
-  const [draftDate, setDraftDate] = useState(initialScheduledAt ? toDateInput(initialScheduledAt) : '')
-  const [draftTime, setDraftTime] = useState(initialScheduledAt ? toTimeInput(initialScheduledAt) : '09:00')
+  const [draftDate, setDraftDate] = useState(initialScheduledAt ? toDateInput(initialScheduledAt, businessTimezone) : '')
+  const [draftTime, setDraftTime] = useState(initialScheduledAt ? toTimeInput(initialScheduledAt, businessTimezone) : '09:00')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const displayDate = scheduledAt
-    ? new Date(scheduledAt).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    ? formatBusinessDateTime(scheduledAt, businessTimezone, 'EEEE, d MMMM yyyy')
     : null
   const displayTime = scheduledAt
-    ? new Date(scheduledAt).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })
+    ? formatBusinessDateTime(scheduledAt, businessTimezone, 'h:mm a')
     : null
 
   async function save() {
     if (!draftDate || !draftTime) return
     setSaving(true)
     setError(null)
-    const newScheduledAt = new Date(`${draftDate}T${draftTime}:00`).toISOString()
+    const newScheduledAt = fromBusinessDateTime(draftDate, draftTime, businessTimezone)
     const supabase = createClient()
     const { error: err } = await supabase
       .from('jobs')
@@ -57,8 +59,8 @@ export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinu
     setSaving(false)
     if (err) { setError(err.message); return }
     setScheduledAt(newScheduledAt)
-    setDraftDate(toDateInput(newScheduledAt))
-    setDraftTime(toTimeInput(newScheduledAt))
+    setDraftDate(toDateInput(newScheduledAt, businessTimezone))
+    setDraftTime(toTimeInput(newScheduledAt, businessTimezone))
     setEditing(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
@@ -67,8 +69,8 @@ export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinu
 
   function cancel() {
     if (scheduledAt) {
-      setDraftDate(toDateInput(scheduledAt))
-      setDraftTime(toTimeInput(scheduledAt))
+      setDraftDate(toDateInput(scheduledAt, businessTimezone))
+      setDraftTime(toTimeInput(scheduledAt, businessTimezone))
     }
     setEditing(false)
     setError(null)

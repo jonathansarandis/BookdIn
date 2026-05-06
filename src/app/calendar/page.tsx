@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toBusinessDateTime, fromBusinessDateTime, formatBusinessDateTime } from '@/lib/datetime'
 
 export const metadata = { title: 'Calendar' }
 
@@ -22,13 +23,17 @@ export default async function CalendarPage({
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
+  const { data: business } = await supabase.from('businesses').select('timezone').eq('id', profile!.business_id!).single()
+  const businessTimezone = business?.timezone || 'Australia/Melbourne'
 
-  const now = new Date()
-  const year = parseInt(searchParams.year || String(now.getFullYear()))
-  const month = parseInt(searchParams.month || String(now.getMonth()))
+  const nowInBusiness = toBusinessDateTime(new Date().toISOString(), businessTimezone)
+  const year = parseInt(searchParams.year || String(nowInBusiness.getFullYear()))
+  const month = parseInt(searchParams.month || String(nowInBusiness.getMonth()))
 
-  const monthStart = new Date(year, month, 1).toISOString()
-  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const daysInMonthForRange = getDaysInMonth(year, month)
+  const monthStart = fromBusinessDateTime(`${year}-${pad(month + 1)}-01`, '00:00', businessTimezone)
+  const monthEnd = fromBusinessDateTime(`${year}-${pad(month + 1)}-${pad(daysInMonthForRange)}`, '23:59', businessTimezone)
 
   const { data: jobs } = await supabase
     .from('jobs')
@@ -62,15 +67,14 @@ export default async function CalendarPage({
 
   function getJobsForDay(day: number) {
     return jobs?.filter(job => {
-      const jobDate = new Date(job.scheduled_at)
+      const jobDate = toBusinessDateTime(job.scheduled_at, businessTimezone)
       return jobDate.getDate() === day &&
              jobDate.getMonth() === month &&
              jobDate.getFullYear() === year
     }) || []
   }
 
-  const today = new Date()
-  const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year
+  const isCurrentMonth = nowInBusiness.getMonth() === month && nowInBusiness.getFullYear() === year
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -85,7 +89,7 @@ export default async function CalendarPage({
               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
               <ChevronLeft className="w-4 h-4 text-gray-500" />
             </Link>
-            <Link href={`/calendar?month=${now.getMonth()}&year=${now.getFullYear()}`}
+            <Link href={`/calendar?month=${nowInBusiness.getMonth()}&year=${nowInBusiness.getFullYear()}`}
               className="px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
               Today
             </Link>
@@ -140,7 +144,7 @@ export default async function CalendarPage({
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1
             const dayJobs = getJobsForDay(day)
-            const isToday = isCurrentMonth && today.getDate() === day
+            const isToday = isCurrentMonth && nowInBusiness.getDate() === day
             const col = (startOffset + i) % 7
             const isWeekend = col === 5 || col === 6
 
@@ -164,7 +168,7 @@ export default async function CalendarPage({
                         'block text-[10px] font-medium px-1.5 py-0.5 rounded truncate hover:opacity-80 transition-opacity',
                         STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-600'
                       )}>
-                      {new Date(job.scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      {formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
                       {' '}{job.customer?.full_name?.split(' ')[0]}
                     </Link>
                   ))}
