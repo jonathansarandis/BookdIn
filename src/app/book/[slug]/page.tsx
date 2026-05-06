@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import AddressAutocomplete from '@/components/AddressAutocomplete'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { useUTMCapture } from '@/lib/useUTMCapture'
@@ -419,30 +420,11 @@ export default function PublicBookingPage() {
 
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Service address</h3>
-              <div>
-                <label className={labelClass}>Street address *</label>
-                <input required value={form.line1} onChange={e => update('line1', e.target.value)}
-                  placeholder="123 Main Street" className={inputClass} />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-1">
-                  <label className={labelClass}>Suburb *</label>
-                  <input required value={form.city} onChange={e => update('city', e.target.value)}
-                    placeholder="Melbourne" className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>State *</label>
-                  <select value={form.state} onChange={e => update('state', e.target.value)} className={inputClass}>
-                    <option value="">State</option>
-                    {['VIC','NSW','QLD','WA','SA','TAS','ACT','NT'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Postcode *</label>
-                  <input required value={form.postcode} onChange={e => update('postcode', e.target.value)}
-                    placeholder="3000" className={inputClass} />
-                </div>
-              </div>
+              <AddressAutocomplete
+                value={{ line1: form.line1, city: form.city, state: form.state, postcode: form.postcode }}
+                onChange={v => setForm(f => ({ ...f, ...v }))}
+                stateOptions={['ACT', 'NSW', 'NT', 'QLD', 'SA', 'TAS', 'VIC', 'WA']}
+              />
               <div>
                 <label className={labelClass}>Access instructions (optional)</label>
                 <textarea value={form.customer_notes} onChange={e => update('customer_notes', e.target.value)}

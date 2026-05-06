@@ -2,6 +2,7 @@
 'use client'
 import PaymentSection from '@/components/payments/PaymentSection'
 import ManualSourceSelector from '@/components/ManualSourceSelector'
+import AddressAutocomplete from '@/components/AddressAutocomplete'
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -687,28 +688,10 @@ export default function BookingPage() {
 
           <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Service address</h3>
-            <div>
-              <label className={labelClass}>Street address *</label>
-              <input required value={form.line1} onChange={e => update('line1', e.target.value)}
-                placeholder="123 Main Street" className={inputClass} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
-                <label className={labelClass}>City *</label>
-                <input required value={form.city} onChange={e => update('city', e.target.value)}
-                  placeholder="Melbourne" className={inputClass} />
-              </div>
-              <div>
-                <label className={labelClass}>State *</label>
-                <input required value={form.state} onChange={e => update('state', e.target.value)}
-                  placeholder="VIC" className={inputClass} />
-              </div>
-              <div>
-                <label className={labelClass}>Postcode *</label>
-                <input required value={form.postcode} onChange={e => update('postcode', e.target.value)}
-                  placeholder="3000" className={inputClass} />
-              </div>
-            </div>
+            <AddressAutocomplete
+              value={{ line1: form.line1, city: form.city, state: form.state, postcode: form.postcode }}
+              onChange={v => setForm(f => ({ ...f, ...v }))}
+            />
             <div>
               <label className={labelClass}>Notes</label>
               <textarea value={form.notes} onChange={e => update('notes', e.target.value)}
