@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { toBusinessDateTime, fromBusinessDateTime, formatBusinessDateTime } from '@/lib/datetime'
+import { toBusinessDateTime, fromBusinessDateTime } from '@/lib/datetime'
+import CalendarGrid from './CalendarGrid'
 
 export const metadata = { title: 'Calendar' }
 
@@ -11,9 +12,6 @@ function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
 }
 
-function getFirstDayOfMonth(year: number, month: number) {
-  return new Date(year, month, 1).getDay()
-}
 
 export default async function CalendarPage({
   searchParams,
@@ -37,16 +35,12 @@ export default async function CalendarPage({
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('*, customer:customers(full_name), service:services(name), provider:providers(display_name, color)')
+    .select('*, customer:customers(full_name, email, phone), service:services(name, pricing_type), provider:providers(display_name, color), address:addresses(line1, city, state, postcode), job_extras(id, name, price)')
     .eq('business_id', profile!.business_id!)
     .gte('scheduled_at', monthStart)
     .lte('scheduled_at', monthEnd)
     .not('status', 'in', '("cancelled")')
     .order('scheduled_at')
-
-  const daysInMonth = getDaysInMonth(year, month)
-  const firstDay = getFirstDayOfMonth(year, month)
-  const startOffset = firstDay === 0 ? 6 : firstDay - 1
 
   const prevMonth = month === 0 ? 11 : month - 1
   const prevYear = month === 0 ? year - 1 : year
@@ -54,27 +48,6 @@ export default async function CalendarPage({
   const nextYear = month === 11 ? year + 1 : year
 
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
-  const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-
-  const STATUS_CHIP: Record<string, string> = {
-    pending:     'bg-amber-100 text-amber-800',
-    confirmed:   'bg-green-100 text-green-800',
-    assigned:    'bg-purple-100 text-purple-800',
-    on_the_way:  'bg-blue-100 text-blue-800',
-    in_progress: 'bg-blue-100 text-blue-800',
-    completed:   'bg-gray-100 text-gray-600',
-  }
-
-  function getJobsForDay(day: number) {
-    return jobs?.filter(job => {
-      const jobDate = toBusinessDateTime(job.scheduled_at, businessTimezone)
-      return jobDate.getDate() === day &&
-             jobDate.getMonth() === month &&
-             jobDate.getFullYear() === year
-    }) || []
-  }
-
-  const isCurrentMonth = nowInBusiness.getMonth() === month && nowInBusiness.getFullYear() === year
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -122,67 +95,12 @@ export default async function CalendarPage({
         ))}
       </div>
 
-      {/* Calendar grid */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-gray-200">
-          {DAY_NAMES.map(day => (
-            <div key={day} className="py-2.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wide">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        {/* Days grid */}
-        <div className="grid grid-cols-7">
-          {/* Empty cells for offset */}
-          {Array.from({ length: startOffset }).map((_, i) => (
-            <div key={`empty-${i}`} className="min-h-[100px] border-r border-b border-gray-100 bg-gray-50/50" />
-          ))}
-
-          {/* Day cells */}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1
-            const dayJobs = getJobsForDay(day)
-            const isToday = isCurrentMonth && nowInBusiness.getDate() === day
-            const col = (startOffset + i) % 7
-            const isWeekend = col === 5 || col === 6
-
-            return (
-              <div key={day}
-                className={cn(
-                  'min-h-[100px] border-r border-b border-gray-100 p-1.5 transition-colors',
-                  isWeekend ? 'bg-gray-50/30' : '',
-                  isToday ? 'bg-brand-50/40' : ''
-                )}>
-                <div className={cn(
-                  'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1',
-                  isToday ? 'bg-brand-500 text-white' : 'text-gray-500'
-                )}>
-                  {day}
-                </div>
-                <div className="space-y-0.5">
-                  {dayJobs.slice(0, 3).map((job: any) => (
-                    <Link key={job.id} href={`/jobs/${job.id}`}
-                      className={cn(
-                        'block text-[10px] font-medium px-1.5 py-0.5 rounded truncate hover:opacity-80 transition-opacity',
-                        STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-600'
-                      )}>
-                      {formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
-                      {' '}{job.customer?.full_name?.split(' ')[0]}
-                    </Link>
-                  ))}
-                  {dayJobs.length > 3 && (
-                    <div className="text-[10px] text-gray-400 px-1.5">
-                      +{dayJobs.length - 3} more
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <CalendarGrid
+        jobs={jobs || []}
+        businessTimezone={businessTimezone}
+        year={year}
+        month={month}
+      />
 
       {/* Jobs this month summary */}
       <div className="grid grid-cols-4 gap-4">
