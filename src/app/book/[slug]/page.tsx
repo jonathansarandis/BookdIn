@@ -55,7 +55,7 @@ export default function PublicBookingPage() {
     async function load() {
       const { data: biz } = await supabase
         .from('businesses')
-        .select('id, name, logo_url, brand_color')
+        .select('id, name, logo_url, brand_color, tax_rate, tax_name, show_tax')
         .eq('booking_url_slug', slug)
         .single()
 
@@ -127,6 +127,11 @@ export default function PublicBookingPage() {
   }
 
   const totalPrice = calcPrice()
+  const showTaxBreakdown = !!(business && business.tax_rate > 0 && business.show_tax)
+  const taxRate = business?.tax_rate ?? 0
+  const taxName = business?.tax_name?.trim() || 'Tax'
+  const taxCents = showTaxBreakdown ? Math.round(totalPrice * taxRate / (100 + taxRate)) : 0
+  const subtotalCents = totalPrice - taxCents
 
   function toggleExtra(id: string) {
     setSelectedExtras(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id])
@@ -147,6 +152,7 @@ export default function PublicBookingPage() {
           scheduled_date: form.scheduled_date,
           scheduled_time: form.scheduled_time,
           total_price: totalPrice,
+          tax_amount: taxCents,
           extras: selectedExtras,
           customer: {
             full_name: form.full_name,
@@ -358,7 +364,19 @@ export default function PublicBookingPage() {
               </div>
             </div>
 
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-1">
+              {showTaxBreakdown && (
+                <>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-green-700">Subtotal</span>
+                    <span className="text-green-700">${(subtotalCents / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-green-700">{taxName} ({taxRate}%)</span>
+                    <span className="text-green-700">${(taxCents / 100).toFixed(2)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-sm text-green-700 font-medium">Estimated total</span>
                 <span className="text-xl font-semibold text-green-700">${(totalPrice / 100).toFixed(2)}</span>
@@ -471,6 +489,10 @@ export default function PublicBookingPage() {
                 { label: 'Name', value: form.full_name },
                 { label: 'Email', value: form.email },
                 { label: 'Phone', value: form.phone },
+                ...(showTaxBreakdown ? [
+                  { label: 'Subtotal', value: `$${(subtotalCents / 100).toFixed(2)}` },
+                  { label: `${taxName} (${taxRate}%)`, value: `$${(taxCents / 100).toFixed(2)}` },
+                ] : []),
                 { label: 'Total', value: `$${(totalPrice / 100).toFixed(2)}`, bold: true },
               ].map(item => (
                 <div key={item.label} className="flex justify-between text-sm">

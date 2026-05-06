@@ -15,18 +15,27 @@ export default function NewInvoicePage() {
   const [jobs, setJobs] = useState<any[]>([])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: '1', unit_price: '' }])
   const [form, setForm] = useState({ customer_id: '', job_id: '', due_date: '', notes: '' })
+  const [taxRate, setTaxRate] = useState(0)
+  const [taxName, setTaxName] = useState('Tax')
+  const [showTax, setShowTax] = useState(false)
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
-      const [{ data: cx }, { data: jbs }] = await Promise.all([
+      const [{ data: cx }, { data: jbs }, { data: biz }] = await Promise.all([
         supabase.from('customers').select('id, full_name').eq('business_id', profile!.business_id!).order('full_name'),
         supabase.from('jobs').select('id, scheduled_at, price, service:services(name), customer:customers(full_name)').eq('business_id', profile!.business_id!).eq('status', 'completed').is('invoice_id', null).order('scheduled_at', { ascending: false }).limit(20),
+        supabase.from('businesses').select('tax_rate, tax_name, show_tax').eq('id', profile!.business_id!).single(),
       ])
       setCustomers(cx || [])
       setJobs(jbs || [])
+      if (biz) {
+        setTaxRate(biz.tax_rate ?? 0)
+        setTaxName(biz.tax_name?.trim() || 'Tax')
+        setShowTax(biz.show_tax ?? false)
+      }
     }
     load()
   }, [])
@@ -57,14 +66,20 @@ export default function NewInvoicePage() {
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
 
+    const totalCents = Math.round(subtotal * 100)
+    const showTaxBreakdown = taxRate > 0 && showTax
+    const taxCents = showTaxBreakdown ? Math.round(totalCents * taxRate / (100 + taxRate)) : 0
+    const subtotalCents = totalCents - taxCents
+
     const { data: invoice, error } = await supabase.from('invoices').insert({
       business_id: profile!.business_id!,
       customer_id: form.customer_id,
       job_id: form.job_id || null,
       status: 'draft',
-      subtotal: Math.round(subtotal * 100),
-      tax_amount: 0,
-      total: Math.round(subtotal * 100),
+      subtotal: subtotalCents,
+      tax_amount: taxCents,
+      tax_name: showTaxBreakdown ? taxName : null,
+      total: totalCents,
       due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
       notes: form.notes || null,
     }).select().single()
@@ -159,9 +174,27 @@ export default function NewInvoicePage() {
               </div>
             </div>
           ))}
-          <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
-            <span className="text-sm font-semibold text-gray-900">Total</span>
-            <span className="text-lg font-semibold text-brand-600">${subtotal.toFixed(2)}</span>
+          <div className="pt-3 border-t border-gray-100 space-y-2">
+            {(taxRate > 0 && showTax) && (() => {
+              const tc = Math.round(subtotal * 100)
+              const tx = Math.round(tc * taxRate / (100 + taxRate))
+              return (
+                <>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500">Subtotal</span>
+                    <span className="text-gray-900">${((tc - tx) / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500">{taxName} ({taxRate}%)</span>
+                    <span className="text-gray-900">${(tx / 100).toFixed(2)}</span>
+                  </div>
+                </>
+              )
+            })()}
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold text-gray-900">Total</span>
+              <span className="text-lg font-semibold text-brand-600">${subtotal.toFixed(2)}</span>
+            </div>
           </div>
         </div>
 

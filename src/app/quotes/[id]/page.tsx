@@ -130,7 +130,7 @@ export default function QuoteDetailPage() {
             </div>
             {quote.tax_amount > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Tax</span>
+                <span className="text-gray-500">{quote.tax_name || 'Tax'}</span>
                 <span>{formatCurrency(quote.tax_amount)}</span>
               </div>
             )}

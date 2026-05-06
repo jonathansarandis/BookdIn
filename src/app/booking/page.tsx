@@ -64,6 +64,9 @@ export default function BookingPage() {
   const [editAddressId, setEditAddressId] = useState('')
   const [rebookCustomerName, setRebookCustomerName] = useState('')
   const [businessTimezone, setBusinessTimezone] = useState('Australia/Melbourne')
+  const [taxRate, setTaxRate] = useState(0)
+  const [taxName, setTaxName] = useState('Tax')
+  const [showTax, setShowTax] = useState(false)
 
   const [leadSource, setLeadSource] = useState('')
   const [campaignLabel, setCampaignLabel] = useState('')
@@ -86,7 +89,7 @@ export default function BookingPage() {
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
-        supabase.from('businesses').select('timezone').eq('id', bid).single(),
+        supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax').eq('id', bid).single(),
       ])
       setServices(svcs || [])
       setCustomers(cxs || [])
@@ -94,6 +97,11 @@ export default function BookingPage() {
       const uniqueCampaigns = [...new Set((campaigns || []).map((r: any) => r.manual_campaign_label).filter(Boolean))]
       setExistingCampaigns(uniqueCampaigns)
       if (biz?.timezone) setBusinessTimezone(biz.timezone)
+      if (biz) {
+        setTaxRate(biz.tax_rate ?? 0)
+        setTaxName(biz.tax_name?.trim() || 'Tax')
+        setShowTax(biz.show_tax ?? false)
+      }
       // In edit mode, the prefill useEffect sets service_id from the job — don't override it here
       if (!editJobId && svcs?.[0]) update('service_id', svcs[0].id)
     }
@@ -230,6 +238,9 @@ export default function BookingPage() {
   }
 
   const totalPrice = calcPrice()
+  const showTaxBreakdown = taxRate > 0 && showTax
+  const taxCents = showTaxBreakdown ? Math.round(totalPrice * taxRate / (100 + taxRate)) : 0
+  const subtotalCents = totalPrice - taxCents
 
   function toggleExtra(id: string) {
     setSelectedExtras(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id])
@@ -270,6 +281,7 @@ export default function BookingPage() {
           service_id: form.service_id,
           price: totalPrice,
           total_price: totalPrice,
+          tax_amount: taxCents,
           duration_minutes: selectedService?.duration_minutes || 120,
           bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
           bathrooms: selectedService?.pricing_type === 'room_based' ? form.bathrooms : null,
@@ -363,8 +375,8 @@ export default function BookingPage() {
         scheduled_at: scheduledAtIso,
         duration_minutes: selectedService?.duration_minutes || 120,
         price: totalPrice,
-      total_price: totalPrice,
-        tax_amount: 0,
+        total_price: totalPrice,
+        tax_amount: taxCents,
         frequency: form.frequency,
         notes: form.notes || null,
         booking_source: 'admin',
@@ -577,7 +589,19 @@ export default function BookingPage() {
           </div>
 
           {/* Price preview */}
-          <div className="bg-brand-50 border border-brand-200 rounded-xl p-4">
+          <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 space-y-1">
+            {showTaxBreakdown && (
+              <>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-brand-700">Subtotal</span>
+                  <span className="text-brand-700">${(subtotalCents / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-brand-700">{taxName} ({taxRate}%)</span>
+                  <span className="text-brand-700">${(taxCents / 100).toFixed(2)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-sm text-brand-700 font-medium">Estimated total</span>
               <span className="text-xl font-semibold text-brand-700">${(totalPrice / 100).toFixed(2)}</span>
@@ -737,6 +761,10 @@ export default function BookingPage() {
               { label: 'Date & time', value: form.scheduled_date ? `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} at ${new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '—' },
               { label: 'Address', value: `${form.line1}, ${form.city} ${form.state} ${form.postcode}` },
               { label: 'Customer', value: editJobId ? form.customer_name : (form.customer_id && !form.new_customer ? customers.find(c => c.id === form.customer_id)?.full_name : form.customer_name) },
+              ...(showTaxBreakdown ? [
+                { label: 'Subtotal', value: `$${(subtotalCents / 100).toFixed(2)}` },
+                { label: `${taxName} (${taxRate}%)`, value: `$${(taxCents / 100).toFixed(2)}` },
+              ] : []),
               { label: 'Total', value: `$${(totalPrice / 100).toFixed(2)}`, bold: true },
             ].map(item => (
               <div key={item.label} className="flex justify-between text-sm">

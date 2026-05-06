@@ -40,6 +40,11 @@ export default function SettingsPage() {
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoError, setLogoError] = useState('')
   const [flashMessage, setFlashMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showTax, setShowTax] = useState(false)
+  const [taxRate, setTaxRate] = useState('')
+  const [taxName, setTaxName] = useState('GST')
+  const [taxSaving, setTaxSaving] = useState(false)
+  const [taxSaved, setTaxSaved] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -71,6 +76,9 @@ export default function SettingsPage() {
     setBusiness(biz)
     setCurrency(biz?.currency || 'AUD')
     setTimezone(biz?.timezone || 'Australia/Melbourne')
+    setShowTax(biz?.show_tax || false)
+    setTaxRate(biz?.tax_rate != null ? String(biz.tax_rate) : '')
+    setTaxName(biz?.tax_name || 'GST')
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -114,6 +122,22 @@ export default function SettingsPage() {
       setSaved(true)
       setBusiness({ ...business, currency, timezone })
       setTimeout(() => setSaved(false), 3000)
+    }
+  }
+
+  async function handleSaveFinance() {
+    if (!business) return
+    setTaxSaving(true)
+    const { error } = await supabase.from('businesses').update({
+      show_tax: showTax,
+      tax_rate: taxRate ? parseFloat(taxRate) : 0,
+      tax_name: taxName || 'GST',
+    }).eq('id', business.id)
+    setTaxSaving(false)
+    if (!error) {
+      setTaxSaved(true)
+      setBusiness({ ...business, show_tax: showTax, tax_rate: parseFloat(taxRate || '0'), tax_name: taxName })
+      setTimeout(() => setTaxSaved(false), 3000)
     }
   }
 
@@ -212,6 +236,51 @@ export default function SettingsPage() {
                   {saving ? 'Saving...' : 'Save changes'}
                 </button>
                 {saved && <span className="text-xs text-green-600">✓ Saved</span>}
+              </div>
+            </div>
+
+            {/* Finance */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900">Finance</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Show tax breakdown</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Display tax separately on invoices and booking summaries</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTax(t => !t)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${showTax ? 'bg-brand-500' : 'bg-gray-200'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${showTax ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {showTax && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Tax name</label>
+                    <input type="text" value={taxName} onChange={e => setTaxName(e.target.value)}
+                      placeholder="GST"
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Tax rate (%)</label>
+                    <input type="number" min="0" max="100" step="0.01" value={taxRate} onChange={e => setTaxRate(e.target.value)}
+                      placeholder="10"
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={handleSaveFinance}
+                  disabled={taxSaving}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {taxSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {taxSaving ? 'Saving...' : 'Save finance settings'}
+                </button>
+                {taxSaved && <span className="text-xs text-green-600">✓ Saved</span>}
               </div>
             </div>
 

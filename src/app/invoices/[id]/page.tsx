@@ -119,7 +119,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             </div>
             {invoice.tax_amount > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Tax</span>
+                <span className="text-gray-500">{invoice.tax_name || 'Tax'}</span>
                 <span className="text-gray-900">{formatCurrency(invoice.tax_amount)}</span>
               </div>
             )}
