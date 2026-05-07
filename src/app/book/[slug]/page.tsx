@@ -372,7 +372,7 @@ export default function PublicBookingPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
               <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
-                <div className="min-w-0 relative">
+                <div className="min-w-0">
                   <label className={labelClass}>Date *</label>
                   <input
                     type="date"
@@ -383,11 +383,6 @@ export default function PublicBookingPage() {
                     className={inputClass}
                     style={{ width: '100%', minWidth: 0, height: '42px', WebkitAppearance: 'none', appearance: 'none' }}
                   />
-                  {!form.scheduled_date && (
-                    <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-400">
-                      Select date
-                    </span>
-                  )}
                 </div>
                 <div className="min-w-0 relative">
                   <label className={labelClass}>Time *</label>
