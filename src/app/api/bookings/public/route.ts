@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { sendBookingConfirmation } from '@/lib/email'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
     scheduled_date,
     scheduled_time,
     total_price,
+    tax_amount: bodyTaxAmount,
     extras,
     customer,
     address,
@@ -40,12 +42,13 @@ export async function POST(request: NextRequest) {
     bedrooms,
     bathrooms,
   } = body
+  const taxAmount = bodyTaxAmount ?? 0
 
   try {
     // 1. Get business details
     const { data: business } = await supabase
       .from('businesses')
-      .select('id, name')
+      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded')
       .eq('id', business_id)
       .single()
 
@@ -117,7 +120,7 @@ export async function POST(request: NextRequest) {
         duration_minutes: service?.duration_minutes || 120,
         price: total_price,
         total_price,
-        tax_amount: 0,
+        tax_amount: taxAmount,
         frequency,
         customer_notes: customer_notes || null,
         payment_status: 'unpaid',
@@ -240,112 +243,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 12. Send confirmation email to customer with Stripe card save link
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL!
-    const cardSaveUrl = `${appUrl}/api/bookings/${job.id}/card-setup`
+    // 12. Send confirmation email to customer
+    const cardSetupUrl = business.stripe_onboarded
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/bookings/${job.id}/card-setup`
+      : undefined
 
-    await resend.emails.send({
-      from: `${business.name} <hello@bookdin.co>`,
-      reply_to: staffProfiles?.[0]?.email,
-      to: customer.email,
-      subject: `Booking confirmed — ${service?.name} on ${formatDate(scheduled_date)}`,
-      html: `
-<!DOCTYPE html>
-<html>
-<body style="margin: 0; padding: 0; background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 20px;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
-        <tr>
-          <td style="background-color: #166534; padding: 32px 40px;">
-            <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 600;">${business.name}</h1>
-            <p style="margin: 8px 0 0; color: #bbf7d0; font-size: 14px;">Booking confirmation</p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 40px;">
-            <p style="margin: 0 0 16px; color: #374151; font-size: 16px;">Hi ${customer.full_name.split(' ')[0]},</p>
-            <p style="margin: 0 0 24px; color: #6b7280; font-size: 15px; line-height: 1.6;">
-              Thanks for booking with us! We've received your request and will be in touch shortly to confirm.
-            </p>
-
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-              <tr><td style="padding: 6px 0;"><table width="100%"><tr>
-                <td style="color: #6b7280; font-size: 14px;">Service</td>
-                <td style="text-align: right; color: #111827; font-size: 14px; font-weight: 600;">${service?.name}</td>
-              </tr></table></td></tr>
-              <tr><td style="padding: 6px 0; border-top: 1px solid #e5e7eb;"><table width="100%"><tr>
-                <td style="color: #6b7280; font-size: 14px;">Date</td>
-                <td style="text-align: right; color: #111827; font-size: 14px;">${formatDate(scheduled_date)}</td>
-              </tr></table></td></tr>
-              <tr><td style="padding: 6px 0; border-top: 1px solid #e5e7eb;"><table width="100%"><tr>
-                <td style="color: #6b7280; font-size: 14px;">Time</td>
-                <td style="text-align: right; color: #111827; font-size: 14px;">${formatTime(scheduled_time)}</td>
-              </tr></table></td></tr>
-              <tr><td style="padding: 6px 0; border-top: 1px solid #e5e7eb;"><table width="100%"><tr>
-                <td style="color: #6b7280; font-size: 14px;">Address</td>
-                <td style="text-align: right; color: #111827; font-size: 14px;">${address.line1}, ${address.city} ${address.state}</td>
-              </tr></table></td></tr>
-              <tr><td style="padding: 6px 0; border-top: 2px solid #111827;"><table width="100%"><tr>
-                <td style="color: #111827; font-size: 15px; font-weight: 700;">Total</td>
-                <td style="text-align: right; color: #111827; font-size: 18px; font-weight: 700;">$${(total_price / 100).toFixed(2)}</td>
-              </tr></table></td></tr>
-            </table>
-
-            <div style="background-color: #fefce8; border: 1px solid #fde047; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-              <p style="margin: 0 0 12px; color: #854d0e; font-size: 15px; font-weight: 600;">Action required: Save your card details</p>
-              <p style="margin: 0 0 16px; color: #92400e; font-size: 14px; line-height: 1.6;">
-                To secure your booking, please add your card details using our secure payment link below. Your card won't be charged until after your service is complete.
-              </p>
-              <a href="${cardSaveUrl}" style="display: inline-block; background-color: #166534; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600;">
-                Save card details securely →
-              </a>
-            </div>
-
-            <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
-              If you have any questions, simply reply to this email. We look forward to seeing you!
-            </p>
-          </td>
-        </tr>
-        <tr>
-          <td style="background-color: #f9fafb; padding: 20px 40px; border-top: 1px solid #e5e7eb;">
-            <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">
-              ${business.name} · Powered by BookdIn
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>
-      `,
-    }).catch(console.error)
+    await sendBookingConfirmation({
+      job: {
+        id: job.id,
+        scheduled_at: scheduledAt.toISOString(),
+        total_price,
+        tax_amount: taxAmount,
+      },
+      customer: { full_name: customer.full_name, email: customer.email },
+      business: {
+        name: business.name,
+        brand_color: business.brand_color,
+        logo_url: business.logo_url,
+        contact_email: business.contact_email,
+        timezone: business.timezone || 'Australia/Melbourne',
+      },
+      address: {
+        line1: address.line1,
+        city: address.city,
+        state: address.state,
+        postcode: address.postcode,
+      },
+      service: { name: service?.name || 'Service' },
+      cardSetupUrl,
+    })
 
 
     // Save lead source attribution
-    if (utm_data) {
-      await supabase.from('lead_sources').insert({
-        booking_id: job.id,
-        business_id,
-        customer_id: customerId,
-        utm_source: utm_data.utm_source,
-        utm_medium: utm_data.utm_medium,
-        utm_campaign: utm_data.utm_campaign,
-        utm_ad_group: utm_data.utm_ad_group,
-        utm_term: utm_data.utm_term,
-        utm_content: utm_data.utm_content,
-        gclid: utm_data.gclid,
-        referrer_url: utm_data.referrer_url,
-        landing_page: utm_data.landing_page,
-        source_type: utm_data.source_type || 'direct',
-        session_id: utm_data.session_id,
-        booking_value_cents: total_price,
-        lead_status: 'booked',
-        converted_at: new Date().toISOString(),
-      }).catch(console.error)
-    }
-
     if (utm_data) {
       await supabase.from('lead_sources').insert({
         booking_id: job.id,

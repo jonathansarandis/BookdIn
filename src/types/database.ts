@@ -40,6 +40,8 @@ export interface Database {
           tax_rate: number
           tax_name: string
           show_tax: boolean
+          tax_mode: string
+          contact_email: string | null
         }
         Insert: Omit<Database['public']['Tables']['businesses']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['businesses']['Insert']>
@@ -192,6 +194,11 @@ export interface Database {
           completed_at: string | null
           bedrooms: number | null
           bathrooms: number | null
+          total_price: number
+          payment_status: string | null
+          payment_method: string | null
+          paid_at: string | null
+          confirmation_email_sent_at: string | null
         }
         Insert: Omit<Database['public']['Tables']['jobs']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['jobs']['Insert']>

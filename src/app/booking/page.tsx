@@ -393,6 +393,12 @@ export default function BookingPage() {
       }).select().single()
       if (jobErr) throw new Error('Failed to create job: ' + jobErr.message)
 
+      // Fire-and-forget confirmation email — does not block redirect
+      fetch(`/api/bookings/${job.id}/send-confirmation`, { method: 'POST' })
+        .then(r => r.json())
+        .then(result => console.log('[booking] confirmation email:', result))
+        .catch(err => console.error('[booking] confirmation email fetch failed:', err))
+
       // Save lead source attribution if selected
       if (leadSource) {
         await fetch('/api/attribution', {
