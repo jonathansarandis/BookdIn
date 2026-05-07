@@ -215,12 +215,10 @@ export default function BookingPage() {
 
   function getFreqDiscount(value: string): number {
     if (value === 'one_time') return 0
-    return freqDiscounts[value]?.discount_percent ?? 0
+    const row = freqDiscounts[value]
+    if (!row?.is_enabled) return 0
+    return row.discount_percent ?? 0
   }
-
-  const availableFreqs = FREQUENCIES.filter(f =>
-    f.value === 'one_time' || (freqDiscounts[f.value]?.is_enabled ?? false)
-  )
 
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency) ?? FREQUENCIES[0]
@@ -504,7 +502,7 @@ export default function BookingPage() {
             <div>
               <label className={labelClass}>Frequency</label>
               <div className="grid grid-cols-2 gap-2">
-                {availableFreqs.map(f => {
+                {FREQUENCIES.map(f => {
                   const disc = getFreqDiscount(f.value)
                   return (
                     <button key={f.value} type="button" onClick={() => update('frequency', f.value)}

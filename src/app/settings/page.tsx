@@ -365,14 +365,14 @@ export default function SettingsPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">Frequency discounts</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Offer recurring booking schedules to your customers. Set a discount % or leave at 0 if you'd rather not offer a discount.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Toggle whether a discount applies to each recurring frequency. Customers can always book recurring schedules — the discount is optional.</p>
               </div>
               <div className="space-y-3">
                 {(['weekly', 'fortnightly', 'monthly'] as const).map(freq => (
                   <div key={freq} className="flex items-center gap-4">
                     <span className="text-sm font-medium text-gray-900 w-24 capitalize">{freq}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">Offered</span>
+                      <span className="text-xs text-gray-500">Apply discount</span>
                       <button
                         type="button"
                         onClick={() => setFreqDiscounts(d => ({ ...d, [freq]: { ...d[freq], enabled: !d[freq].enabled } }))}
