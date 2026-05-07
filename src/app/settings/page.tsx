@@ -46,6 +46,10 @@ export default function SettingsPage() {
   const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive')
   const [taxSaving, setTaxSaving] = useState(false)
   const [taxSaved, setTaxSaved] = useState(false)
+  const [freqDiscounts, setFreqDiscounts] = useState({ weekly: '0', fortnightly: '0', monthly: '0' })
+  const [freqSaving, setFreqSaving] = useState(false)
+  const [freqSaved, setFreqSaved] = useState(false)
+  const [freqError, setFreqError] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -81,6 +85,18 @@ export default function SettingsPage() {
     setTaxRate(biz?.tax_rate != null ? String(biz.tax_rate) : '')
     setTaxName(biz?.tax_name || 'Tax')
     setTaxMode(biz?.tax_mode ?? 'exclusive')
+
+    if (biz?.id) {
+      const { data: discountRows } = await supabase
+        .from('frequency_discounts')
+        .select('frequency, discount_percent')
+        .eq('business_id', biz.id)
+      if (discountRows) {
+        const map: Record<string, string> = { weekly: '0', fortnightly: '0', monthly: '0' }
+        discountRows.forEach((r: any) => { map[r.frequency] = String(r.discount_percent) })
+        setFreqDiscounts({ weekly: map.weekly, fortnightly: map.fortnightly, monthly: map.monthly })
+      }
+    }
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -141,6 +157,30 @@ export default function SettingsPage() {
       setTaxSaved(true)
       setBusiness({ ...business, show_tax: showTax, tax_rate: parseFloat(taxRate || '0'), tax_name: taxName, tax_mode: taxMode })
       setTimeout(() => setTaxSaved(false), 3000)
+    }
+  }
+
+  async function handleSaveFreqDiscounts() {
+    if (!business) return
+    const vals = [
+      { frequency: 'weekly', pct: parseFloat(freqDiscounts.weekly || '0') },
+      { frequency: 'fortnightly', pct: parseFloat(freqDiscounts.fortnightly || '0') },
+      { frequency: 'monthly', pct: parseFloat(freqDiscounts.monthly || '0') },
+    ]
+    if (vals.some(v => isNaN(v.pct) || v.pct < 0 || v.pct > 100)) {
+      setFreqError('Discounts must be between 0 and 100')
+      return
+    }
+    setFreqError(null)
+    setFreqSaving(true)
+    const rows = vals.map(v => ({ business_id: business.id, frequency: v.frequency, discount_percent: v.pct }))
+    const { error } = await supabase
+      .from('frequency_discounts')
+      .upsert(rows, { onConflict: 'business_id,frequency' })
+    setFreqSaving(false)
+    if (!error) {
+      setFreqSaved(true)
+      setTimeout(() => setFreqSaved(false), 3000)
     }
   }
 
@@ -309,6 +349,42 @@ export default function SettingsPage() {
                   {taxSaving ? 'Saving...' : 'Save finance settings'}
                 </button>
                 {taxSaved && <span className="text-xs text-green-600">✓ Saved</span>}
+              </div>
+            </div>
+
+            {/* Frequency discounts */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Frequency discounts</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Automatically apply a discount when customers book on a recurring schedule</p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {(['weekly', 'fortnightly', 'monthly'] as const).map(freq => (
+                  <div key={freq}>
+                    <label className="block text-xs font-medium text-gray-600 mb-1 capitalize">{freq}</label>
+                    <div className="relative">
+                      <input
+                        type="number" min="0" max="100" step="1"
+                        value={freqDiscounts[freq]}
+                        onChange={e => setFreqDiscounts(d => ({ ...d, [freq]: e.target.value }))}
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-7 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {freqError && <p className="text-xs text-red-600">{freqError}</p>}
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={handleSaveFreqDiscounts}
+                  disabled={freqSaving}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {freqSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {freqSaving ? 'Saving...' : 'Save discounts'}
+                </button>
+                {freqSaved && <span className="text-xs text-green-600">✓ Saved</span>}
               </div>
             </div>
 
