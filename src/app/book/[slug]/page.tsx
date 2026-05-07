@@ -248,8 +248,18 @@ export default function PublicBookingPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: brand }}>
-            <span className="text-white font-bold text-sm">{business.name[0]}</span>
+          <div className="w-12 h-12 rounded-lg bg-[var(--brand-color)] flex items-center justify-center overflow-hidden flex-shrink-0">
+            {business?.logo_url ? (
+              <img
+                src={business.logo_url}
+                alt={`${business.name} logo`}
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <span className="text-white font-semibold text-lg">
+                {business?.name?.charAt(0) ?? ''}
+              </span>
+            )}
           </div>
           <div>
             <p className="font-semibold text-gray-900 text-sm">{business.name}</p>
@@ -259,15 +269,6 @@ export default function PublicBookingPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
-        {business?.logo_url && (
-          <div className="flex justify-center mb-4">
-            <img
-              src={business.logo_url}
-              alt={`${business.name} logo`}
-              className="h-16 w-auto object-contain"
-            />
-          </div>
-        )}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Book a service</h1>
           <p className="text-gray-500 text-sm mt-1">Fill in your details and we'll confirm your booking shortly.</p>
