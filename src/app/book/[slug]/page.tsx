@@ -55,7 +55,7 @@ export default function PublicBookingPage() {
   useEffect(() => {
     async function load() {
       const { data: biz } = await supabase
-        .from('businesses')
+        .from('businesses_public')
         .select('id, name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode')
         .eq('booking_url_slug', slug)
         .single()
