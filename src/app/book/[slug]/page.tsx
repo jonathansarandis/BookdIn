@@ -374,7 +374,7 @@ export default function PublicBookingPage() {
                     min={new Date().toISOString().split('T')[0]}
                     onChange={e => update('scheduled_date', e.target.value)}
                     className={inputClass}
-                    style={{ width: '100%', minWidth: 0, WebkitAppearance: 'none', appearance: 'none' }}
+                    style={{ width: '100%', minWidth: 0, height: '42px', WebkitAppearance: 'none', appearance: 'none' }}
                   />
                   {!form.scheduled_date && (
                     <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-400">
@@ -388,7 +388,7 @@ export default function PublicBookingPage() {
                     value={form.scheduled_time}
                     onChange={e => update('scheduled_time', e.target.value)}
                     className={inputClass}
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', height: '42px' }}
                   >
                     <option value="flexible">Flexible time</option>
                     {['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
