@@ -137,6 +137,8 @@ export interface Database {
           duration_minutes: number
           is_active: boolean
           sort_order: number
+          is_popular: boolean
+          is_quote_only: boolean
         }
         Insert: Omit<Database['public']['Tables']['service_extras']['Row'], 'id'>
         Update: Partial<Database['public']['Tables']['service_extras']['Insert']>
