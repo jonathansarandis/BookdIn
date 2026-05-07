@@ -369,7 +369,9 @@ export default function PublicBookingPage() {
                   <label className={labelClass}>Date *</label>
                   <input type="date" required value={form.scheduled_date}
                     min={new Date().toISOString().split('T')[0]}
-                    onChange={e => update('scheduled_date', e.target.value)} className={`${inputClass} min-w-0`} />
+                    onChange={e => update('scheduled_date', e.target.value)}
+                    className={`${inputClass} min-w-0`}
+                    style={{ WebkitAppearance: 'none', appearance: 'none', minWidth: 0, maxWidth: '100%' }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <label className={labelClass}>Time *</label>
