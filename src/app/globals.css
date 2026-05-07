@@ -104,3 +104,10 @@ input, textarea, select {
 input::placeholder, textarea::placeholder {
   color: #9ca3af !important;
 }
+
+input[type="date"].blank-date::-webkit-datetime-edit {
+  color: transparent;
+}
+input[type="date"].blank-date:focus::-webkit-datetime-edit {
+  color: inherit;
+}
