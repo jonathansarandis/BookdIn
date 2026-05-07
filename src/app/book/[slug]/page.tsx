@@ -40,7 +40,7 @@ export default function PublicBookingPage() {
     frequency: 'one_time',
     bedrooms: 1,
     bathrooms: 1,
-    scheduled_date: '',
+    scheduled_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
     scheduled_time: '09:00',
     full_name: '',
     email: '',
