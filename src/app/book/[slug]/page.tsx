@@ -246,8 +246,8 @@ export default function PublicBookingPage() {
   return (
     <div className="min-h-screen bg-gray-50" style={{ '--brand-color': brand } as React.CSSProperties}>
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
+      <header className="bg-white shadow-sm border-b border-gray-100">
+        <div className="px-4 py-3 flex items-center gap-3">
           <div className="w-12 h-12 rounded-lg bg-[var(--brand-color)] flex items-center justify-center overflow-hidden flex-shrink-0">
             {business?.logo_url ? (
               <img
@@ -261,12 +261,9 @@ export default function PublicBookingPage() {
               </span>
             )}
           </div>
-          <div>
-            <p className="font-semibold text-gray-900 text-sm">{business.name}</p>
-            <p className="text-xs text-gray-500">Online booking</p>
-          </div>
+          <h1 className="text-lg font-semibold text-gray-900">{business.name}</h1>
         </div>
-      </div>
+      </header>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="mb-6">
