@@ -39,7 +39,7 @@ export default async function CalendarPage({
     .eq('business_id', profile!.business_id!)
     .gte('scheduled_at', monthStart)
     .lte('scheduled_at', monthEnd)
-    .not('status', 'in', '("cancelled")')
+    .neq('status', 'cancelled')
     .order('scheduled_at')
 
   const prevMonth = month === 0 ? 11 : month - 1
