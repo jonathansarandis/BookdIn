@@ -5,15 +5,18 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import AddressAutocomplete from '@/components/AddressAutocomplete'
 import { createClient } from '@/lib/supabase/client'
+import AddonsPicker from '@/components/AddonsPicker'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { useUTMCapture } from '@/lib/useUTMCapture'
 
 const FREQUENCIES = [
-  { value: 'one_time',    label: 'One-time',   discount: 0 },
-  { value: 'weekly',      label: 'Weekly',      discount: 10 },
-  { value: 'fortnightly', label: 'Fortnightly', discount: 10 },
-  { value: 'monthly',     label: 'Monthly',     discount: 10 },
+  { value: 'one_time',    label: 'One-time' },
+  { value: 'weekly',      label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly',     label: 'Monthly' },
 ]
+
+const FREQ_FALLBACK: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
 export default function PublicBookingPage() {
   const params = useParams()
@@ -30,6 +33,7 @@ export default function PublicBookingPage() {
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState(1)
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
+  const [freqDiscounts, setFreqDiscounts] = useState<Record<string, number>>({})
 
   const [form, setForm] = useState({
     service_id: '',
@@ -77,19 +81,27 @@ export default function PublicBookingPage() {
     load()
   }, [slug])
 
-  // Load room pricing when service changes
+  // Load room pricing + frequency discounts when service changes
   useEffect(() => {
     if (!form.service_id) return
-    async function loadRoomPricing() {
-      const { data } = await supabase
-        .from('room_pricing')
-        .select('*')
-        .eq('service_id', form.service_id)
-      setRoomPricing(data || [])
+    async function loadServiceData() {
+      const [{ data: rpData }, { data: fdData }] = await Promise.all([
+        supabase.from('room_pricing').select('*').eq('service_id', form.service_id),
+        supabase.from('frequency_discounts').select('frequency, discount_percent').eq('service_id', form.service_id),
+      ])
+      setRoomPricing(rpData || [])
       setSelectedExtras([])
+      const map: Record<string, number> = {}
+      for (const row of fdData || []) map[row.frequency] = row.discount_percent
+      setFreqDiscounts(map)
     }
-    loadRoomPricing()
+    loadServiceData()
   }, [form.service_id])
+
+  function getFreqDiscount(value: string): number {
+    if (value === 'one_time') return 0
+    return freqDiscounts[value] ?? FREQ_FALLBACK[value] ?? 0
+  }
 
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency)!
@@ -119,11 +131,12 @@ export default function PublicBookingPage() {
     }
 
     const extrasTotal = selectedService.service_extras
-      ?.filter((ex: any) => selectedExtras.includes(ex.id))
+      ?.filter((ex: any) => selectedExtras.includes(ex.id) && !ex.is_quote_only)
       .reduce((sum: number, ex: any) => sum + ex.price, 0) || 0
 
     const subtotal = base + extrasTotal
-    const discount = selectedFreq.discount > 0 ? Math.round(subtotal * selectedFreq.discount / 100) : 0
+    const freqDisc = getFreqDiscount(form.frequency)
+    const discount = freqDisc > 0 ? Math.round(subtotal * freqDisc / 100) : 0
     return subtotal - discount
   }
 
@@ -298,14 +311,17 @@ export default function PublicBookingPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Frequency</h3>
               <div className="grid grid-cols-2 gap-2">
-                {FREQUENCIES.map(f => (
-                  <button key={f.value} type="button" onClick={() => update('frequency', f.value)}
-                    className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? '' : 'border-gray-200 hover:border-gray-300'}`}
-                    style={form.frequency === f.value ? { borderColor: brand, backgroundColor: brandTint } : undefined}>
-                    <div className={`text-xs font-medium ${form.frequency === f.value ? '' : 'text-gray-900'}`} style={form.frequency === f.value ? { color: brand } : undefined}>{f.label}</div>
-                    {f.discount > 0 && <div className="text-[10px] text-green-600 mt-0.5">{f.discount}% discount</div>}
-                  </button>
-                ))}
+                {FREQUENCIES.map(f => {
+                  const disc = getFreqDiscount(f.value)
+                  return (
+                    <button key={f.value} type="button" onClick={() => update('frequency', f.value)}
+                      className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? '' : 'border-gray-200 hover:border-gray-300'}`}
+                      style={form.frequency === f.value ? { borderColor: brand, backgroundColor: brandTint } : undefined}>
+                      <div className={`text-xs font-medium ${form.frequency === f.value ? '' : 'text-gray-900'}`} style={form.frequency === f.value ? { color: brand } : undefined}>{f.label}</div>
+                      {disc > 0 && <div className="text-[10px] text-green-600 mt-0.5">{disc}% discount</div>}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -334,25 +350,15 @@ export default function PublicBookingPage() {
               </div>
             )}
 
-            {selectedService?.service_extras?.length > 0 && (
+            {selectedService?.service_extras?.some((e: any) => e.is_active) && (
               <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Add-ons</h3>
-                <div className="space-y-2">
-                  {selectedService.service_extras.map((extra: any) => (
-                    <label key={extra.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <div className="flex items-center gap-2.5">
-                        <input type="checkbox" checked={selectedExtras.includes(extra.id)}
-                          onChange={() => toggleExtra(extra.id)}
-                          className="w-4 h-4 cursor-pointer" style={{ accentColor: brand }} />
-                        <div>
-                          <span className="text-sm text-gray-700">{extra.name}</span>
-                          {extra.description && <p className="text-xs text-gray-500">{extra.description}</p>}
-                        </div>
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">+${(extra.price / 100).toFixed(0)}</span>
-                    </label>
-                  ))}
-                </div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Popular add-ons</h3>
+                <AddonsPicker
+                  extras={selectedService.service_extras}
+                  selected={selectedExtras}
+                  onChange={toggleExtra}
+                  brandColor={brand}
+                />
               </div>
             )}
 
@@ -393,8 +399,8 @@ export default function PublicBookingPage() {
                 <span className="text-sm font-medium" style={{ color: brand }}>Estimated total</span>
                 <span className="text-xl font-semibold" style={{ color: brand }}>${(totalToCharge / 100).toFixed(2)}</span>
               </div>
-              {selectedFreq.discount > 0 && (
-                <p className="text-xs text-green-600 mt-1">{selectedFreq.discount}% frequency discount applied</p>
+              {getFreqDiscount(form.frequency) > 0 && (
+                <p className="text-xs text-green-600 mt-1">{getFreqDiscount(form.frequency)}% frequency discount applied</p>
               )}
             </div>
 
@@ -474,6 +480,12 @@ export default function PublicBookingPage() {
               {[
                 { label: 'Service', value: selectedService?.name },
                 { label: 'Frequency', value: selectedFreq.label },
+                ...(selectedService?.service_extras
+                  ?.filter((ex: any) => selectedExtras.includes(ex.id))
+                  .map((ex: any) => ({
+                    label: ex.name,
+                    value: ex.is_quote_only ? 'Custom price' : `+$${(ex.price / 100).toFixed(0)}`,
+                  })) ?? []),
                 { label: 'Date', value: form.scheduled_date ? new Date(`${form.scheduled_date}T12:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '' },
                 { label: 'Time', value: new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }) },
                 ...(selectedService?.pricing_type === 'room_based' ? [

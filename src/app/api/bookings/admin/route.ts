@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 
-const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 10, fortnightly: 10, monthly: 10 }
+const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const supabase = createClient()
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
     bedrooms: service.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
     bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
-    selectedExtras: extraDetails.map(ex => ({ price: ex.price })),
+    selectedExtras: extraDetails.map(ex => ({ price: ex.price, is_quote_only: ex.is_quote_only })),
     roomPricing: service.room_pricing || [],
   })
   const discountedPrice = applyFrequencyDiscount(breakdown.total, discountPct)

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     bedrooms,
     bathrooms,
   } = body
-  const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 10, fortnightly: 10, monthly: 10 }
+  const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
   try {
     // 1. Get business details
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       },
       bedrooms: service.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
       bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
-      selectedExtras: extraDetails.map(ex => ({ price: ex.price })),
+      selectedExtras: extraDetails.map(ex => ({ price: ex.price, is_quote_only: ex.is_quote_only })),
       roomPricing: service.room_pricing || [],
     })
     const discountedPrice = applyFrequencyDiscount(breakdown.total, discountPct)

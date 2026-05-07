@@ -8,15 +8,18 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
+import AddonsPicker from '@/components/AddonsPicker'
 import { calcJobPrice } from '@/lib/pricing'
 import { toBusinessDateTime, fromBusinessDateTime } from '@/lib/datetime'
 
 const FREQUENCIES = [
-  { value: 'one_time',    label: 'One-time',         discount: 0 },
-  { value: 'weekly',      label: 'Weekly',            discount: 10 },
-  { value: 'fortnightly', label: 'Fortnightly',       discount: 10 },
-  { value: 'monthly',     label: 'Monthly',           discount: 10 },
+  { value: 'one_time',    label: 'One-time' },
+  { value: 'weekly',      label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly',     label: 'Monthly' },
 ]
+
+const FREQ_FALLBACK: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
 const TIME_SLOTS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00']
 
@@ -73,6 +76,7 @@ export default function BookingPage() {
   const [leadSource, setLeadSource] = useState('')
   const [campaignLabel, setCampaignLabel] = useState('')
   const [existingCampaigns, setExistingCampaigns] = useState<string[]>([])
+  const [freqDiscounts, setFreqDiscounts] = useState<Record<string, number>>({})
 
   function update(field: string, value: any) {
     setForm(f => ({ ...f, [field]: value }))
@@ -206,6 +210,25 @@ export default function BookingPage() {
     prefill()
   }, [rebookJobId])
 
+  useEffect(() => {
+    if (!form.service_id) return
+    const supabase = createClient()
+    supabase
+      .from('frequency_discounts')
+      .select('frequency, discount_percent')
+      .eq('service_id', form.service_id)
+      .then(({ data }) => {
+        const map: Record<string, number> = {}
+        for (const row of data || []) map[row.frequency] = row.discount_percent
+        setFreqDiscounts(map)
+      })
+  }, [form.service_id])
+
+  function getFreqDiscount(value: string): number {
+    if (value === 'one_time') return 0
+    return freqDiscounts[value] ?? FREQ_FALLBACK[value] ?? 0
+  }
+
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency) ?? FREQUENCIES[0]
 
@@ -232,11 +255,12 @@ export default function BookingPage() {
       bedrooms: form.bedrooms,
       bathrooms: form.bathrooms,
       selectedExtras: (selectedService.service_extras || [])
-        .filter((ex: any) => selectedExtras.includes(ex.id))
+        .filter((ex: any) => selectedExtras.includes(ex.id) && !ex.is_quote_only)
         .map((ex: any) => ({ price: ex.price })),
       roomPricing: selectedService?.room_pricing || [],
     })
-    const discount = selectedFreq.discount > 0 ? Math.round(breakdown.total * selectedFreq.discount / 100) : 0
+    const freqDisc = getFreqDiscount(form.frequency)
+    const discount = freqDisc > 0 ? Math.round(breakdown.total * freqDisc / 100) : 0
     return breakdown.total - discount
   }
 
@@ -483,13 +507,16 @@ export default function BookingPage() {
             <div>
               <label className={labelClass}>Frequency</label>
               <div className="grid grid-cols-2 gap-2">
-                {FREQUENCIES.map(f => (
-                  <button key={f.value} type="button" onClick={() => update('frequency', f.value)}
-                    className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <div className={`text-xs font-medium ${form.frequency === f.value ? 'text-brand-700' : 'text-gray-900'}`}>{f.label}</div>
-                    {f.discount > 0 && <div className="text-[10px] text-green-600 mt-0.5">{f.discount}% discount</div>}
-                  </button>
-                ))}
+                {FREQUENCIES.map(f => {
+                  const disc = getFreqDiscount(f.value)
+                  return (
+                    <button key={f.value} type="button" onClick={() => update('frequency', f.value)}
+                      className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                      <div className={`text-xs font-medium ${form.frequency === f.value ? 'text-brand-700' : 'text-gray-900'}`}>{f.label}</div>
+                      {disc > 0 && <div className="text-[10px] text-green-600 mt-0.5">{disc}% discount</div>}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -512,22 +539,14 @@ export default function BookingPage() {
           </div>
 
           {/* Extras */}
-          {selectedService?.service_extras?.length > 0 && (
+          {selectedService?.service_extras?.some((e: any) => e.is_active) && (
             <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Add-ons</h3>
-              <div className="space-y-2">
-                {selectedService.service_extras.map((extra: any) => (
-                  <label key={extra.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <div className="flex items-center gap-2.5">
-                      <input type="checkbox" checked={selectedExtras.includes(extra.id)}
-                        onChange={() => toggleExtra(extra.id)}
-                        className="w-4 h-4 accent-brand-500 cursor-pointer" />
-                      <span className="text-sm text-gray-700">{extra.name}</span>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">+${(extra.price / 100).toFixed(0)}</span>
-                  </label>
-                ))}
-              </div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Popular add-ons</h3>
+              <AddonsPicker
+                extras={selectedService.service_extras}
+                selected={selectedExtras}
+                onChange={toggleExtra}
+              />
             </div>
           )}
 
@@ -583,8 +602,8 @@ export default function BookingPage() {
               <span className="text-sm text-brand-700 font-medium">Estimated total</span>
               <span className="text-xl font-semibold text-brand-700">${(totalToCharge / 100).toFixed(2)}</span>
             </div>
-            {selectedFreq.discount > 0 && (
-              <p className="text-xs text-brand-600 mt-1">{selectedFreq.discount}% frequency discount applied</p>
+            {getFreqDiscount(form.frequency) > 0 && (
+              <p className="text-xs text-brand-600 mt-1">{getFreqDiscount(form.frequency)}% frequency discount applied</p>
             )}
           </div>
 
@@ -717,6 +736,12 @@ export default function BookingPage() {
             {[
               { label: 'Service', value: selectedService?.name },
               { label: 'Frequency', value: selectedFreq.label },
+              ...(selectedService?.service_extras
+                ?.filter((ex: any) => selectedExtras.includes(ex.id))
+                .map((ex: any) => ({
+                  label: ex.name,
+                  value: ex.is_quote_only ? 'Custom price' : `+$${(ex.price / 100).toFixed(0)}`,
+                })) ?? []),
               { label: 'Date & time', value: form.scheduled_date ? `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} at ${new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '—' },
               { label: 'Address', value: `${form.line1}, ${form.city} ${form.state} ${form.postcode}` },
               { label: 'Customer', value: editJobId ? form.customer_name : (form.customer_id && !form.new_customer ? customers.find(c => c.id === form.customer_id)?.full_name : form.customer_name) },

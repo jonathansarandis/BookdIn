@@ -32,7 +32,7 @@ export type PriceInput = {
   }
   bedrooms?: number | null
   bathrooms?: number | null
-  selectedExtras: Array<{ price: number }>  // cents each
+  selectedExtras: Array<{ price: number; is_quote_only?: boolean }>  // cents each
   roomPricing: RoomPricingRow[]             // all room_pricing rows for this service
 }
 
@@ -80,7 +80,7 @@ export function calcJobPrice(input: PriceInput): PriceBreakdown {
     rooms = bedroomAdder + bathroomAdder
   }
 
-  const extras = selectedExtras.reduce((sum, ex) => sum + ex.price, 0)
+  const extras = selectedExtras.filter(ex => !ex.is_quote_only).reduce((sum, ex) => sum + ex.price, 0)
 
   const total = base + rooms + extras
 
