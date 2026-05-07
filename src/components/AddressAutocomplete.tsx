@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
+import { Search } from 'lucide-react'
 
 interface AddressValue {
   line1: string
@@ -20,9 +21,9 @@ const cls = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:
 const lbl = 'block text-xs font-medium text-gray-600 mb-1.5'
 
 export default function AddressAutocomplete({ value, onChange, stateOptions }: Props) {
-  const searchRef = useRef<HTMLInputElement>(null)
   const line1Ref = useRef<HTMLInputElement>(null)
   const onChangeRef = useRef(onChange)
+  const manualRef = useRef(false)
   const [manual, setManual] = useState(false)
 
   useEffect(() => { onChangeRef.current = onChange }, [onChange])
@@ -34,17 +35,22 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
     })
 
     importLibrary('places').then(({ Autocomplete }) => {
-      if (!searchRef.current) return
+      if (!line1Ref.current) return
 
-      const ac = new Autocomplete(searchRef.current, {
+      const ac = new Autocomplete(line1Ref.current, {
         componentRestrictions: { country: 'au' },
         types: ['address'],
-        fields: ['address_components'],
+        fields: ['address_components', 'geometry', 'name', 'formatted_address'],
       })
 
       ac.addListener('place_changed', () => {
+        if (manualRef.current) return
+
         const place = ac.getPlace()
-        if (!place.address_components) return
+        if (!place.address_components) {
+          console.warn('[AddressAutocomplete] place_changed: address_components missing', place)
+          return
+        }
 
         const get = (type: string, form: 'long_name' | 'short_name' = 'long_name') =>
           place.address_components!.find(c => c.types.includes(type))?.[form] ?? ''
@@ -52,37 +58,48 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
         const subpremise = get('subpremise')
         const streetNumber = get('street_number')
         const route = get('route')
+        const line1 = subpremise
+          ? `${subpremise}/${streetNumber} ${route}`
+          : `${streetNumber} ${route}`.trim()
+
+        // Anti-flicker: overwrite DOM value synchronously before React re-renders
+        // so Google's full formatted_address never appears in the street field.
+        if (line1Ref.current) line1Ref.current.value = line1
 
         onChangeRef.current({
-          line1: subpremise
-            ? `${subpremise}/${streetNumber} ${route}`
-            : `${streetNumber} ${route}`.trim(),
+          line1,
           city: get('locality') || get('sublocality_level_1'),
           state: get('administrative_area_level_1', 'short_name'),
           postcode: get('postal_code'),
         })
-
-        if (searchRef.current) searchRef.current.value = ''
       })
     })
   }, [])
 
   const handleManual = () => {
+    manualRef.current = true
     setManual(true)
     setTimeout(() => line1Ref.current?.focus(), 0)
   }
 
   return (
     <div className="space-y-3">
-      <div className={manual ? 'opacity-40 pointer-events-none select-none' : ''}>
-        <label className={lbl}>Search address</label>
-        <input
-          ref={searchRef}
-          type="text"
-          placeholder="Start typing an address..."
-          className={cls}
-          autoComplete="off"
-        />
+      <div>
+        <label className={lbl}>Street address *</label>
+        <div className="relative">
+          <input
+            ref={line1Ref}
+            required
+            value={value.line1}
+            onChange={e => onChange({ ...value, line1: e.target.value })}
+            placeholder={manual ? '123 Main Street' : 'Start typing an address...'}
+            className={cls + (manual ? '' : ' pr-8')}
+            autoComplete="off"
+          />
+          {!manual && (
+            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          )}
+        </div>
       </div>
 
       {!manual && (
@@ -94,18 +111,6 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
           Enter address manually
         </button>
       )}
-
-      <div>
-        <label className={lbl}>Street address *</label>
-        <input
-          ref={line1Ref}
-          required
-          value={value.line1}
-          onChange={e => onChange({ ...value, line1: e.target.value })}
-          placeholder="123 Main Street"
-          className={cls}
-        />
-      </div>
 
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-1">
