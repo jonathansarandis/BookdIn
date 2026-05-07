@@ -35,17 +35,18 @@ export function CancelBookingButton({ jobId, status }: { jobId: string; status: 
   async function handleCancel() {
     if (!window.confirm('Cancel this booking? This will mark it as cancelled and cannot be undone here.')) return
     setLoading(true)
-    const supabase = createClient()
-    await supabase.from('jobs').update({ status: 'cancelled' }).eq('id', jobId)
-    const { data: job } = await supabase.from('jobs').select('business_id').eq('id', jobId).single()
-    await supabase.from('activity_logs').insert({
-      business_id: job?.business_id,
-      event_type: 'booking_cancelled',
-      description: 'Booking cancelled',
-      entity_type: 'job',
-      entity_id: jobId,
-    })
+    const res = await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' })
+    const data = await res.json()
     setLoading(false)
+    if (!res.ok) {
+      alert('Failed to cancel booking. Please try again.')
+      return
+    }
+    if (data.emailStatus === 'failed') {
+      alert('Booking cancelled, but confirmation email failed to send.')
+    } else {
+      alert('Booking cancelled.')
+    }
     router.refresh()
   }
 

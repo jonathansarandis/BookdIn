@@ -200,6 +200,8 @@ export interface Database {
           payment_method: string | null
           paid_at: string | null
           confirmation_email_sent_at: string | null
+          receipt_email_sent_at: string | null
+          cancellation_email_sent_at: string | null
         }
         Insert: Omit<Database['public']['Tables']['jobs']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['jobs']['Insert']>
