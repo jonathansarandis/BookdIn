@@ -280,7 +280,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <span className="text-gray-900">${(subtotalCents / 100).toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">{taxName} ({taxRate}%)</span>
+                  <span className="text-gray-500">{taxName}</span>
                   <span className="text-gray-900">${(taxCents / 100).toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm border-t border-gray-100 pt-2">
