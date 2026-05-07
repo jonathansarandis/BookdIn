@@ -140,6 +140,9 @@ export default function PublicBookingPage() {
   const subtotalCents = taxMode === 'exclusive' ? rawPrice : rawPrice - taxCents
   const totalToCharge = rawPrice + (taxMode === 'exclusive' ? taxCents : 0)
 
+  const brand = business?.brand_color || '#1A6B4A'
+  const brandTint = `${brand}14`
+
   function toggleExtra(id: string) {
     setSelectedExtras(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id])
   }
@@ -224,15 +227,15 @@ export default function PublicBookingPage() {
     )
   }
 
-  const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+  const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-color)] focus:border-transparent"
   const labelClass = "block text-xs font-medium text-gray-600 mb-1.5"
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50" style={{ '--brand-color': brand } as React.CSSProperties}>
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 bg-green-700 rounded-lg flex items-center justify-center">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: brand }}>
             <span className="text-white font-bold text-sm">{business.name[0]}</span>
           </div>
           <div>
@@ -252,8 +255,9 @@ export default function PublicBookingPage() {
         <div className="flex items-center gap-2 mb-6">
           {[1, 2, 3].map(s => (
             <div key={s} className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors
-                ${step >= s ? 'bg-green-700 text-white' : 'bg-gray-200 text-gray-500'}`}>
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${step >= s ? 'text-white' : 'bg-gray-200 text-gray-500'}`}
+                style={step >= s ? { backgroundColor: brand } : undefined}>
                 {step > s ? '✓' : s}
               </div>
               <span className={`text-xs font-medium ${step >= s ? 'text-gray-900' : 'text-gray-400'}`}>
@@ -273,13 +277,13 @@ export default function PublicBookingPage() {
               <h3 className="text-sm font-semibold text-gray-900">Select a service</h3>
               <div className="space-y-2">
                 {services.map(s => (
-                  <label key={s.id} className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                    form.service_id === s.id ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-                  }`}>
+                  <label key={s.id}
+                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${form.service_id === s.id ? '' : 'border-gray-200 hover:border-gray-300'}`}
+                    style={form.service_id === s.id ? { borderColor: brand, backgroundColor: brandTint } : undefined}>
                     <div className="flex items-center gap-3">
                       <input type="radio" name="service" value={s.id} checked={form.service_id === s.id}
                         onChange={() => { update('service_id', s.id); setSelectedExtras([]) }}
-                        className="w-4 h-4 accent-green-600" />
+                        className="w-4 h-4" style={{ accentColor: brand }} />
                       <div>
                         <p className="text-sm font-medium text-gray-900">{s.name}</p>
                         {s.description && <p className="text-xs text-gray-500">{s.description}</p>}
@@ -296,8 +300,9 @@ export default function PublicBookingPage() {
               <div className="grid grid-cols-2 gap-2">
                 {FREQUENCIES.map(f => (
                   <button key={f.value} type="button" onClick={() => update('frequency', f.value)}
-                    className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                    <div className={`text-xs font-medium ${form.frequency === f.value ? 'text-green-700' : 'text-gray-900'}`}>{f.label}</div>
+                    className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? '' : 'border-gray-200 hover:border-gray-300'}`}
+                    style={form.frequency === f.value ? { borderColor: brand, backgroundColor: brandTint } : undefined}>
+                    <div className={`text-xs font-medium ${form.frequency === f.value ? '' : 'text-gray-900'}`} style={form.frequency === f.value ? { color: brand } : undefined}>{f.label}</div>
                     {f.discount > 0 && <div className="text-[10px] text-green-600 mt-0.5">{f.discount}% discount</div>}
                   </button>
                 ))}
@@ -338,7 +343,7 @@ export default function PublicBookingPage() {
                       <div className="flex items-center gap-2.5">
                         <input type="checkbox" checked={selectedExtras.includes(extra.id)}
                           onChange={() => toggleExtra(extra.id)}
-                          className="w-4 h-4 accent-green-600 cursor-pointer" />
+                          className="w-4 h-4 cursor-pointer" style={{ accentColor: brand }} />
                         <div>
                           <span className="text-sm text-gray-700">{extra.name}</span>
                           {extra.description && <p className="text-xs text-gray-500">{extra.description}</p>}
@@ -371,22 +376,22 @@ export default function PublicBookingPage() {
               </div>
             </div>
 
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-1">
+            <div className="rounded-xl p-4 space-y-1 border" style={{ backgroundColor: brandTint, borderColor: `${brand}40` }}>
               {showTaxBreakdown && (
                 <>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-green-700">Subtotal</span>
-                    <span className="text-green-700">${(subtotalCents / 100).toFixed(2)}</span>
+                    <span style={{ color: brand }}>Subtotal</span>
+                    <span style={{ color: brand }}>${(subtotalCents / 100).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-green-700">{taxName} ({taxRate}%)</span>
-                    <span className="text-green-700">${(taxCents / 100).toFixed(2)}</span>
+                    <span style={{ color: brand }}>{taxName} ({taxRate}%)</span>
+                    <span style={{ color: brand }}>${(taxCents / 100).toFixed(2)}</span>
                   </div>
                 </>
               )}
               <div className="flex justify-between items-center">
-                <span className="text-sm text-green-700 font-medium">Estimated total</span>
-                <span className="text-xl font-semibold text-green-700">${(totalToCharge / 100).toFixed(2)}</span>
+                <span className="text-sm font-medium" style={{ color: brand }}>Estimated total</span>
+                <span className="text-xl font-semibold" style={{ color: brand }}>${(totalToCharge / 100).toFixed(2)}</span>
               </div>
               {selectedFreq.discount > 0 && (
                 <p className="text-xs text-green-600 mt-1">{selectedFreq.discount}% frequency discount applied</p>
@@ -394,7 +399,8 @@ export default function PublicBookingPage() {
             </div>
 
             <button onClick={() => setStep(2)} disabled={!form.service_id || !form.scheduled_date}
-              className="w-full py-3 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+              className="w-full py-3 text-white text-sm font-medium rounded-lg transition-all hover:brightness-90 disabled:opacity-50"
+              style={{ backgroundColor: brand }}>
               Continue →
             </button>
           </div>
@@ -452,7 +458,8 @@ export default function PublicBookingPage() {
               </button>
               <button onClick={() => setStep(3)}
                 disabled={!form.full_name || !form.email || !form.phone || !form.line1 || !form.city || !form.state || !form.postcode}
-                className="flex-1 py-3 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+                className="flex-1 py-3 text-white text-sm font-medium rounded-lg transition-all hover:brightness-90 disabled:opacity-50"
+                style={{ backgroundColor: brand }}>
                 Review →
               </button>
             </div>
@@ -485,7 +492,7 @@ export default function PublicBookingPage() {
               ].map(item => (
                 <div key={item.label} className="flex justify-between text-sm">
                   <span className="text-gray-500">{item.label}</span>
-                  <span className={`${item.bold ? 'font-semibold text-green-700' : 'text-gray-900'} text-right max-w-xs`}>{item.value}</span>
+                  <span className={`${item.bold ? 'font-semibold' : 'text-gray-900'} text-right max-w-xs`} style={item.bold ? { color: brand } : undefined}>{item.value}</span>
                 </div>
               ))}
             </div>
@@ -502,7 +509,8 @@ export default function PublicBookingPage() {
                 Back
               </button>
               <button onClick={handleSubmit} disabled={submitting}
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
+                className="flex-1 flex items-center justify-center gap-2 py-3 text-white text-sm font-medium rounded-lg transition-all hover:brightness-90 disabled:opacity-50"
+                style={{ backgroundColor: brand }}>
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {submitting ? 'Submitting...' : 'Confirm booking'}
               </button>
