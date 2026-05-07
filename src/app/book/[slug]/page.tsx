@@ -40,7 +40,7 @@ export default function PublicBookingPage() {
     frequency: 'one_time',
     bedrooms: 1,
     bathrooms: 1,
-    scheduled_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+    scheduled_date: '',
     scheduled_time: 'flexible',
     full_name: '',
     email: '',
@@ -365,13 +365,16 @@ export default function PublicBookingPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="min-w-0">
+                <div className="min-w-0 relative">
                   <label className={labelClass}>Date *</label>
                   <input type="date" required value={form.scheduled_date}
                     min={new Date().toISOString().split('T')[0]}
                     onChange={e => update('scheduled_date', e.target.value)}
                     className={`${inputClass} min-w-0`}
                     style={{ WebkitAppearance: 'none', appearance: 'none', minWidth: 0, maxWidth: '100%' }} />
+                  {!form.scheduled_date && (
+                    <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-400">Select date</span>
+                  )}
                 </div>
                 <div className="min-w-0">
                   <label className={labelClass}>Time *</label>
