@@ -106,8 +106,8 @@ input::placeholder, textarea::placeholder {
 }
 
 input[type="date"].blank-date::-webkit-datetime-edit {
-  color: transparent;
+  color: transparent !important;
 }
 input[type="date"].blank-date:focus::-webkit-datetime-edit {
-  color: inherit;
+  color: #111827 !important;
 }
