@@ -101,7 +101,7 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                         STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-600'
                       )}
                     >
-                      {formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
+                      {job.is_flexible_time ? 'Flexible' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
                       {' '}{job.customer?.full_name?.split(' ')[0]}
                     </button>
                   ))}

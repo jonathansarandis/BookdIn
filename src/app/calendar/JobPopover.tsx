@@ -128,7 +128,7 @@ export default function JobPopover({ job, businessTimezone, onClose }: Props) {
               <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm text-gray-900">{dateStr}</p>
-                <p className="text-xs text-gray-500">{timeRange}</p>
+                <p className="text-xs text-gray-500">{job?.is_flexible_time ? 'Flexible time' : timeRange}</p>
                 {job?.frequency && job.frequency !== 'one_time' && (
                   <p className="text-xs text-gray-400 mt-0.5">{FREQUENCY_LABELS[job.frequency] || job.frequency}</p>
                 )}

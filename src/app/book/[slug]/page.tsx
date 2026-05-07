@@ -41,7 +41,7 @@ export default function PublicBookingPage() {
     bedrooms: 1,
     bathrooms: 1,
     scheduled_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-    scheduled_time: '09:00',
+    scheduled_time: 'flexible',
     full_name: '',
     email: '',
     phone: '',
@@ -364,8 +364,8 @@ export default function PublicBookingPage() {
 
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
-              <div className="flex gap-4">
-                <div className="flex-1 min-w-0">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="min-w-0">
                   <label className={labelClass}>Date *</label>
                   <input type="date" required value={form.scheduled_date}
                     min={new Date().toISOString().split('T')[0]}
@@ -373,9 +373,10 @@ export default function PublicBookingPage() {
                     className={`${inputClass} min-w-0`}
                     style={{ WebkitAppearance: 'none', appearance: 'none', minWidth: 0, maxWidth: '100%' }} />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0">
                   <label className={labelClass}>Time *</label>
                   <select value={form.scheduled_time} onChange={e => update('scheduled_time', e.target.value)} className={inputClass}>
+                    <option value="flexible">Flexible time</option>
                     {['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
                       <option key={t} value={t}>{new Date(`2000-01-01T${t}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}</option>
                     ))}
@@ -489,7 +490,7 @@ export default function PublicBookingPage() {
                     value: ex.is_quote_only ? 'Custom price' : `+$${(ex.price / 100).toFixed(0)}`,
                   })) ?? []),
                 { label: 'Date', value: form.scheduled_date ? new Date(`${form.scheduled_date}T12:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '' },
-                { label: 'Time', value: new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }) },
+                { label: 'Time', value: form.scheduled_time === 'flexible' ? 'Flexible time' : new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }) },
                 ...(selectedService?.pricing_type === 'room_based' ? [
                   { label: 'Bedrooms', value: `${form.bedrooms}` },
                   { label: 'Bathrooms', value: `${form.bathrooms}` },

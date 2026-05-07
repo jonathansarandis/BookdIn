@@ -5,11 +5,14 @@ import { createClient } from '@/lib/supabase/client'
 import { Calendar, Clock, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { toBusinessDateTime, fromBusinessDateTime, formatBusinessDateTime } from '@/lib/datetime'
 
+const TIME_SLOTS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00']
+
 interface Props {
   jobId: string
   initialScheduledAt: string | null
   durationMinutes: number | null
   businessTimezone: string
+  initialIsFlexibleTime: boolean
 }
 
 function toDateInput(iso: string, tz: string): string {
@@ -29,12 +32,13 @@ function toTimeInput(iso: string, tz: string): string {
   ].join(':')
 }
 
-export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinutes, businessTimezone }: Props) {
+export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinutes, businessTimezone, initialIsFlexibleTime }: Props) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [scheduledAt, setScheduledAt] = useState(initialScheduledAt)
+  const [isFlexibleTime, setIsFlexibleTime] = useState(initialIsFlexibleTime)
   const [draftDate, setDraftDate] = useState(initialScheduledAt ? toDateInput(initialScheduledAt, businessTimezone) : '')
-  const [draftTime, setDraftTime] = useState(initialScheduledAt ? toTimeInput(initialScheduledAt, businessTimezone) : '09:00')
+  const [draftTime, setDraftTime] = useState(initialIsFlexibleTime ? 'flexible' : (initialScheduledAt ? toTimeInput(initialScheduledAt, businessTimezone) : '09:00'))
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,17 +54,19 @@ export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinu
     if (!draftDate || !draftTime) return
     setSaving(true)
     setError(null)
-    const newScheduledAt = fromBusinessDateTime(draftDate, draftTime, businessTimezone)
+    const newIsFlexible = draftTime === 'flexible'
+    const newScheduledAt = fromBusinessDateTime(draftDate, newIsFlexible ? '09:00' : draftTime, businessTimezone)
     const supabase = createClient()
     const { error: err } = await supabase
       .from('jobs')
-      .update({ scheduled_at: newScheduledAt })
+      .update({ scheduled_at: newScheduledAt, is_flexible_time: newIsFlexible })
       .eq('id', jobId)
     setSaving(false)
     if (err) { setError(err.message); return }
     setScheduledAt(newScheduledAt)
+    setIsFlexibleTime(newIsFlexible)
     setDraftDate(toDateInput(newScheduledAt, businessTimezone))
-    setDraftTime(toTimeInput(newScheduledAt, businessTimezone))
+    setDraftTime(newIsFlexible ? 'flexible' : toTimeInput(newScheduledAt, businessTimezone))
     setEditing(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
@@ -70,7 +76,7 @@ export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinu
   function cancel() {
     if (scheduledAt) {
       setDraftDate(toDateInput(scheduledAt, businessTimezone))
-      setDraftTime(toTimeInput(scheduledAt, businessTimezone))
+      setDraftTime(isFlexibleTime ? 'flexible' : toTimeInput(scheduledAt, businessTimezone))
     }
     setEditing(false)
     setError(null)
@@ -105,12 +111,16 @@ export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinu
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Time</label>
-              <input
-                type="time"
+              <select
                 value={draftTime}
                 onChange={e => setDraftTime(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
+              >
+                <option value="flexible">Flexible time</option>
+                {TIME_SLOTS.map(t => (
+                  <option key={t} value={t}>{new Date(`2000-01-01T${t}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}</option>
+                ))}
+              </select>
             </div>
           </div>
           {error && <p className="text-xs text-red-600">{error}</p>}
@@ -141,10 +151,10 @@ export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinu
               <span>{displayDate}</span>
             </div>
           )}
-          {displayTime && (
+          {(displayTime || isFlexibleTime) && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-              <span>{displayTime}</span>
+              <span>{isFlexibleTime ? 'Flexible time' : displayTime}</span>
             </div>
           )}
           {durationMinutes && (

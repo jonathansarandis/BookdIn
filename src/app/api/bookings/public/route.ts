@@ -43,6 +43,8 @@ export async function POST(request: NextRequest) {
     bedrooms,
     bathrooms,
   } = body
+  const isFlexible = scheduled_time === 'flexible'
+  const effectiveTime = isFlexible ? '09:00' : scheduled_time
   const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
   try {
@@ -158,7 +160,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     // 5. Create job (pending status — no card yet)
-    const scheduledAt = new Date(`${scheduled_date}T${scheduled_time}:00`)
+    const scheduledAt = new Date(`${scheduled_date}T${effectiveTime}:00`)
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .insert({
@@ -177,6 +179,7 @@ export async function POST(request: NextRequest) {
         payment_status: 'unpaid',
         payment_method: 'card',
         booking_source: 'online',
+        is_flexible_time: isFlexible,
         bedrooms: service?.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
         bathrooms: service?.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
       })
@@ -298,6 +301,7 @@ export async function POST(request: NextRequest) {
         scheduled_at: scheduledAt.toISOString(),
         total_price: taxSplit.total,
         tax_amount: taxSplit.tax,
+        is_flexible_time: isFlexible,
       },
       customer: { full_name: customer.full_name, email: customer.email },
       business: {

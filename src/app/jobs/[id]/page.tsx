@@ -185,6 +185,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             initialScheduledAt={job.scheduled_at}
             durationMinutes={job.duration_minutes ?? null}
             businessTimezone={business?.timezone || 'Australia/Melbourne'}
+            initialIsFlexibleTime={job.is_flexible_time ?? false}
           />
 
           {/* Address */}

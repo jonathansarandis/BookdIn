@@ -41,6 +41,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     status,
     payment_method,
     rebook_source_job_id,
+    is_flexible_time,
   } = body
 
   const admin = createAdminClient()
@@ -136,6 +137,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         frequency,
         notes: notes ?? null,
         provider_id: provider_id ?? null,
+        is_flexible_time: is_flexible_time ?? false,
       })
       .eq('id', editJobId)
 
@@ -184,6 +186,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       payment_status: 'unpaid',
       bedrooms: service.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
       bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
+      is_flexible_time: is_flexible_time ?? false,
     })
     .select('id')
     .single()
@@ -233,6 +236,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         scheduled_at,
         total_price: taxSplit.total,
         tax_amount: taxSplit.tax,
+        is_flexible_time: is_flexible_time ?? false,
       },
       customer: jobForEmail.customer,
       business: {

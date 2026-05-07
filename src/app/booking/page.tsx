@@ -135,7 +135,7 @@ export default function BookingPage() {
       const d = toBusinessDateTime(job.scheduled_at, businessTimezone)
       const pad = (n: number) => String(n).padStart(2, '0')
       const scheduledDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-      const scheduledTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+      const scheduledTime = job.is_flexible_time ? 'flexible' : `${pad(d.getHours())}:${pad(d.getMinutes())}`
 
       setForm(f => ({
         ...f,
@@ -305,7 +305,8 @@ export default function BookingPage() {
         if (addrErr) throw new Error('Failed to update address: ' + addrErr.message)
 
         // Step 3: job + extras + activity log (server-side price verification)
-        const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, form.scheduled_time, businessTimezone)
+        const isFlexible = form.scheduled_time === 'flexible'
+        const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, isFlexible ? '09:00' : form.scheduled_time, businessTimezone)
         const editRes = await fetch('/api/bookings/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -316,6 +317,7 @@ export default function BookingPage() {
             bedrooms: form.bedrooms,
             bathrooms: form.bathrooms,
             scheduled_at: scheduledAtIso,
+            is_flexible_time: isFlexible,
             extras: selectedExtras,
             total_price: totalToCharge,
             tax_amount: taxCents,
@@ -376,7 +378,8 @@ export default function BookingPage() {
       }
 
       // Create job via API route (server-side price verification + extras + activity log + email)
-      const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, form.scheduled_time, businessTimezone)
+      const isFlexible = form.scheduled_time === 'flexible'
+      const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, isFlexible ? '09:00' : form.scheduled_time, businessTimezone)
       const createRes = await fetch('/api/bookings/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -386,6 +389,7 @@ export default function BookingPage() {
           bedrooms: form.bedrooms,
           bathrooms: form.bathrooms,
           scheduled_at: scheduledAtIso,
+          is_flexible_time: isFlexible,
           extras: selectedExtras,
           total_price: totalToCharge,
           tax_amount: taxCents,
@@ -563,8 +567,9 @@ export default function BookingPage() {
               <div>
                 <label className={labelClass}>Time *</label>
                 <select value={form.scheduled_time} onChange={e => update('scheduled_time', e.target.value)} className={inputClass}>
+                  <option value="flexible">Flexible time</option>
                   {/* Render a custom option for times not in the standard slot list (e.g. prefilled from a public booking) */}
-                  {!TIME_SLOTS.includes(form.scheduled_time) && form.scheduled_time && (
+                  {!TIME_SLOTS.includes(form.scheduled_time) && form.scheduled_time && form.scheduled_time !== 'flexible' && (
                     <option value={form.scheduled_time}>
                       {new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                     </option>
@@ -742,7 +747,11 @@ export default function BookingPage() {
                   label: ex.name,
                   value: ex.is_quote_only ? 'Custom price' : `+$${(ex.price / 100).toFixed(0)}`,
                 })) ?? []),
-              { label: 'Date & time', value: form.scheduled_date ? `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} at ${new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '—' },
+              { label: 'Date & time', value: form.scheduled_date
+                  ? form.scheduled_time === 'flexible'
+                    ? `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — Flexible time`
+                    : `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} at ${new Date(`2000-01-01T${form.scheduled_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+                  : '—' },
               { label: 'Address', value: `${form.line1}, ${form.city} ${form.state} ${form.postcode}` },
               { label: 'Customer', value: editJobId ? form.customer_name : (form.customer_id && !form.new_customer ? customers.find(c => c.id === form.customer_id)?.full_name : form.customer_name) },
               ...(showTaxBreakdown ? [
