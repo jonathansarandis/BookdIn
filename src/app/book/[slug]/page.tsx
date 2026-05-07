@@ -364,14 +364,14 @@ export default function PublicBookingPage() {
 
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="min-w-0">
+              <div className="flex gap-4">
+                <div className="flex-1 min-w-0">
                   <label className={labelClass}>Date *</label>
                   <input type="date" required value={form.scheduled_date}
                     min={new Date().toISOString().split('T')[0]}
                     onChange={e => update('scheduled_date', e.target.value)} className={inputClass} />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 min-w-0">
                   <label className={labelClass}>Time *</label>
                   <select value={form.scheduled_time} onChange={e => update('scheduled_time', e.target.value)} className={inputClass}>
                     {['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (

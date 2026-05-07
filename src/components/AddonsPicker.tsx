@@ -62,9 +62,10 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
         <button
           type="button"
           onClick={() => setShowAll(v => !v)}
-          className="mt-1 w-full text-left text-xs text-gray-500 hover:text-gray-700 px-2.5 py-2 transition-colors"
+          className={`mt-2 w-full text-center text-sm font-medium py-3 transition-colors${!brandColor ? ' text-brand-700 hover:text-brand-800' : ''}`}
+          style={brandColor ? { color: brandColor } : undefined}
         >
-          {showAll ? '− Show fewer' : `+ Show all add-ons (${rest.length} more)`}
+          {showAll ? 'Show fewer' : `Show all add-ons (${rest.length} more)`}
         </button>
       )}
     </div>
