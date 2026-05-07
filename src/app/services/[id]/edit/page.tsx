@@ -14,7 +14,7 @@ const PRICING_TYPES = [
   { value: 'sqft_based', label: 'Per sq ft',    desc: 'Based on property size' },
 ]
 
-interface Extra { id?: string; name: string; price: string; duration: string }
+interface Extra { id?: string; name: string; price: string; duration: string; is_popular: boolean; is_quote_only: boolean }
 interface RoomPrice { count: number; price: string }
 
 export default function EditServicePage() {
@@ -93,6 +93,8 @@ export default function EditServicePage() {
         name: ex.name,
         price: (ex.price / 100).toFixed(2),
         duration: ex.duration_minutes?.toString() || '0',
+        is_popular: ex.is_popular ?? false,
+        is_quote_only: ex.is_quote_only ?? false,
       })) || [])
 
       // Load room pricing
@@ -113,9 +115,9 @@ export default function EditServicePage() {
     load()
   }, [serviceId])
 
-  function addExtra() { setExtras(e => [...e, { name: '', price: '', duration: '0' }]) }
+  function addExtra() { setExtras(e => [...e, { name: '', price: '', duration: '0', is_popular: false, is_quote_only: false }]) }
 
-  function updateExtra(i: number, field: string, value: string) {
+  function updateExtra(i: number, field: string, value: any) {
     setExtras(e => e.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex))
   }
 
@@ -164,6 +166,8 @@ export default function EditServicePage() {
             price: Math.round(parseFloat(ex.price) * 100),
             duration_minutes: parseInt(ex.duration || '0'),
             sort_order: i,
+            is_popular: ex.is_popular,
+            is_quote_only: ex.is_quote_only,
           }).eq('id', ex.id)
         } else {
           await supabase.from('service_extras').insert({
@@ -174,6 +178,8 @@ export default function EditServicePage() {
             duration_minutes: parseInt(ex.duration || '0'),
             sort_order: i,
             is_active: true,
+            is_popular: ex.is_popular ?? false,
+            is_quote_only: ex.is_quote_only ?? false,
           })
         }
       }
@@ -348,33 +354,39 @@ export default function EditServicePage() {
               <Plus className="w-3.5 h-3.5" /> Add extra
             </button>
           </div>
+          <p className="text-xs text-gray-500">Mark popular add-ons to surface them at the top of the booking form. Mark quote only when the price varies and needs a custom quote.</p>
           {extras.length === 0 && (
             <p className="text-xs text-gray-400">No add-ons — e.g. Oven clean, Carpet steam, Interior windows</p>
           )}
           {extras.map((extra, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-center">
-              <div className="col-span-6">
-                <input value={extra.name} onChange={e => updateExtra(i, 'name', e.target.value)}
-                  placeholder="Extra name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-              </div>
-              <div className="col-span-3 relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <div key={i} className="flex items-center gap-1.5">
+              <input value={extra.name} onChange={e => updateExtra(i, 'name', e.target.value)}
+                placeholder="Extra name"
+                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              <div className="relative w-20 flex-shrink-0">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
                 <input type="number" min="0" step="0.01" value={extra.price}
                   onChange={e => updateExtra(i, 'price', e.target.value)} placeholder="0.00"
-                  className="w-full pl-7 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                  disabled={extra.is_quote_only}
+                  className={`w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-opacity ${extra.is_quote_only ? 'opacity-50' : ''}`} />
               </div>
-              <div className="col-span-2">
-                <input type="number" min="0" step="5" value={extra.duration}
-                  onChange={e => updateExtra(i, 'duration', e.target.value)} placeholder="min"
-                  className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-              </div>
-              <div className="col-span-1 flex justify-center">
-                <button type="button" onClick={() => removeExtra(i)}
-                  className="p-1 text-gray-400 hover:text-red-500 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              <input type="number" min="0" step="5" value={extra.duration}
+                onChange={e => updateExtra(i, 'duration', e.target.value)} placeholder="min"
+                className="w-14 flex-shrink-0 px-2 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              <button type="button"
+                onClick={() => updateExtra(i, 'is_popular', !extra.is_popular)}
+                className={`flex-shrink-0 h-[34px] w-20 rounded-lg border text-xs font-medium transition-colors ${extra.is_popular ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-400'}`}>
+                {extra.is_popular ? '★ Popular' : 'Popular'}
+              </button>
+              <button type="button"
+                onClick={() => updateExtra(i, 'is_quote_only', !extra.is_quote_only)}
+                className={`flex-shrink-0 h-[34px] w-20 rounded-lg border text-xs font-medium transition-colors ${extra.is_quote_only ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-400'}`}>
+                Quote only
+              </button>
+              <button type="button" onClick={() => removeExtra(i)}
+                className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
           ))}
         </div>
