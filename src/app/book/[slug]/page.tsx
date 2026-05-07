@@ -365,7 +365,7 @@ export default function PublicBookingPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="min-w-0 w-full relative">
+                <div className="min-w-0 relative">
                   <label className={labelClass}>Date *</label>
                   <input type="date" required value={form.scheduled_date}
                     min={new Date().toISOString().split('T')[0]}
@@ -376,7 +376,7 @@ export default function PublicBookingPage() {
                     <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-400">Select date</span>
                   )}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 relative">
                   <label className={labelClass}>Time *</label>
                   <select value={form.scheduled_time} onChange={e => update('scheduled_time', e.target.value)} className={inputClass}>
                     <option value="flexible">Flexible time</option>
