@@ -261,9 +261,6 @@ export default function BookingPage() {
     // Edit flow
     if (editJobId) {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
-      const bid = profile!.business_id!
 
       try {
         // Step 1: customer
@@ -283,46 +280,29 @@ export default function BookingPage() {
         }).eq('id', editAddressId)
         if (addrErr) throw new Error('Failed to update address: ' + addrErr.message)
 
-        // Step 3: job
+        // Step 3: job + extras + activity log (server-side price verification)
         const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, form.scheduled_time, businessTimezone)
-        const { error: jobErr } = await supabase.from('jobs').update({
-          service_id: form.service_id,
-          price: subtotalCents,
-          total_price: totalToCharge,
-          tax_amount: taxCents,
-          duration_minutes: selectedService?.duration_minutes || 120,
-          bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
-          bathrooms: selectedService?.pricing_type === 'room_based' ? form.bathrooms : null,
-          scheduled_at: scheduledAtIso,
-          frequency: form.frequency,
-          notes: form.notes || null,
-          provider_id: form.provider_id || null,
-        }).eq('id', editJobId)
-        if (jobErr) throw new Error('Failed to update booking: ' + jobErr.message)
-
-        // Step 4: clear existing extras
-        const { error: delErr } = await supabase.from('job_extras').delete().eq('job_id', editJobId)
-        if (delErr) throw new Error('Failed to clear extras: ' + delErr.message)
-
-        // Step 5: insert selected extras
-        if (selectedExtras.length > 0) {
-          const extrasToInsert = selectedService?.service_extras
-            .filter((ex: any) => selectedExtras.includes(ex.id))
-            .map((ex: any) => ({ job_id: editJobId, extra_id: ex.id, name: ex.name, price: ex.price }))
-          if (extrasToInsert?.length) {
-            const { error: extErr } = await supabase.from('job_extras').insert(extrasToInsert)
-            if (extErr) throw new Error('Failed to save extras: ' + extErr.message)
-          }
-        }
-
-        // Activity log
-        await supabase.from('activity_logs').insert({
-          business_id: bid,
-          event_type: 'booking_updated',
-          description: `Booking updated for ${form.customer_name}`,
-          entity_type: 'job',
-          entity_id: editJobId,
+        const editRes = await fetch('/api/bookings/admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            editJobId,
+            service_id: form.service_id,
+            frequency: form.frequency,
+            bedrooms: form.bedrooms,
+            bathrooms: form.bathrooms,
+            scheduled_at: scheduledAtIso,
+            extras: selectedExtras,
+            total_price: totalToCharge,
+            tax_amount: taxCents,
+            notes: form.notes || null,
+            provider_id: form.provider_id || null,
+          }),
         })
+        const editData = await editRes.json()
+        if (!editRes.ok) {
+          throw new Error(editRes.status === 400 ? 'Pricing changed — refresh and try again' : (editData.error || 'Failed to update booking'))
+        }
 
         router.push('/calendar')
       } catch (err: any) {
@@ -371,33 +351,34 @@ export default function BookingPage() {
         addressId = addr.id
       }
 
-      // Create job
+      // Create job via API route (server-side price verification + extras + activity log + email)
       const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, form.scheduled_time, businessTimezone)
-      const { data: job, error: jobErr } = await supabase.from('jobs').insert({
-        business_id: bid,
-        customer_id: customerId,
-        address_id: addressId,
-        service_id: form.service_id,
-        provider_id: form.provider_id || null,
-        status: form.provider_id ? 'assigned' : 'pending',
-        scheduled_at: scheduledAtIso,
-        duration_minutes: selectedService?.duration_minutes || 120,
-        price: subtotalCents,
-        total_price: totalToCharge,
-        tax_amount: taxCents,
-        frequency: form.frequency,
-        notes: form.notes || null,
-        booking_source: 'admin',
-        bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
-        bathrooms: selectedService?.pricing_type === 'room_based' ? form.bathrooms : null,
-      }).select().single()
-      if (jobErr) throw new Error('Failed to create job: ' + jobErr.message)
-
-      // Fire-and-forget confirmation email — does not block redirect
-      fetch(`/api/bookings/${job.id}/send-confirmation`, { method: 'POST' })
-        .then(r => r.json())
-        .then(result => console.log('[booking] confirmation email:', result))
-        .catch(err => console.error('[booking] confirmation email fetch failed:', err))
+      const createRes = await fetch('/api/bookings/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service_id: form.service_id,
+          frequency: form.frequency,
+          bedrooms: form.bedrooms,
+          bathrooms: form.bathrooms,
+          scheduled_at: scheduledAtIso,
+          extras: selectedExtras,
+          total_price: totalToCharge,
+          tax_amount: taxCents,
+          customer_id: customerId,
+          address_id: addressId,
+          provider_id: form.provider_id || null,
+          notes: form.notes || null,
+          booking_source: 'admin',
+          payment_method: paymentMethod,
+          rebook_source_job_id: rebookJobId || null,
+        }),
+      })
+      const createData = await createRes.json()
+      if (!createRes.ok) {
+        throw new Error(createRes.status === 400 ? 'Pricing changed — refresh and try again' : (createData.error || 'Failed to create booking'))
+      }
+      const jobId = createData.job_id
 
       // Save lead source attribution if selected
       if (leadSource) {
@@ -405,7 +386,7 @@ export default function BookingPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            booking_id: job.id,
+            booking_id: jobId,
             business_id: bid,
             customer_id: customerId,
             source_type: leadSource,
@@ -423,29 +404,11 @@ export default function BookingPage() {
         const intentRes = await fetch('/api/stripe/intent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId: job.id, paymentMethodId }),
+          body: JSON.stringify({ jobId, paymentMethodId }),
         })
         const intentData = await intentRes.json()
         if (intentData.error) throw new Error(intentData.error)
       }
-
-      // Insert extras
-      if (selectedExtras.length > 0) {
-        const extrasToInsert = selectedService?.service_extras
-          .filter((ex: any) => selectedExtras.includes(ex.id))
-          .map((ex: any) => ({ job_id: job.id, extra_id: ex.id, name: ex.name, price: ex.price }))
-        if (extrasToInsert?.length) await supabase.from('job_extras').insert(extrasToInsert)
-      }
-
-      // Log activity
-      await supabase.from('activity_logs').insert({
-        business_id: bid,
-        event_type: rebookJobId ? 'booking_rebooked' : 'booking_created',
-        description: `Booking ${rebookJobId ? 'rebooked' : 'created'} for ${form.new_customer ? form.customer_name : customers.find(c => c.id === customerId)?.full_name}`,
-        entity_type: 'job',
-        entity_id: job.id,
-        ...(rebookJobId ? { metadata: { source_job_id: rebookJobId } } : {}),
-      })
 
       // Update customer stats
       await supabase.from('customers').update({
@@ -455,7 +418,7 @@ export default function BookingPage() {
       }).eq('id', customerId)
 
       setSuccess(true)
-      setTimeout(() => router.push(`/jobs/${job.id}`), 1500)
+      setTimeout(() => router.push(`/jobs/${jobId}`), 1500)
     } catch (err: any) {
       setError(err.message)
       setLoading(false)
