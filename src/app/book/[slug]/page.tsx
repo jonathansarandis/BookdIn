@@ -364,21 +364,32 @@ export default function PublicBookingPage() {
 
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
                 <div className="min-w-0 relative">
                   <label className={labelClass}>Date *</label>
-                  <input type="date" required value={form.scheduled_date}
+                  <input
+                    type="date"
+                    required
+                    value={form.scheduled_date}
                     min={new Date().toISOString().split('T')[0]}
                     onChange={e => update('scheduled_date', e.target.value)}
-                    className={`${inputClass} min-w-0`}
-                    style={{ WebkitAppearance: 'none', appearance: 'none', minWidth: 0, maxWidth: '100%' }} />
+                    className={inputClass}
+                    style={{ width: '100%', minWidth: 0, WebkitAppearance: 'none', appearance: 'none' }}
+                  />
                   {!form.scheduled_date && (
-                    <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-400">Select date</span>
+                    <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-400">
+                      Select date
+                    </span>
                   )}
                 </div>
                 <div className="min-w-0 relative">
                   <label className={labelClass}>Time *</label>
-                  <select value={form.scheduled_time} onChange={e => update('scheduled_time', e.target.value)} className={inputClass}>
+                  <select
+                    value={form.scheduled_time}
+                    onChange={e => update('scheduled_time', e.target.value)}
+                    className={inputClass}
+                    style={{ width: '100%' }}
+                  >
                     <option value="flexible">Flexible time</option>
                     {['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
                       <option key={t} value={t}>{new Date(`2000-01-01T${t}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}</option>
