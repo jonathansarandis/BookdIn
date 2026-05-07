@@ -43,6 +43,7 @@ export default function SettingsPage() {
   const [showTax, setShowTax] = useState(false)
   const [taxRate, setTaxRate] = useState('')
   const [taxName, setTaxName] = useState('GST')
+  const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive')
   const [taxSaving, setTaxSaving] = useState(false)
   const [taxSaved, setTaxSaved] = useState(false)
   const supabase = createClient()
@@ -79,6 +80,7 @@ export default function SettingsPage() {
     setShowTax(biz?.show_tax || false)
     setTaxRate(biz?.tax_rate != null ? String(biz.tax_rate) : '')
     setTaxName(biz?.tax_name || 'GST')
+    setTaxMode(biz?.tax_mode ?? 'exclusive')
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -132,11 +134,12 @@ export default function SettingsPage() {
       show_tax: showTax,
       tax_rate: taxRate ? parseFloat(taxRate) : 0,
       tax_name: taxName || 'GST',
+      tax_mode: taxMode,
     }).eq('id', business.id)
     setTaxSaving(false)
     if (!error) {
       setTaxSaved(true)
-      setBusiness({ ...business, show_tax: showTax, tax_rate: parseFloat(taxRate || '0'), tax_name: taxName })
+      setBusiness({ ...business, show_tax: showTax, tax_rate: parseFloat(taxRate || '0'), tax_name: taxName, tax_mode: taxMode })
       setTimeout(() => setTaxSaved(false), 3000)
     }
   }
@@ -256,20 +259,45 @@ export default function SettingsPage() {
                 </button>
               </div>
               {showTax && (
-                <div className="grid grid-cols-2 gap-4">
+                <>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Tax name</label>
-                    <input type="text" value={taxName} onChange={e => setTaxName(e.target.value)}
-                      placeholder="GST"
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                    <p className="text-sm font-medium text-gray-900 mb-2">How your prices work</p>
+                    <div className="space-y-2">
+                      <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${taxMode === 'exclusive' ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <input type="radio" name="tax_mode" value="exclusive" checked={taxMode === 'exclusive'}
+                          onChange={() => setTaxMode('exclusive')}
+                          className="mt-0.5 w-4 h-4 accent-brand-500" />
+                        <div>
+                          <p className={`text-sm font-medium ${taxMode === 'exclusive' ? 'text-brand-700' : 'text-gray-900'}`}>Tax exclusive — GST added on top</p>
+                          <p className="text-xs text-gray-500 mt-0.5">e.g. $180 service + $18 GST = $198 customer pays</p>
+                        </div>
+                      </label>
+                      <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${taxMode === 'inclusive' ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <input type="radio" name="tax_mode" value="inclusive" checked={taxMode === 'inclusive'}
+                          onChange={() => setTaxMode('inclusive')}
+                          className="mt-0.5 w-4 h-4 accent-brand-500" />
+                        <div>
+                          <p className={`text-sm font-medium ${taxMode === 'inclusive' ? 'text-brand-700' : 'text-gray-900'}`}>Tax inclusive — prices already include GST</p>
+                          <p className="text-xs text-gray-500 mt-0.5">e.g. $198 total price, $18 GST baked in</p>
+                        </div>
+                      </label>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Tax rate (%)</label>
-                    <input type="number" min="0" max="100" step="0.01" value={taxRate} onChange={e => setTaxRate(e.target.value)}
-                      placeholder="10"
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Tax name</label>
+                      <input type="text" value={taxName} onChange={e => setTaxName(e.target.value)}
+                        placeholder="GST"
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Tax rate (%)</label>
+                      <input type="number" min="0" max="100" step="0.01" value={taxRate} onChange={e => setTaxRate(e.target.value)}
+                        placeholder="10"
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
                   </div>
-                </div>
+                </>
               )}
               <div className="flex items-center gap-3 pt-1">
                 <button

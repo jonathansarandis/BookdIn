@@ -56,7 +56,7 @@ export default function PublicBookingPage() {
     async function load() {
       const { data: biz } = await supabase
         .from('businesses')
-        .select('id, name, logo_url, brand_color, tax_rate, tax_name, show_tax')
+        .select('id, name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode')
         .eq('booking_url_slug', slug)
         .single()
 
@@ -127,12 +127,18 @@ export default function PublicBookingPage() {
     return subtotal - discount
   }
 
-  const totalPrice = calcPrice()
+  const rawPrice = calcPrice()
   const showTaxBreakdown = !!(business && business.tax_rate > 0 && business.show_tax)
   const taxRate = business?.tax_rate ?? 0
   const taxName = business?.tax_name?.trim() || 'Tax'
-  const taxCents = showTaxBreakdown ? Math.round(totalPrice * taxRate / (100 + taxRate)) : 0
-  const subtotalCents = totalPrice - taxCents
+  const taxMode = business?.tax_mode ?? 'exclusive'
+  const taxCents = showTaxBreakdown
+    ? taxMode === 'exclusive'
+      ? Math.round(rawPrice * taxRate / 100)
+      : Math.round(rawPrice * taxRate / (100 + taxRate))
+    : 0
+  const subtotalCents = taxMode === 'exclusive' ? rawPrice : rawPrice - taxCents
+  const totalToCharge = rawPrice + (taxMode === 'exclusive' ? taxCents : 0)
 
   function toggleExtra(id: string) {
     setSelectedExtras(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id])
@@ -152,7 +158,7 @@ export default function PublicBookingPage() {
           frequency: form.frequency,
           scheduled_date: form.scheduled_date,
           scheduled_time: form.scheduled_time,
-          total_price: totalPrice,
+          total_price: totalToCharge,
           tax_amount: taxCents,
           extras: selectedExtras,
           customer: {
@@ -380,7 +386,7 @@ export default function PublicBookingPage() {
               )}
               <div className="flex justify-between items-center">
                 <span className="text-sm text-green-700 font-medium">Estimated total</span>
-                <span className="text-xl font-semibold text-green-700">${(totalPrice / 100).toFixed(2)}</span>
+                <span className="text-xl font-semibold text-green-700">${(totalToCharge / 100).toFixed(2)}</span>
               </div>
               {selectedFreq.discount > 0 && (
                 <p className="text-xs text-green-600 mt-1">{selectedFreq.discount}% frequency discount applied</p>
@@ -475,7 +481,7 @@ export default function PublicBookingPage() {
                   { label: 'Subtotal', value: `$${(subtotalCents / 100).toFixed(2)}` },
                   { label: `${taxName} (${taxRate}%)`, value: `$${(taxCents / 100).toFixed(2)}` },
                 ] : []),
-                { label: 'Total', value: `$${(totalPrice / 100).toFixed(2)}`, bold: true },
+                { label: 'Total', value: `$${(totalToCharge / 100).toFixed(2)}`, bold: true },
               ].map(item => (
                 <div key={item.label} className="flex justify-between text-sm">
                   <span className="text-gray-500">{item.label}</span>

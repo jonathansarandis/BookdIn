@@ -125,15 +125,11 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   const isPaid  = job.payment_status === 'paid'
   const canPay  = !isPaid && job.status !== 'cancelled' && job.total_price > 0
 
-  // Currently assumes tax-inclusive pricing (correct for AU/UK B2C).
-  // For US/exclusive markets we'll add a businesses.tax_inclusive boolean
-  // and branch the math accordingly.
-  const taxRate = business?.tax_rate ?? 0
   const taxName = business?.tax_name?.trim() || 'Tax'
-  const showTaxBreakdown = taxRate > 0 && (business?.show_tax ?? false)
-  const totalCents = job.total_price || 0
-  const taxCents = showTaxBreakdown ? Math.round(totalCents * taxRate / (100 + taxRate)) : 0
+  const totalCents = job.total_price ?? job.price ?? 0
+  const taxCents = job.tax_amount ?? 0
   const subtotalCents = totalCents - taxCents
+  const showTaxBreakdown = (business?.show_tax ?? false) && taxCents > 0
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

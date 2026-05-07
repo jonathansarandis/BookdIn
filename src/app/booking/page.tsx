@@ -68,6 +68,7 @@ export default function BookingPage() {
   const [taxRate, setTaxRate] = useState(0)
   const [taxName, setTaxName] = useState('Tax')
   const [showTax, setShowTax] = useState(false)
+  const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive')
 
   const [leadSource, setLeadSource] = useState('')
   const [campaignLabel, setCampaignLabel] = useState('')
@@ -90,7 +91,7 @@ export default function BookingPage() {
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
-        supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax').eq('id', bid).single(),
+        supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax, tax_mode').eq('id', bid).single(),
       ])
       setServices(svcs || [])
       setCustomers(cxs || [])
@@ -102,6 +103,7 @@ export default function BookingPage() {
         setTaxRate(biz.tax_rate ?? 0)
         setTaxName(biz.tax_name?.trim() || 'Tax')
         setShowTax(biz.show_tax ?? false)
+        setTaxMode(biz.tax_mode ?? 'exclusive')
       }
       // In edit mode, the prefill useEffect sets service_id from the job — don't override it here
       if (!editJobId && svcs?.[0]) update('service_id', svcs[0].id)
@@ -238,10 +240,15 @@ export default function BookingPage() {
     return breakdown.total - discount
   }
 
-  const totalPrice = calcPrice()
+  const rawPrice = calcPrice()
   const showTaxBreakdown = taxRate > 0 && showTax
-  const taxCents = showTaxBreakdown ? Math.round(totalPrice * taxRate / (100 + taxRate)) : 0
-  const subtotalCents = totalPrice - taxCents
+  const taxCents = showTaxBreakdown
+    ? taxMode === 'exclusive'
+      ? Math.round(rawPrice * taxRate / 100)
+      : Math.round(rawPrice * taxRate / (100 + taxRate))
+    : 0
+  const subtotalCents = taxMode === 'exclusive' ? rawPrice : rawPrice - taxCents
+  const totalToCharge = rawPrice + (taxMode === 'exclusive' ? taxCents : 0)
 
   function toggleExtra(id: string) {
     setSelectedExtras(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id])
@@ -280,8 +287,8 @@ export default function BookingPage() {
         const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, form.scheduled_time, businessTimezone)
         const { error: jobErr } = await supabase.from('jobs').update({
           service_id: form.service_id,
-          price: totalPrice,
-          total_price: totalPrice,
+          price: subtotalCents,
+          total_price: totalToCharge,
           tax_amount: taxCents,
           duration_minutes: selectedService?.duration_minutes || 120,
           bedrooms: selectedService?.pricing_type === 'room_based' ? form.bedrooms : null,
@@ -375,8 +382,8 @@ export default function BookingPage() {
         status: form.provider_id ? 'assigned' : 'pending',
         scheduled_at: scheduledAtIso,
         duration_minutes: selectedService?.duration_minutes || 120,
-        price: totalPrice,
-        total_price: totalPrice,
+        price: subtotalCents,
+        total_price: totalToCharge,
         tax_amount: taxCents,
         frequency: form.frequency,
         notes: form.notes || null,
@@ -398,7 +405,7 @@ export default function BookingPage() {
             source_type: leadSource,
             manually_entered: true,
             manual_campaign_label: campaignLabel || null,
-            booking_value_cents: totalPrice,
+            booking_value_cents: totalToCharge,
           }),
         })
       }
@@ -438,7 +445,7 @@ export default function BookingPage() {
       await supabase.from('customers').update({
         total_bookings: supabase.rpc as any,
         last_booking_at: new Date().toISOString(),
-        lifetime_value: totalPrice,
+        lifetime_value: totalToCharge,
       }).eq('id', customerId)
 
       setSuccess(true)
@@ -605,7 +612,7 @@ export default function BookingPage() {
             )}
             <div className="flex justify-between items-center">
               <span className="text-sm text-brand-700 font-medium">Estimated total</span>
-              <span className="text-xl font-semibold text-brand-700">${(totalPrice / 100).toFixed(2)}</span>
+              <span className="text-xl font-semibold text-brand-700">${(totalToCharge / 100).toFixed(2)}</span>
             </div>
             {selectedFreq.discount > 0 && (
               <p className="text-xs text-brand-600 mt-1">{selectedFreq.discount}% frequency discount applied</p>
@@ -748,7 +755,7 @@ export default function BookingPage() {
                 { label: 'Subtotal', value: `$${(subtotalCents / 100).toFixed(2)}` },
                 { label: `${taxName} (${taxRate}%)`, value: `$${(taxCents / 100).toFixed(2)}` },
               ] : []),
-              { label: 'Total', value: `$${(totalPrice / 100).toFixed(2)}`, bold: true },
+              { label: 'Total', value: `$${(totalToCharge / 100).toFixed(2)}`, bold: true },
             ].map(item => (
               <div key={item.label} className="flex justify-between text-sm">
                 <span className="text-gray-500">{item.label}</span>
