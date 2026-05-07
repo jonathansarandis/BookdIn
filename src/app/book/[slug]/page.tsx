@@ -365,7 +365,7 @@ export default function PublicBookingPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="min-w-0 relative">
+                <div className="min-w-0 w-full relative">
                   <label className={labelClass}>Date *</label>
                   <input type="date" required value={form.scheduled_date}
                     min={new Date().toISOString().split('T')[0]}
