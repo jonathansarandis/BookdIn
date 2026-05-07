@@ -8,6 +8,9 @@ export interface BusinessEmailData {
   logo_url?: string | null
   contact_email?: string | null
   timezone: string
+  currency?: string | null
+  plan?: string | null
+  tax_name?: string | null
 }
 
 export interface CustomerEmailData {
@@ -45,8 +48,8 @@ function accent(business: BusinessEmailData): string {
   return business.brand_color || '#1A6B4A'
 }
 
-function formatMoney(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
+function formatMoney(cents: number, currency?: string | null): string {
+  return `$${(cents / 100).toFixed(2)} ${currency || 'USD'}`
 }
 
 function formatAddr(a: AddressEmailData): string {
@@ -68,11 +71,14 @@ function emailHeader(business: BusinessEmailData): string {
 }
 
 function emailFooter(business: BusinessEmailData): string {
+  const poweredBy = (!business.plan || business.plan === 'free')
+    ? ` &middot; Powered by BookdIn`
+    : ''
   return `
     <tr>
       <td style="background-color:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
         <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">
-          ${business.name} &middot; Powered by BookdIn
+          ${business.name}${poweredBy}
         </p>
       </td>
     </tr>`
@@ -107,17 +113,18 @@ function bookingSummaryTable(
   const showTax = taxCents > 0
   const subtotalCents = job.total_price - taxCents
 
+  const taxLabel = business.tax_name || 'Tax'
   const taxRows = showTax ? `
       <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
         <table width="100%"><tr>
           <td style="color:#6b7280;font-size:14px;">Subtotal</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${formatMoney(subtotalCents)}</td>
+          <td style="text-align:right;color:#111827;font-size:14px;">${formatMoney(subtotalCents, business.currency)}</td>
         </tr></table>
       </td></tr>
       <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
         <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Tax</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${formatMoney(taxCents)}</td>
+          <td style="color:#6b7280;font-size:14px;">${taxLabel}</td>
+          <td style="text-align:right;color:#111827;font-size:14px;">${formatMoney(taxCents, business.currency)}</td>
         </tr></table>
       </td></tr>` : ''
 
@@ -145,7 +152,7 @@ function bookingSummaryTable(
       <tr><td style="padding:6px 0;border-top:2px solid #111827;">
         <table width="100%"><tr>
           <td style="color:#111827;font-size:15px;font-weight:700;">Total</td>
-          <td style="text-align:right;color:#111827;font-size:18px;font-weight:700;">${formatMoney(job.total_price)} AUD</td>
+          <td style="text-align:right;color:#111827;font-size:18px;font-weight:700;">${formatMoney(job.total_price, business.currency)}</td>
         </tr></table>
       </td></tr>
     </table>`
@@ -177,7 +184,7 @@ export function bookingConfirmationTemplate(data: {
         </a>
       </div>`
     : `<div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:24px;">
-        <p style="margin:0;color:#166534;font-size:14px;line-height:1.6;">
+        <p style="margin:0;color:${color};font-size:14px;line-height:1.6;">
           Payment will be collected on the day of your service. We'll be in touch shortly to confirm your booking.
         </p>
       </div>`
@@ -203,7 +210,7 @@ export function bookingConfirmationTemplate(data: {
     `Service: ${service.name}`,
     `Date: ${dateStr}`,
     `Address: ${formatAddr(address)}`,
-    `Total: ${formatMoney(job.total_price)} AUD`,
+    `Total: ${formatMoney(job.total_price, business.currency)}`,
     '',
     cardSetupUrl
       ? `Add your card on file: ${cardSetupUrl}`
@@ -230,7 +237,7 @@ export function receiptTemplate(data: {
   const dateStr = formatBusinessDateTime(job.scheduled_at, business.timezone)
   const ref = job.id.slice(0, 8).toUpperCase()
 
-  const subject = `Receipt — ${formatMoney(paymentAmount)} payment received`
+  const subject = `Receipt — ${formatMoney(paymentAmount, business.currency)} payment received`
 
   const html = wrapEmail(business, `
     <p style="margin:0 0 16px;color:#374151;font-size:16px;">Hi ${firstName},</p>
@@ -239,7 +246,7 @@ export function receiptTemplate(data: {
     </p>
     <div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin-bottom:24px;text-align:center;">
       <p style="margin:0 0 4px;color:#6b7280;font-size:13px;">Amount paid</p>
-      <p style="margin:0;color:#166534;font-size:28px;font-weight:700;">${formatMoney(paymentAmount)} AUD</p>
+      <p style="margin:0;color:${accent(business)};font-size:28px;font-weight:700;">${formatMoney(paymentAmount, business.currency)}</p>
     </div>
     <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
       <tr><td style="padding:6px 0;">
@@ -262,7 +269,7 @@ export function receiptTemplate(data: {
   const text = [
     `Hi ${firstName},`,
     '',
-    `Payment received: ${formatMoney(paymentAmount)} AUD`,
+    `Payment received: ${formatMoney(paymentAmount, business.currency)}`,
     `Booking reference: #${ref}`,
     `Service date: ${dateStr}`,
     '',
@@ -373,7 +380,7 @@ export function reminderTemplate(data: {
     </p>
     ${bookingSummaryTable(job, service, address, business)}
     <div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:24px;">
-      <p style="margin:0;color:#166534;font-size:14px;line-height:1.6;">
+      <p style="margin:0;color:${color};font-size:14px;line-height:1.6;">
         Please ensure someone is home and the property is accessible at the scheduled time.
       </p>
     </div>
@@ -389,7 +396,7 @@ export function reminderTemplate(data: {
     `Service: ${service.name}`,
     `Date: ${dateStr}`,
     `Address: ${formatAddr(address)}`,
-    `Total: ${formatMoney(job.total_price)} AUD`,
+    `Total: ${formatMoney(job.total_price, business.currency)}`,
     '',
     'Please ensure someone is home and the property is accessible.',
     '',

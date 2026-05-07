@@ -42,7 +42,7 @@ export default function SettingsPage() {
   const [flashMessage, setFlashMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showTax, setShowTax] = useState(false)
   const [taxRate, setTaxRate] = useState('')
-  const [taxName, setTaxName] = useState('GST')
+  const [taxName, setTaxName] = useState('Tax')
   const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive')
   const [taxSaving, setTaxSaving] = useState(false)
   const [taxSaved, setTaxSaved] = useState(false)
@@ -79,7 +79,7 @@ export default function SettingsPage() {
     setTimezone(biz?.timezone || 'Australia/Melbourne')
     setShowTax(biz?.show_tax || false)
     setTaxRate(biz?.tax_rate != null ? String(biz.tax_rate) : '')
-    setTaxName(biz?.tax_name || 'GST')
+    setTaxName(biz?.tax_name || 'Tax')
     setTaxMode(biz?.tax_mode ?? 'exclusive')
   }
 
@@ -133,7 +133,7 @@ export default function SettingsPage() {
     const { error } = await supabase.from('businesses').update({
       show_tax: showTax,
       tax_rate: taxRate ? parseFloat(taxRate) : 0,
-      tax_name: taxName || 'GST',
+      tax_name: taxName || 'Tax',
       tax_mode: taxMode,
     }).eq('id', business.id)
     setTaxSaving(false)

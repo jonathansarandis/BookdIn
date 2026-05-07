@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     // 1. Get business details
     const { data: business } = await supabase
       .from('businesses')
-      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded')
+      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded, plan, currency')
       .eq('id', business_id)
       .single()
 
@@ -261,7 +261,9 @@ export async function POST(request: NextRequest) {
         brand_color: business.brand_color,
         logo_url: business.logo_url,
         contact_email: business.contact_email,
-        timezone: business.timezone || 'Australia/Melbourne',
+        timezone: business.timezone,
+        plan: business.plan,
+        currency: business.currency,
       },
       address: {
         line1: address.line1,

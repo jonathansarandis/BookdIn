@@ -32,6 +32,8 @@ interface JobEmailRow {
     contact_email: string | null
     timezone: string
     stripe_onboarded: boolean
+    plan: string
+    currency: string
   } | null
 }
 
@@ -80,7 +82,7 @@ export async function POST(
       customer:customers(full_name, email),
       service:services(name),
       address:addresses(line1, city, state, postcode),
-      business:businesses(name, brand_color, logo_url, contact_email, timezone, stripe_onboarded)
+      business:businesses(name, brand_color, logo_url, contact_email, timezone, stripe_onboarded, plan, currency)
     `)
     .eq('id', params.id)
     .single()

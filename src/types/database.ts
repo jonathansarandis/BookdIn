@@ -42,6 +42,7 @@ export interface Database {
           show_tax: boolean
           tax_mode: string
           contact_email: string | null
+          plan: string
         }
         Insert: Omit<Database['public']['Tables']['businesses']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['businesses']['Insert']>
