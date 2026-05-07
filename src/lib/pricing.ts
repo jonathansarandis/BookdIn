@@ -145,3 +145,45 @@ export function calcJobPrice(input: PriceInput): PriceBreakdown {
  * })
  * // → { base: 15000, rooms: 0, extras: 3500, total: 18500, durationMinutes: 120 }
  */
+
+// ─── Post-calcJobPrice helpers ────────────────────────────────────────────────
+
+/**
+ * Apply a frequency discount to a subtotal.
+ * discountPct is an integer percentage (e.g. 10 for 10%).
+ * Returns the discounted subtotal in cents.
+ */
+export function applyFrequencyDiscount(subtotalCents: number, discountPct: number): number {
+  if (discountPct <= 0) return subtotalCents
+  return subtotalCents - Math.round(subtotalCents * discountPct / 100)
+}
+
+export type TaxSplit = {
+  subtotal: number  // cents — pre-tax subtotal
+  tax: number       // cents — tax amount
+  total: number     // cents — amount customer pays
+}
+
+/**
+ * Split a price into subtotal, tax, and total given tax mode and rate.
+ *
+ * exclusive: tax is added on top of rawPrice. total = rawPrice + tax.
+ * inclusive: tax is extracted from within rawPrice. total = rawPrice.
+ *
+ * Matches the arithmetic in both booking forms exactly.
+ */
+export function calcTaxSplit(
+  rawPrice: number,
+  taxMode: 'exclusive' | 'inclusive',
+  taxRatePct: number,
+): TaxSplit {
+  if (taxRatePct <= 0) {
+    return { subtotal: rawPrice, tax: 0, total: rawPrice }
+  }
+  if (taxMode === 'exclusive') {
+    const tax = Math.round(rawPrice * taxRatePct / 100)
+    return { subtotal: rawPrice, tax, total: rawPrice + tax }
+  }
+  const tax = Math.round(rawPrice * taxRatePct / (100 + taxRatePct))
+  return { subtotal: rawPrice - tax, tax, total: rawPrice }
+}

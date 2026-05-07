@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { sendBookingConfirmation } from '@/lib/email'
+import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,8 +33,8 @@ export async function POST(request: NextRequest) {
     frequency,
     scheduled_date,
     scheduled_time,
-    total_price,
-    tax_amount: bodyTaxAmount,
+    total_price: clientTotal,
+    tax_amount: clientTax,
     extras,
     customer,
     address,
@@ -42,13 +43,13 @@ export async function POST(request: NextRequest) {
     bedrooms,
     bathrooms,
   } = body
-  const taxAmount = bodyTaxAmount ?? 0
+  const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 10, fortnightly: 10, monthly: 10 }
 
   try {
     // 1. Get business details
     const { data: business } = await supabase
       .from('businesses')
-      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded, plan, currency')
+      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded, plan, currency, tax_rate, tax_mode, show_tax')
       .eq('id', business_id)
       .single()
 
@@ -56,12 +57,62 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 })
     }
 
-    // 2. Get service details
+    // 2. Get service details (with room_pricing for server-side recalculation)
     const { data: service } = await supabase
       .from('services')
-      .select('*')
+      .select('*, room_pricing(*)')
       .eq('id', service_id)
       .single()
+
+    if (!service) {
+      return NextResponse.json({ error: 'Service not found' }, { status: 404 })
+    }
+
+    // 2a. Frequency discount: DB first, hardcoded fallback
+    const { data: freqRow } = await supabase
+      .from('frequency_discounts')
+      .select('discount_percent')
+      .eq('service_id', service_id)
+      .eq('frequency', frequency)
+      .single()
+    const discountPct = freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0
+
+    // 2b. Fetch extras early (tightened: service_id + business_id prevents cross-tenant/cross-service borrowing)
+    let extraDetails: any[] = []
+    if (extras?.length > 0) {
+      const { data } = await supabase
+        .from('service_extras')
+        .select('*')
+        .in('id', extras)
+        .eq('service_id', service_id)
+        .eq('business_id', business_id)
+      extraDetails = data || []
+    }
+
+    // 2c. Server-side price recalculation
+    const breakdown = calcJobPrice({
+      service: {
+        id: service.id,
+        base_price: service.base_price,
+        pricing_type: service.pricing_type,
+        duration_minutes: service.duration_minutes,
+      },
+      bedrooms: service.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
+      bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
+      selectedExtras: extraDetails.map(ex => ({ price: ex.price })),
+      roomPricing: service.room_pricing || [],
+    })
+    const discountedPrice = applyFrequencyDiscount(breakdown.total, discountPct)
+    const effectiveTaxRate = business.show_tax && business.tax_rate > 0 ? business.tax_rate : 0
+    const taxSplit = calcTaxSplit(discountedPrice, business.tax_mode ?? 'exclusive', effectiveTaxRate)
+
+    // 2d. Mismatch check: ±1 cent tolerance
+    if (Math.abs(taxSplit.total - clientTotal) > 1) {
+      return NextResponse.json(
+        { error: 'Pricing mismatch — please refresh and try again' },
+        { status: 400 },
+      )
+    }
 
     // 3. Create or find customer
     let customerId: string
@@ -118,9 +169,9 @@ export async function POST(request: NextRequest) {
         status: 'pending',
         scheduled_at: scheduledAt.toISOString(),
         duration_minutes: service?.duration_minutes || 120,
-        price: total_price,
-        total_price,
-        tax_amount: taxAmount,
+        price: taxSplit.subtotal,
+        total_price: taxSplit.total,
+        tax_amount: taxSplit.tax,
         frequency,
         customer_notes: customer_notes || null,
         payment_status: 'unpaid',
@@ -134,23 +185,16 @@ export async function POST(request: NextRequest) {
 
     if (jobError) throw new Error('Failed to create job')
 
-    // 6. Insert extras
-    if (extras?.length > 0) {
-      const { data: extraDetails } = await supabase
-        .from('service_extras')
-        .select('*')
-        .in('id', extras)
-
-      if (extraDetails?.length) {
-        await supabase.from('job_extras').insert(
-          extraDetails.map(ex => ({
-            job_id: job.id,
-            extra_id: ex.id,
-            name: ex.name,
-            price: ex.price,
-          }))
-        )
-      }
+    // 6. Insert extras (using pre-fetched extraDetails from step 2b)
+    if (extraDetails.length > 0) {
+      await supabase.from('job_extras').insert(
+        extraDetails.map(ex => ({
+          job_id: job.id,
+          extra_id: ex.id,
+          name: ex.name,
+          price: ex.price,
+        }))
+      )
     }
 
     // 7. Create CRM contact
@@ -190,7 +234,7 @@ export async function POST(request: NextRequest) {
         contact_id: crmContact.id,
         type: 'note',
         title: 'Online booking submitted',
-        body: `Booked ${service?.name} for ${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}. Total: $${(total_price / 100).toFixed(2)}`,
+        body: `Booked ${service?.name} for ${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}. Total: $${(taxSplit.total / 100).toFixed(2)}`,
       })
     }
 
@@ -232,7 +276,7 @@ export async function POST(request: NextRequest) {
                   <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px; font-size: 14px;">${customer.email}</td></tr>
                   <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Service</td><td style="padding: 8px; font-size: 14px;">${service?.name}</td></tr>
                   <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Date</td><td style="padding: 8px; font-size: 14px;">${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}</td></tr>
-                  <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(total_price / 100).toFixed(2)}</td></tr>
+                  <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(taxSplit.total / 100).toFixed(2)}</td></tr>
                 </table>
                 <p style="color: #dc2626; font-weight: 600;">Action required: Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
                 <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
@@ -252,8 +296,8 @@ export async function POST(request: NextRequest) {
       job: {
         id: job.id,
         scheduled_at: scheduledAt.toISOString(),
-        total_price,
-        tax_amount: taxAmount,
+        total_price: taxSplit.total,
+        tax_amount: taxSplit.tax,
       },
       customer: { full_name: customer.full_name, email: customer.email },
       business: {
@@ -293,7 +337,7 @@ export async function POST(request: NextRequest) {
         landing_page: utm_data.landing_page,
         source_type: utm_data.source_type || 'direct',
         session_id: utm_data.session_id,
-        booking_value_cents: total_price,
+        booking_value_cents: taxSplit.total,
         lead_status: 'booked',
         converted_at: new Date().toISOString(),
       }).catch(console.error)
