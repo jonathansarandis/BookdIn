@@ -98,11 +98,11 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                       onClick={() => setSelectedJob(job)}
                       className={cn(
                         'block w-full text-left text-[10px] font-medium px-1.5 py-0.5 rounded truncate hover:opacity-80 transition-opacity',
-                        STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-600'
+                        STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-800'
                       )}
                     >
-                      {job.is_flexible_time ? 'Flexible' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
-                      {' '}{job.customer?.full_name?.split(' ')[0]}
+                      {job.is_flexible_time ? 'Flexible · ' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a') + ' '}
+                      {job.customer?.full_name?.split(' ')[0]}
                     </button>
                   ))}
                   {dayJobs.length > 3 && (
