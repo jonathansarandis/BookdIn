@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
             subject: `📞 New booking — call ${customer.full_name} now`,
             html: `
               <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-                <h2 style="color: #166534;">New online booking received</h2>
+                <h2 style="color: ${business.brand_color || '#1A6B4A'};">New online booking received</h2>
                 <p>A new booking has come in and requires a confirmation call.</p>
                 <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
                   <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Customer</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">${customer.full_name}</td></tr>
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
                   <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(total_price / 100).toFixed(2)}</td></tr>
                 </table>
                 <p style="color: #dc2626; font-weight: 600;">Action required: Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
-                <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: #166534; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
+                <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
               </div>
             `,
           }).catch(console.error)

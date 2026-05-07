@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
   const { data: overdueQuotes } = await supabase
     .from('quotes')
-    .select('*, customer:customers(full_name, email, phone), business:businesses(id, name)')
+    .select('*, customer:customers(full_name, email, phone), business:businesses(id, name, brand_color)')
     .eq('status', 'sent')
     .lt('sent_at', twoDaysAgo)
 
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
         subject: `Following up on your quote — ${quoteRef}`,
         html: `
           <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-            <h2 style="color: #166534;">Following up on your quote</h2>
+            <h2 style="color: ${quote.business?.brand_color || '#1A6B4A'};">Following up on your quote</h2>
             <p>Hi ${quote.customer.full_name},</p>
             <p>We wanted to follow up on the quote we sent you a couple of days ago (${quoteRef}) for $${(quote.total / 100).toFixed(2)}.</p>
             <p>If you have any questions or would like to go ahead, simply reply to this email or give us a call.</p>
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
   // ----------------------------------------------------------------
   const { data: dueFollowups } = await supabase
     .from('crm_contacts')
-    .select('*, business:businesses(id, name)')
+    .select('*, business:businesses(id, name, brand_color)')
     .not('next_followup_at', 'is', null)
     .lt('next_followup_at', now.toISOString())
     .not('stage', 'in', '("won","lost")')
@@ -147,12 +147,12 @@ export async function GET(request: NextRequest) {
           subject: `📞 Follow up with ${contact.full_name} now`,
           html: `
             <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #166534;">Follow-up reminder</h2>
+              <h2 style="color: ${contact.business?.brand_color || '#1A6B4A'};">Follow-up reminder</h2>
               <p>Hi ${s.full_name},</p>
               <p>It's time to follow up with <strong>${contact.full_name}</strong>.</p>
               ${contact.phone ? `<p>📞 <a href="tel:${contact.phone}">${contact.phone}</a></p>` : ''}
               ${contact.email ? `<p>✉️ ${contact.email}</p>` : ''}
-              <a href="${process.env.NEXT_PUBLIC_APP_URL}/crm/${contact.id}" style="display: inline-block; background: #166534; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View contact →</a>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/crm/${contact.id}" style="display: inline-block; background: ${contact.business?.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View contact →</a>
             </div>
           `,
         }).catch(console.error)

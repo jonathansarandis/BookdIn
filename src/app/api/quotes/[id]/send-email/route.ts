@@ -47,7 +47,7 @@ export async function POST(
   // Get business name
   const { data: business } = await serviceClient
     .from('businesses')
-    .select('id, name')
+    .select('id, name, brand_color')
     .eq('id', profile.business_id)
     .single()
 
@@ -86,7 +86,7 @@ export async function POST(
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
           
           <tr>
-            <td style="background-color: #166534; padding: 32px 40px;">
+            <td style="background-color: ${business?.brand_color || '#1A6B4A'}; padding: 32px 40px;">
               <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">${businessName}</h1>
               <p style="margin: 8px 0 0; color: #bbf7d0; font-size: 14px;">Quote for services</p>
             </td>
@@ -144,7 +144,7 @@ export async function POST(
               </table>
 
               ${quote.notes ? `
-              <div style="background-color: #f9fafb; border-left: 3px solid #166534; padding: 16px; border-radius: 4px; margin-bottom: 32px;">
+              <div style="background-color: #f9fafb; border-left: 3px solid ${business?.brand_color || '#1A6B4A'}; padding: 16px; border-radius: 4px; margin-bottom: 32px;">
                 <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.6;">${quote.notes}</p>
               </div>
               ` : ''}
