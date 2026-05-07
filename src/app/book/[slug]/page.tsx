@@ -303,7 +303,13 @@ export default function PublicBookingPage() {
                     <div className="flex items-center gap-3 min-w-0">
                       <input type="radio" name="service" value={s.id} checked={form.service_id === s.id}
                         onChange={() => { update('service_id', s.id); setSelectedExtras([]) }}
-                        className="w-4 h-4 flex-shrink-0" style={{ accentColor: brand }} />
+                        className="sr-only" />
+                      <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
+                        style={{ borderColor: form.service_id === s.id ? brand : '#d1d5db' }}>
+                        {form.service_id === s.id && (
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: brand }} />
+                        )}
+                      </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900">{s.name}</p>
                         {s.description && <p className="text-xs text-gray-500">{s.description}</p>}
