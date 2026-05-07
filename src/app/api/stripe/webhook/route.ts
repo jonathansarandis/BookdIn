@@ -2,10 +2,59 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { sendReceipt } from '@/lib/email'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
 })
+
+async function sendJobReceipt(jobId: string, paymentAmount: number): Promise<void> {
+  const admin = createAdminClient()
+  const { data: job } = await admin
+    .from('jobs')
+    .select(`
+      id, scheduled_at, total_price, tax_amount, receipt_email_sent_at,
+      customer:customers(full_name, email),
+      business:businesses(name, brand_color, logo_url, contact_email, timezone, currency, plan, tax_name)
+    `)
+    .eq('id', jobId)
+    .single()
+
+  if (!job) {
+    console.error('[webhook] job not found for receipt:', jobId)
+    return
+  }
+  if (job.receipt_email_sent_at) {
+    console.log('[webhook] receipt already sent, skipping:', jobId)
+    return
+  }
+  if (!job.customer || !job.business) {
+    console.error('[webhook] incomplete job data for receipt:', jobId)
+    return
+  }
+
+  const result = await sendReceipt({
+    job: {
+      id: job.id,
+      scheduled_at: job.scheduled_at,
+      total_price: job.total_price,
+      tax_amount: job.tax_amount,
+    },
+    customer: job.customer,
+    business: job.business,
+    paymentAmount,
+  })
+
+  if (result.success) {
+    await admin
+      .from('jobs')
+      .update({ receipt_email_sent_at: new Date().toISOString() })
+      .eq('id', jobId)
+  }
+
+  console.log('[webhook] receipt result for job', jobId, ':', result)
+}
 
 export async function POST(request: Request) {
   const body = await request.text()
@@ -42,6 +91,8 @@ export async function POST(request: Request) {
               paid_at: new Date().toISOString(),
             })
             .eq('id', jobId)
+
+          await sendJobReceipt(jobId, paymentIntent.amount_received)
         }
 
         if (invoiceId) {
@@ -82,6 +133,8 @@ export async function POST(request: Request) {
               paid_at: new Date().toISOString(),
             })
             .eq('id', jobId)
+
+          await sendJobReceipt(jobId, session.amount_total)
         }
 
         if (invoiceId) {
