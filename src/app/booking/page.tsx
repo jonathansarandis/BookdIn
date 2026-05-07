@@ -19,7 +19,6 @@ const FREQUENCIES = [
   { value: 'monthly',     label: 'Monthly' },
 ]
 
-const FREQ_FALLBACK: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
 const TIME_SLOTS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00']
 
@@ -76,7 +75,7 @@ export default function BookingPage() {
   const [leadSource, setLeadSource] = useState('')
   const [campaignLabel, setCampaignLabel] = useState('')
   const [existingCampaigns, setExistingCampaigns] = useState<string[]>([])
-  const [freqDiscounts, setFreqDiscounts] = useState<Record<string, number>>({})
+  const [freqDiscounts, setFreqDiscounts] = useState<Record<string, { discount_percent: number; is_enabled: boolean }>>({})
 
   function update(field: string, value: any) {
     setForm(f => ({ ...f, [field]: value }))
@@ -90,12 +89,13 @@ export default function BookingPage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
       const bid = profile!.business_id!
 
-      const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }, { data: biz }] = await Promise.all([
+      const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }, { data: biz }, { data: fdData }] = await Promise.all([
         supabase.from('services').select('*, service_extras(*), room_pricing(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
         supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax, tax_mode').eq('id', bid).single(),
+        supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', bid),
       ])
       setServices(svcs || [])
       setCustomers(cxs || [])
@@ -109,6 +109,9 @@ export default function BookingPage() {
         setShowTax(biz.show_tax ?? false)
         setTaxMode(biz.tax_mode ?? 'exclusive')
       }
+      const freqMap: Record<string, { discount_percent: number; is_enabled: boolean }> = {}
+      for (const row of fdData || []) freqMap[row.frequency] = { discount_percent: row.discount_percent, is_enabled: row.is_enabled }
+      setFreqDiscounts(freqMap)
       // In edit mode, the prefill useEffect sets service_id from the job — don't override it here
       if (!editJobId && svcs?.[0]) update('service_id', svcs[0].id)
     }
@@ -210,24 +213,14 @@ export default function BookingPage() {
     prefill()
   }, [rebookJobId])
 
-  useEffect(() => {
-    if (!form.service_id) return
-    const supabase = createClient()
-    supabase
-      .from('frequency_discounts')
-      .select('frequency, discount_percent')
-      .eq('service_id', form.service_id)
-      .then(({ data }) => {
-        const map: Record<string, number> = {}
-        for (const row of data || []) map[row.frequency] = row.discount_percent
-        setFreqDiscounts(map)
-      })
-  }, [form.service_id])
-
   function getFreqDiscount(value: string): number {
     if (value === 'one_time') return 0
-    return freqDiscounts[value] ?? FREQ_FALLBACK[value] ?? 0
+    return freqDiscounts[value]?.discount_percent ?? 0
   }
+
+  const availableFreqs = FREQUENCIES.filter(f =>
+    f.value === 'one_time' || (freqDiscounts[f.value]?.is_enabled ?? false)
+  )
 
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency) ?? FREQUENCIES[0]
@@ -511,7 +504,7 @@ export default function BookingPage() {
             <div>
               <label className={labelClass}>Frequency</label>
               <div className="grid grid-cols-2 gap-2">
-                {FREQUENCIES.map(f => {
+                {availableFreqs.map(f => {
                   const disc = getFreqDiscount(f.value)
                   return (
                     <button key={f.value} type="button" onClick={() => update('frequency', f.value)}

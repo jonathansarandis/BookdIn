@@ -16,8 +16,6 @@ const FREQUENCIES = [
   { value: 'monthly',     label: 'Monthly' },
 ]
 
-const FREQ_FALLBACK: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
-
 export default function PublicBookingPage() {
   const params = useParams()
   const slug = params.slug as string
@@ -33,7 +31,7 @@ export default function PublicBookingPage() {
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState(1)
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
-  const [freqDiscounts, setFreqDiscounts] = useState<Record<string, number>>({})
+  const [freqDiscounts, setFreqDiscounts] = useState<Record<string, { discount_percent: number; is_enabled: boolean }>>({})
 
   const [form, setForm] = useState({
     service_id: '',
@@ -67,41 +65,40 @@ export default function PublicBookingPage() {
       if (!biz) { setLoading(false); return }
       setBusiness(biz)
 
-      const { data: svcs } = await supabase
-        .from('services')
-        .select('*, service_extras(*)')
-        .eq('business_id', biz.id)
-        .eq('is_active', true)
-        .order('sort_order')
+      const [{ data: svcs }, { data: fdData }] = await Promise.all([
+        supabase.from('services').select('*, service_extras(*)').eq('business_id', biz.id).eq('is_active', true).order('sort_order'),
+        supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', biz.id),
+      ])
 
       setServices(svcs || [])
       if (svcs?.[0]) update('service_id', svcs[0].id)
+      const freqMap: Record<string, { discount_percent: number; is_enabled: boolean }> = {}
+      for (const row of fdData || []) freqMap[row.frequency] = { discount_percent: row.discount_percent, is_enabled: row.is_enabled }
+      setFreqDiscounts(freqMap)
       setLoading(false)
     }
     load()
   }, [slug])
 
-  // Load room pricing + frequency discounts when service changes
+  // Load room pricing when service changes
   useEffect(() => {
     if (!form.service_id) return
     async function loadServiceData() {
-      const [{ data: rpData }, { data: fdData }] = await Promise.all([
-        supabase.from('room_pricing').select('*').eq('service_id', form.service_id),
-        supabase.from('frequency_discounts').select('frequency, discount_percent').eq('service_id', form.service_id),
-      ])
+      const { data: rpData } = await supabase.from('room_pricing').select('*').eq('service_id', form.service_id)
       setRoomPricing(rpData || [])
       setSelectedExtras([])
-      const map: Record<string, number> = {}
-      for (const row of fdData || []) map[row.frequency] = row.discount_percent
-      setFreqDiscounts(map)
     }
     loadServiceData()
   }, [form.service_id])
 
   function getFreqDiscount(value: string): number {
     if (value === 'one_time') return 0
-    return freqDiscounts[value] ?? FREQ_FALLBACK[value] ?? 0
+    return freqDiscounts[value]?.discount_percent ?? 0
   }
+
+  const availableFreqs = FREQUENCIES.filter(f =>
+    f.value === 'one_time' || (freqDiscounts[f.value]?.is_enabled ?? false)
+  )
 
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency)!
@@ -324,7 +321,7 @@ export default function PublicBookingPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Frequency</h3>
               <div className="grid grid-cols-2 gap-2">
-                {FREQUENCIES.map(f => {
+                {availableFreqs.map(f => {
                   const disc = getFreqDiscount(f.value)
                   return (
                     <button key={f.value} type="button" onClick={() => update('frequency', f.value)}

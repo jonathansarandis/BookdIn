@@ -46,7 +46,11 @@ export default function SettingsPage() {
   const [taxMode, setTaxMode] = useState<'exclusive' | 'inclusive'>('exclusive')
   const [taxSaving, setTaxSaving] = useState(false)
   const [taxSaved, setTaxSaved] = useState(false)
-  const [freqDiscounts, setFreqDiscounts] = useState({ weekly: '0', fortnightly: '0', monthly: '0' })
+  const [freqDiscounts, setFreqDiscounts] = useState<Record<string, { pct: string; enabled: boolean }>>({
+    weekly:      { pct: '0', enabled: true },
+    fortnightly: { pct: '0', enabled: true },
+    monthly:     { pct: '0', enabled: true },
+  })
   const [freqSaving, setFreqSaving] = useState(false)
   const [freqSaved, setFreqSaved] = useState(false)
   const [freqError, setFreqError] = useState<string | null>(null)
@@ -89,12 +93,16 @@ export default function SettingsPage() {
     if (biz?.id) {
       const { data: discountRows } = await supabase
         .from('frequency_discounts')
-        .select('frequency, discount_percent')
+        .select('frequency, discount_percent, is_enabled')
         .eq('business_id', biz.id)
       if (discountRows) {
-        const map: Record<string, string> = { weekly: '0', fortnightly: '0', monthly: '0' }
-        discountRows.forEach((r: any) => { map[r.frequency] = String(r.discount_percent) })
-        setFreqDiscounts({ weekly: map.weekly, fortnightly: map.fortnightly, monthly: map.monthly })
+        const map: Record<string, { pct: string; enabled: boolean }> = {
+          weekly:      { pct: '0', enabled: true },
+          fortnightly: { pct: '0', enabled: true },
+          monthly:     { pct: '0', enabled: true },
+        }
+        discountRows.forEach((r: any) => { map[r.frequency] = { pct: String(r.discount_percent), enabled: r.is_enabled } })
+        setFreqDiscounts(map)
       }
     }
   }
@@ -162,18 +170,19 @@ export default function SettingsPage() {
 
   async function handleSaveFreqDiscounts() {
     if (!business) return
-    const vals = [
-      { frequency: 'weekly', pct: parseFloat(freqDiscounts.weekly || '0') },
-      { frequency: 'fortnightly', pct: parseFloat(freqDiscounts.fortnightly || '0') },
-      { frequency: 'monthly', pct: parseFloat(freqDiscounts.monthly || '0') },
-    ]
+    const freqs = ['weekly', 'fortnightly', 'monthly'] as const
+    const vals = freqs.map(freq => ({
+      frequency: freq,
+      pct: parseFloat(freqDiscounts[freq].pct || '0'),
+      enabled: freqDiscounts[freq].enabled,
+    }))
     if (vals.some(v => isNaN(v.pct) || v.pct < 0 || v.pct > 100)) {
       setFreqError('Discounts must be between 0 and 100')
       return
     }
     setFreqError(null)
     setFreqSaving(true)
-    const rows = vals.map(v => ({ business_id: business.id, frequency: v.frequency, discount_percent: v.pct }))
+    const rows = vals.map(v => ({ business_id: business.id, frequency: v.frequency, discount_percent: v.pct, is_enabled: v.enabled }))
     const { error } = await supabase
       .from('frequency_discounts')
       .upsert(rows, { onConflict: 'business_id,frequency' })
@@ -356,18 +365,29 @@ export default function SettingsPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">Frequency discounts</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Automatically apply a discount when customers book on a recurring schedule</p>
+                <p className="text-xs text-gray-500 mt-0.5">Offer recurring booking schedules to your customers. Set a discount % or leave at 0 if you'd rather not offer a discount.</p>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-3">
                 {(['weekly', 'fortnightly', 'monthly'] as const).map(freq => (
-                  <div key={freq}>
-                    <label className="block text-xs font-medium text-gray-600 mb-1 capitalize">{freq}</label>
-                    <div className="relative">
+                  <div key={freq} className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-gray-900 w-24 capitalize">{freq}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Offered</span>
+                      <button
+                        type="button"
+                        onClick={() => setFreqDiscounts(d => ({ ...d, [freq]: { ...d[freq], enabled: !d[freq].enabled } }))}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${freqDiscounts[freq].enabled ? 'bg-brand-500' : 'bg-gray-200'}`}
+                      >
+                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${freqDiscounts[freq].enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    <div className="relative max-w-[110px]">
                       <input
                         type="number" min="0" max="100" step="1"
-                        value={freqDiscounts[freq]}
-                        onChange={e => setFreqDiscounts(d => ({ ...d, [freq]: e.target.value }))}
-                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-7 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        value={freqDiscounts[freq].pct}
+                        onChange={e => setFreqDiscounts(d => ({ ...d, [freq]: { ...d[freq], pct: e.target.value } }))}
+                        disabled={!freqDiscounts[freq].enabled}
+                        className={`w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-7 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 ${!freqDiscounts[freq].enabled ? 'opacity-50' : ''}`}
                       />
                       <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
                     </div>
