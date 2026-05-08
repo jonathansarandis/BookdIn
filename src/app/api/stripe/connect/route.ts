@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
+  console.log("[stripe/connect] auth user:", { id: user?.id, email: user?.email, authError });
   if (authError || !user) {
     return NextResponse.redirect(`${appUrl}/login`)
   }
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
     .eq('owner_id', user.id)
     .single()
 
+  console.log("[stripe/connect] business lookup:", { userId: user?.id, business, error });
   if (error || !business) {
     return NextResponse.redirect(`${appUrl}/settings?stripe_error=business_not_found`)
   }
