@@ -27,10 +27,6 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  if (job.stripe_payment_method_id) {
-    return NextResponse.json({ error: 'Card already on file for this job' }, { status: 409 })
-  }
-
   let token = job.card_setup_token
   let expiresAt = job.card_setup_token_expires_at
 

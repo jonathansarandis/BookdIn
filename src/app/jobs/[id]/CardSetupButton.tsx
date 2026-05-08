@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Link2, Copy, Check } from 'lucide-react'
 
-export default function CardSetupButton({ jobId }: { jobId: string }) {
+export default function CardSetupButton({ jobId, hasCard = false }: { jobId: string; hasCard?: boolean }) {
   const [link, setLink] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -39,8 +39,11 @@ export default function CardSetupButton({ jobId }: { jobId: string }) {
           className="w-full flex items-center justify-center gap-1.5 py-2 px-3 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
           <Link2 className="w-3.5 h-3.5" />
-          {loading ? 'Generating...' : 'Generate secure card link'}
+          {loading ? 'Generating...' : hasCard ? 'Generate replacement link' : 'Generate secure card link'}
         </button>
+        {hasCard && !loading && (
+          <p className="text-xs text-gray-500 mt-1 text-center">Use this if the customer wants to update their card</p>
+        )}
         {error && <p className="text-xs text-red-600 mt-1.5">{error}</p>}
       </div>
     )

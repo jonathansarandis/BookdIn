@@ -10,6 +10,9 @@ import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 import JobMessages from '@/app/jobs/[id]/JobMessages'
 import CardSetupButton from '@/app/jobs/[id]/CardSetupButton'
 import ChargeButton from '@/app/jobs/[id]/ChargeButton'
+import PreauthorizeButton from '@/app/jobs/[id]/PreauthorizeButton'
+import ChargeNowButton from '@/app/jobs/[id]/ChargeNowButton'
+import CancelCardButton from '@/app/jobs/[id]/CancelCardButton'
 import NotesEditor from '@/app/jobs/[id]/NotesEditor'
 import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 
@@ -330,20 +333,29 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <PayButton jobId={job.id} amount={job.total_price}
                     label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`} />
                 )}
-                <CardSetupButton jobId={job.id} />
+                <CardSetupButton jobId={job.id} hasCard={false} />
               </>
             )}
 
-            {/* card_on_file — pre-auth will run the day before */}
+            {/* card_on_file — full admin action set */}
             {paymentStatus === 'card_on_file' && (
-              <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 leading-relaxed">
-                Card saved. A pre-authorisation will run automatically the day before the service.
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 leading-relaxed">
+                  Card saved. A pre-authorisation will run automatically the day before the service.
+                </p>
+                <PreauthorizeButton jobId={job.id} />
+                <ChargeNowButton jobId={job.id} totalPrice={job.total_price} />
+                <CardSetupButton jobId={job.id} hasCard={true} />
+                <CancelCardButton jobId={job.id} label="Cancel saved card" />
+              </div>
             )}
 
-            {/* authorized — ready to capture */}
+            {/* authorized — capture or cancel pre-auth */}
             {paymentStatus === 'authorized' && (
-              <ChargeButton jobId={job.id} totalPrice={job.total_price} />
+              <div className="space-y-2">
+                <ChargeButton jobId={job.id} totalPrice={job.total_price} />
+                <CancelCardButton jobId={job.id} label="Cancel pre-authorization" />
+              </div>
             )}
 
             {/* paid */}
@@ -356,24 +368,25 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               </p>
             )}
 
-            {/* auth_failed — pre-auth failed, resend card link to retry */}
+            {/* auth_failed — retry pre-auth or collect new card */}
             {paymentStatus === 'auth_failed' && job.status !== 'cancelled' && (
-              <>
+              <div className="space-y-2">
                 <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 leading-relaxed">
-                  Pre-authorisation failed. Resend the card link to collect a new card.
+                  Pre-authorisation failed. Retry with the saved card or collect a new one.
                 </p>
-                <CardSetupButton jobId={job.id} />
-              </>
+                <PreauthorizeButton jobId={job.id} label="Try pre-authorize again" />
+                <CardSetupButton jobId={job.id} hasCard={false} />
+              </div>
             )}
 
-            {/* capture_failed — pre-auth succeeded but capture failed, allow retry */}
+            {/* capture_failed — retry capture */}
             {paymentStatus === 'capture_failed' && (
-              <>
+              <div className="space-y-2">
                 <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 leading-relaxed">
                   Capture failed. You can retry below.
                 </p>
                 <ChargeButton jobId={job.id} totalPrice={job.total_price} />
-              </>
+              </div>
             )}
           </div>
 

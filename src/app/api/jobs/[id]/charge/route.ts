@@ -46,7 +46,10 @@ export async function POST(
     .select(`
       id,
       payment_status,
+      total_price,
       stripe_payment_intent_id,
+      stripe_payment_method_id,
+      stripe_customer_id,
       business:businesses(stripe_account_id)
     `)
     .eq('id', params.id)
@@ -57,9 +60,57 @@ export async function POST(
     return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   }
 
+  const stripeAccountId = job.business?.stripe_account_id
+  const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+
+  // card_on_file → direct charge (no pre-auth)
+  if (job.payment_status === 'card_on_file') {
+    if (!job.stripe_payment_method_id || !job.stripe_customer_id) {
+      return NextResponse.json({ error: 'No card on file' }, { status: 409 })
+    }
+
+    let intent: Stripe.PaymentIntent
+    try {
+      intent = await stripe.paymentIntents.create({
+        amount: job.total_price,
+        currency: 'aud',
+        customer: job.stripe_customer_id,
+        payment_method: job.stripe_payment_method_id,
+        off_session: true,
+        confirm: true,
+        capture_method: 'automatic',
+      }, stripeOpts)
+    } catch (err: any) {
+      console.error(`[charge] Direct charge failed for job ${params.id}:`, err.message)
+      return NextResponse.json({ error: err.message || 'Charge failed' }, { status: 500 })
+    }
+
+    const { error: updateError } = await supabase
+      .from('jobs')
+      .update({
+        payment_status: 'paid',
+        paid_at: new Date().toISOString(),
+        final_charged_amount: intent.amount_received,
+        stripe_payment_intent_id: intent.id,
+      })
+      .eq('id', params.id)
+
+    if (updateError) {
+      console.error(`[charge] DB update failed for job ${params.id}:`, updateError.message)
+      return NextResponse.json(
+        { error: 'Charge succeeded but DB update failed — contact support' },
+        { status: 500 }
+      )
+    }
+
+    console.log(`[charge] Direct charge job ${params.id} — intent ${intent.id}, received ${intent.amount_received}`)
+    return NextResponse.json({ success: true, amount_received: intent.amount_received })
+  }
+
+  // authorized → capture existing intent
   if (job.payment_status !== 'authorized') {
     return NextResponse.json(
-      { error: `Cannot capture — payment status is '${job.payment_status}'` },
+      { error: `Cannot charge — payment status is '${job.payment_status}'` },
       { status: 409 }
     )
   }
@@ -67,9 +118,6 @@ export async function POST(
   if (!job.stripe_payment_intent_id) {
     return NextResponse.json({ error: 'No PaymentIntent on record' }, { status: 409 })
   }
-
-  const stripeAccountId = job.business?.stripe_account_id
-  const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 
   let intent: Stripe.PaymentIntent
   try {
