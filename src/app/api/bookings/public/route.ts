@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     // 1. Get business details
     const { data: business } = await supabase
       .from('businesses')
-      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded, plan, currency, tax_rate, tax_mode, show_tax')
+      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded, stripe_charges_enabled, plan, currency, tax_rate, tax_mode, show_tax')
       .eq('id', business_id)
       .single()
 
@@ -304,7 +304,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 12. Send confirmation email to customer
-    const cardSetupUrl = business.stripe_onboarded
+    const cardSetupUrl = business.stripe_charges_enabled
       ? `${process.env.NEXT_PUBLIC_APP_URL}/secure-card/${cardSetupToken}`
       : undefined
 
