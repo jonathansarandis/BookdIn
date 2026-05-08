@@ -30,6 +30,7 @@ export async function middleware(request: NextRequest) {
     '/auth/signup',
     '/book',
     '/booking-confirmed',
+    '/secure-card',
     '/',
     '/pricing',
     '/features',
@@ -38,6 +39,9 @@ export async function middleware(request: NextRequest) {
     '/api/import',
     '/api/demo',
     '/api/demo/logout',
+    '/api/bookings/public',
+    '/api/secure-card',
+    '/api/stripe/webhook',
     '/provider/login',
     '/provider/accept',
   ]
