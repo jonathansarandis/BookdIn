@@ -188,6 +188,15 @@ export async function POST(request: NextRequest) {
 
     if (jobError) throw new Error('Failed to create job')
 
+    // 5a. Generate single-use card-setup token (14-day expiry)
+    const { randomBytes } = await import('crypto')
+    const cardSetupToken = randomBytes(32).toString('hex')
+    const tokenExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+    await supabase.from('jobs').update({
+      card_setup_token: cardSetupToken,
+      card_setup_token_expires_at: tokenExpiresAt.toISOString(),
+    }).eq('id', job.id)
+
     // 6. Insert extras (using pre-fetched extraDetails from step 2b)
     if (extraDetails.length > 0) {
       await supabase.from('job_extras').insert(
@@ -296,7 +305,7 @@ export async function POST(request: NextRequest) {
 
     // 12. Send confirmation email to customer
     const cardSetupUrl = business.stripe_onboarded
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/bookings/${job.id}/card-setup`
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/secure-card/${cardSetupToken}`
       : undefined
 
     await sendBookingConfirmation({

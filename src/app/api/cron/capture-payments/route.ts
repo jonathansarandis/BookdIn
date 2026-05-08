@@ -1,5 +1,7 @@
 // @ts-nocheck
 // src/app/api/cron/capture-payments/route.ts
+// Runs daily at 12:00 UTC (vercel.json). Creates and confirms PaymentIntents for all
+// jobs scheduled tomorrow that have a card on file (payment_status='card_on_file').
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
@@ -30,14 +32,23 @@ export async function GET(request: NextRequest) {
 
   console.log(`[capture-payments] Running for ${tomorrowStart.toISOString()} – ${tomorrowEnd.toISOString()}`)
 
-  // Find jobs scheduled tomorrow with an authorized (uncaptured) payment intent
+  // Find jobs scheduled tomorrow with a card on file ready to charge
   const { data: jobs, error: queryError } = await supabase
     .from('jobs')
-    .select('id, stripe_payment_intent_id, status, payment_status')
+    .select(`
+      id,
+      total_price,
+      stripe_payment_method_id,
+      stripe_customer_id,
+      status,
+      payment_status,
+      business:businesses(stripe_account_id, currency)
+    `)
     .gte('scheduled_at', tomorrowStart.toISOString())
     .lte('scheduled_at', tomorrowEnd.toISOString())
-    .eq('payment_status', 'authorized')
-    .not('stripe_payment_intent_id', 'is', null)
+    .eq('payment_status', 'card_on_file')
+    .not('stripe_payment_method_id', 'is', null)
+    .not('stripe_customer_id', 'is', null)
     .not('status', 'in', '("cancelled","completed")')
 
   if (queryError) {
@@ -45,37 +56,53 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: queryError.message }, { status: 500 })
   }
 
-  console.log(`[capture-payments] ${jobs?.length ?? 0} job(s) to capture`)
+  console.log(`[capture-payments] ${jobs?.length ?? 0} job(s) to charge`)
 
   let captured = 0
   let failed = 0
   const errors: { job_id: string; error: string }[] = []
 
   for (const job of jobs || []) {
+    const stripeAccountId = job.business?.stripe_account_id
+    const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+    const currency = (job.business?.currency || 'AUD').toLowerCase()
+
     try {
-      await stripe.paymentIntents.capture(job.stripe_payment_intent_id)
+      // Create and immediately confirm the PaymentIntent off-session
+      const intent = await stripe.paymentIntents.create(
+        {
+          amount: job.total_price,
+          currency,
+          customer: job.stripe_customer_id,
+          payment_method: job.stripe_payment_method_id,
+          off_session: true,
+          confirm: true,
+          metadata: { job_id: job.id },
+        },
+        stripeOpts
+      )
 
       const { error: updateError } = await supabase
         .from('jobs')
         .update({
           payment_status: 'paid',
           paid_at: new Date().toISOString(),
+          stripe_payment_intent_id: intent.id,
         })
         .eq('id', job.id)
 
       if (updateError) {
         console.error(`[capture-payments] DB update failed for job ${job.id}:`, updateError.message)
       } else {
-        console.log(`[capture-payments] Captured job ${job.id} (intent ${job.stripe_payment_intent_id})`)
+        console.log(`[capture-payments] Charged job ${job.id} — intent ${intent.id}`)
         captured++
       }
     } catch (err: any) {
       const message = err?.message ?? String(err)
-      console.error(`[capture-payments] Stripe capture failed for job ${job.id}:`, message)
+      console.error(`[capture-payments] Charge failed for job ${job.id}:`, message)
       errors.push({ job_id: job.id, error: message })
       failed++
 
-      // Mark as failed so the dashboard surfaces it; don't abort the batch
       try {
         await supabase
           .from('jobs')
@@ -87,7 +114,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  console.log(`[capture-payments] Done — captured: ${captured}, failed: ${failed}`)
+  console.log(`[capture-payments] Done — charged: ${captured}, failed: ${failed}`)
 
   return NextResponse.json({
     message: 'Capture-payments cron completed',
