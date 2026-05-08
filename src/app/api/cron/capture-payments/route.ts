@@ -68,13 +68,14 @@ export async function GET(request: NextRequest) {
     const currency = (job.business?.currency || 'AUD').toLowerCase()
 
     try {
-      // Create and immediately confirm the PaymentIntent off-session
+      // Create and confirm a manual PaymentIntent (pre-auth only — no immediate capture)
       const intent = await stripe.paymentIntents.create(
         {
           amount: job.total_price,
           currency,
           customer: job.stripe_customer_id,
           payment_method: job.stripe_payment_method_id,
+          capture_method: 'manual',
           off_session: true,
           confirm: true,
           metadata: { job_id: job.id },
@@ -85,8 +86,7 @@ export async function GET(request: NextRequest) {
       const { error: updateError } = await supabase
         .from('jobs')
         .update({
-          payment_status: 'paid',
-          paid_at: new Date().toISOString(),
+          payment_status: 'authorized',
           stripe_payment_intent_id: intent.id,
         })
         .eq('id', job.id)
@@ -94,27 +94,27 @@ export async function GET(request: NextRequest) {
       if (updateError) {
         console.error(`[capture-payments] DB update failed for job ${job.id}:`, updateError.message)
       } else {
-        console.log(`[capture-payments] Charged job ${job.id} — intent ${intent.id}`)
+        console.log(`[capture-payments] Pre-authorized job ${job.id} — intent ${intent.id}`)
         captured++
       }
     } catch (err: any) {
       const message = err?.message ?? String(err)
-      console.error(`[capture-payments] Charge failed for job ${job.id}:`, message)
+      console.error(`[capture-payments] Pre-auth failed for job ${job.id}:`, message)
       errors.push({ job_id: job.id, error: message })
       failed++
 
       try {
         await supabase
           .from('jobs')
-          .update({ payment_status: 'capture_failed' })
+          .update({ payment_status: 'auth_failed' })
           .eq('id', job.id)
       } catch (dbErr: any) {
-        console.error(`[capture-payments] Could not mark capture_failed for job ${job.id}:`, dbErr?.message)
+        console.error(`[capture-payments] Could not mark auth_failed for job ${job.id}:`, dbErr?.message)
       }
     }
   }
 
-  console.log(`[capture-payments] Done — charged: ${captured}, failed: ${failed}`)
+  console.log(`[capture-payments] Done — authorized: ${captured}, failed: ${failed}`)
 
   return NextResponse.json({
     message: 'Capture-payments cron completed',

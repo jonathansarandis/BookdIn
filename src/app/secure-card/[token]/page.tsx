@@ -246,7 +246,7 @@ export default function SecureCardPage() {
           <h1 className="text-lg font-semibold text-gray-900 mb-1">Secure card details</h1>
           <p className="text-sm text-gray-500 mb-6 leading-relaxed">
             Hi {info.customerName?.split(' ')[0]}, please save your card to secure your booking.
-            Your card won't be charged until the day before your service.
+            A pre-authorisation will be processed one day before your appointment to reserve the funds, this is not a charge. Once your clean is complete, the final amount will be processed.
           </p>
 
           <Elements stripe={stripePromise}>

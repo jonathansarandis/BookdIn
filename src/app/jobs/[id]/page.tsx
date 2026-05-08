@@ -9,6 +9,7 @@ import PayButton from '@/components/payments/PayButton'
 import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 import JobMessages from '@/app/jobs/[id]/JobMessages'
 import CardSetupButton from '@/app/jobs/[id]/CardSetupButton'
+import ChargeButton from '@/app/jobs/[id]/ChargeButton'
 import NotesEditor from '@/app/jobs/[id]/NotesEditor'
 import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 
@@ -123,7 +124,27 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   }
 
   const isPaid  = job.payment_status === 'paid'
-  const canPay  = !isPaid && job.status !== 'cancelled' && job.total_price > 0
+  const canPay  = job.payment_status === 'unpaid' && job.status !== 'cancelled' && job.total_price > 0
+
+  const PAYMENT_STATUS_STYLES: Record<string, string> = {
+    unpaid:          'bg-yellow-100 text-yellow-700',
+    card_on_file:    'bg-blue-100 text-blue-700',
+    authorized:      'bg-indigo-100 text-indigo-700',
+    paid:            'bg-green-100 text-green-700',
+    auth_failed:     'bg-red-100 text-red-700',
+    capture_failed:  'bg-red-100 text-red-700',
+  }
+  const PAYMENT_STATUS_LABELS: Record<string, string> = {
+    unpaid:          'Unpaid',
+    card_on_file:    'Card saved',
+    authorized:      'Pre-authorized',
+    paid:            'Paid',
+    auth_failed:     'Auth failed',
+    capture_failed:  'Capture failed',
+  }
+  const paymentStatus = job.payment_status ?? 'unpaid'
+  const paymentPillStyle = PAYMENT_STATUS_STYLES[paymentStatus] ?? 'bg-gray-100 text-gray-700'
+  const paymentPillLabel = PAYMENT_STATUS_LABELS[paymentStatus] ?? paymentStatus
 
   const taxName = business?.tax_name?.trim() || 'Tax'
   const totalCents = job.total_price ?? job.price ?? 0
@@ -297,19 +318,62 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Status</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isPaid ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                {isPaid ? 'Paid' : 'Unpaid'}
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentPillStyle}`}>
+                {paymentPillLabel}
               </span>
             </div>
-            {canPay && (
-              <PayButton jobId={job.id} amount={job.total_price}
-                label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`} />
+
+            {/* unpaid — manual payment or send card link */}
+            {paymentStatus === 'unpaid' && job.status !== 'cancelled' && (
+              <>
+                {canPay && (
+                  <PayButton jobId={job.id} amount={job.total_price}
+                    label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`} />
+                )}
+                <CardSetupButton jobId={job.id} />
+              </>
             )}
-            {!isPaid && job.status !== 'cancelled' && (
-              <CardSetupButton jobId={job.id} />
+
+            {/* card_on_file — pre-auth will run the day before */}
+            {paymentStatus === 'card_on_file' && (
+              <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2 leading-relaxed">
+                Card saved. A pre-authorisation will run automatically the day before the service.
+              </p>
             )}
-            {isPaid && job.status === 'completed' && (
-              <p className="text-xs text-green-600 text-center">✓ Payment received</p>
+
+            {/* authorized — ready to capture */}
+            {paymentStatus === 'authorized' && (
+              <ChargeButton jobId={job.id} totalPrice={job.total_price} />
+            )}
+
+            {/* paid */}
+            {paymentStatus === 'paid' && (
+              <p className="text-xs text-green-600 text-center">
+                ✓ Payment received
+                {job.final_charged_amount && job.final_charged_amount !== job.total_price
+                  ? ` · $${(job.final_charged_amount / 100).toFixed(2)} charged`
+                  : ''}
+              </p>
+            )}
+
+            {/* auth_failed — pre-auth failed, resend card link to retry */}
+            {paymentStatus === 'auth_failed' && job.status !== 'cancelled' && (
+              <>
+                <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 leading-relaxed">
+                  Pre-authorisation failed. Resend the card link to collect a new card.
+                </p>
+                <CardSetupButton jobId={job.id} />
+              </>
+            )}
+
+            {/* capture_failed — pre-auth succeeded but capture failed, allow retry */}
+            {paymentStatus === 'capture_failed' && (
+              <>
+                <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 leading-relaxed">
+                  Capture failed. You can retry below.
+                </p>
+                <ChargeButton jobId={job.id} totalPrice={job.total_price} />
+              </>
             )}
           </div>
 
