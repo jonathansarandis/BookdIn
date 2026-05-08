@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react'
+import EmailTemplateCard from '@/app/settings/EmailTemplateCard'
 
 const TIMEZONES = [
   { label: 'Melbourne / Sydney (AEST)', value: 'Australia/Melbourne' },
@@ -407,6 +408,9 @@ export default function SettingsPage() {
                 {freqSaved && <span className="text-xs text-green-600">✓ Saved</span>}
               </div>
             </div>
+
+            {/* Email templates */}
+            <EmailTemplateCard businessId={business?.id} />
 
             {/* Stripe Connect */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">

@@ -111,6 +111,7 @@ export async function POST(
     address: job.address,
     service: job.service,
     cardSetupUrl,
+    business_id: profile?.business_id ?? undefined,
   })
 
   // 6. Mark sent — prevents duplicate sends if caller retries

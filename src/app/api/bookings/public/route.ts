@@ -334,6 +334,7 @@ export async function POST(request: NextRequest) {
       },
       service: { name: service?.name || 'Service' },
       cardSetupUrl,
+      business_id: business_id,
     })
 
 

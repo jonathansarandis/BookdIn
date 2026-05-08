@@ -251,6 +251,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       address: jobForEmail.address,
       service: { name: service.name },
       cardSetupUrl,
+      business_id: businessId,
     })
 
     emailStatus = result.success ? 'sent' : 'failed'
