@@ -76,7 +76,7 @@ function CardForm({ token, info }: { token: string; info: BookingInfo }) {
   }
 
   const formattedDate = info.isFlexibleTime
-    ? 'Flexible — we'll confirm the exact time closer to your booking'
+    ? "Flexible — we'll confirm the exact time closer to your booking"
     : new Date(info.scheduledAt).toLocaleDateString('en-AU', {
         weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
       })
