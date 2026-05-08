@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('name, brand_color, logo_url, contact_email, timezone, plan, currency, cancellation_fee_cents, cancellation_cutoff')
+    .select('name, brand_color, logo_url, contact_email, timezone, plan, currency, cancellation_fee_cents, cancellation_cutoff, phone, website, street_address, suburb, state, postcode, country, business_number, business_number_label')
     .eq('id', profile.business_id)
     .single()
 
@@ -47,13 +47,22 @@ export async function POST(request: NextRequest) {
   }
 
   const businessData = {
-    name:          businessName,
-    brand_color:   business?.brand_color ?? '#1A6B4A',
-    logo_url:      business?.logo_url ?? null,
-    contact_email: business?.contact_email ?? null,
-    timezone:      business?.timezone ?? 'Australia/Melbourne',
-    plan:          business?.plan ?? null,
-    currency:      business?.currency ?? 'AUD',
+    name:                 businessName,
+    brand_color:          business?.brand_color ?? '#1A6B4A',
+    logo_url:             business?.logo_url ?? null,
+    contact_email:        business?.contact_email ?? null,
+    timezone:             business?.timezone ?? 'Australia/Melbourne',
+    plan:                 business?.plan ?? null,
+    currency:             business?.currency ?? 'AUD',
+    phone:                business?.phone ?? null,
+    website:              business?.website ?? null,
+    street_address:       business?.street_address ?? null,
+    suburb:               business?.suburb ?? null,
+    state:                business?.state ?? null,
+    postcode:             business?.postcode ?? null,
+    country:              business?.country ?? null,
+    business_number:      business?.business_number ?? null,
+    business_number_label: business?.business_number_label ?? null,
   }
 
   const sampleJob = {

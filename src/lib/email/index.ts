@@ -54,7 +54,7 @@ export async function sendBookingConfirmation(params: {
           .single(),
         supabase
           .from('businesses')
-          .select('cancellation_fee_cents, cancellation_cutoff')
+          .select('cancellation_fee_cents, cancellation_cutoff, phone, website, street_address, suburb, state, postcode, country, business_number, business_number_label')
           .eq('id', params.business_id)
           .single(),
       ])
@@ -115,8 +115,21 @@ export async function sendBookingConfirmation(params: {
         cancellation_cutoff: cancellationCutoff,
       }
 
+      const augmentedBusiness = {
+        ...params.business,
+        phone:                 (bizExtra as any)?.phone ?? null,
+        website:               (bizExtra as any)?.website ?? null,
+        street_address:        (bizExtra as any)?.street_address ?? null,
+        suburb:                (bizExtra as any)?.suburb ?? null,
+        state:                 (bizExtra as any)?.state ?? null,
+        postcode:              (bizExtra as any)?.postcode ?? null,
+        country:               (bizExtra as any)?.country ?? null,
+        business_number:       (bizExtra as any)?.business_number ?? null,
+        business_number_label: (bizExtra as any)?.business_number_label ?? null,
+      }
+
       html = renderConfirmationHtml(
-        templateBody, vars, params.business,
+        templateBody, vars, augmentedBusiness,
         params.job, params.service, params.address,
         params.cardSetupUrl,
       )

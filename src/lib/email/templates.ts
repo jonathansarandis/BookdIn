@@ -11,6 +11,16 @@ export interface BusinessEmailData {
   currency?: string | null
   plan?: string | null
   tax_name?: string | null
+  // Contact details (from businesses table — appear in email footer)
+  phone?: string | null
+  website?: string | null
+  street_address?: string | null
+  suburb?: string | null
+  state?: string | null
+  postcode?: string | null
+  country?: string | null
+  business_number?: string | null
+  business_number_label?: string | null
 }
 
 export interface CustomerEmailData {
@@ -58,29 +68,53 @@ function formatAddr(a: AddressEmailData): string {
 }
 
 function emailHeader(business: BusinessEmailData): string {
-  const color = accent(business)
   const logo = business.logo_url
-    ? `<img src="${business.logo_url}" alt="${business.name}" style="max-height:40px;max-width:200px;display:block;margin-bottom:10px;" />`
+    ? `<img src="${business.logo_url}" alt="${business.name}" style="max-height:40px;max-width:180px;display:block;margin-bottom:10px;" />`
     : ''
   return `
     <tr>
-      <td style="background-color:${color};padding:32px 40px;">
+      <td class="email-header-cell" style="background-color:#ffffff;padding:28px 40px 24px;border-bottom:1px solid #ede9e3;">
         ${logo}
-        <span style="color:#ffffff;font-size:22px;font-weight:600;">${business.name}</span>
+        <span style="color:#1a1a1a;font-size:17px;font-weight:600;display:block;">${business.name}</span>
       </td>
     </tr>`
 }
 
 function emailFooter(business: BusinessEmailData): string {
-  const poweredBy = (!business.plan || business.plan === 'free')
-    ? ` &middot; Powered by BookdIn`
+  const addrParts: string[] = []
+  if (business.street_address) addrParts.push(business.street_address)
+  const cityLine: string[] = []
+  if (business.suburb) cityLine.push(business.suburb)
+  if (business.state) cityLine.push(business.state)
+  if (business.postcode) cityLine.push(business.postcode)
+  if (cityLine.length) addrParts.push(cityLine.join(' '))
+  if (business.country) addrParts.push(business.country)
+
+  const contactParts: string[] = []
+  if (addrParts.length) contactParts.push(addrParts.join(', '))
+  if (business.phone) contactParts.push(business.phone)
+  if (business.website) {
+    const display = business.website.replace(/^https?:\/\//, '')
+    contactParts.push(`<a href="${business.website}" style="color:#8a8275;text-decoration:none;">${display}</a>`)
+  }
+  if (business.business_number) {
+    contactParts.push(`${business.business_number_label || 'ABN'}: ${business.business_number}`)
+  }
+
+  const contactHtml = contactParts.length
+    ? `<p style="margin:4px 0 8px;color:#8a8275;font-size:12px;line-height:1.7;">${contactParts.join(' &nbsp;&middot;&nbsp; ')}</p>`
     : ''
+
+  const poweredBy = (!business.plan || business.plan === 'free')
+    ? `<p style="margin:0;font-size:12px;color:#8a8275;"><a href="https://bookdin.co" style="color:#8a8275;text-decoration:none;">Powered by BookdIn</a></p>`
+    : ''
+
   return `
     <tr>
-      <td style="background-color:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
-        <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">
-          ${business.name}${poweredBy}
-        </p>
+      <td class="email-footer-cell" style="background-color:#f5f3ef;padding:24px 40px;border-top:1px solid #ede9e3;">
+        <p style="margin:0;color:#3d3730;font-size:13px;font-weight:600;">${business.name}</p>
+        ${contactHtml}
+        ${poweredBy}
       </td>
     </tr>`
 }
@@ -88,12 +122,23 @@ function emailFooter(business: BusinessEmailData): string {
 function wrapEmail(business: BusinessEmailData, body: string): string {
   return `<!DOCTYPE html>
 <html>
-<body style="margin:0;padding:0;background-color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:40px 20px;">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    @media only screen and (max-width: 620px) {
+      .email-card { width: 100% !important; border-radius: 0 !important; }
+      .email-body-cell { padding: 24px !important; }
+      .email-header-cell { padding: 20px 24px 18px !important; }
+      .email-footer-cell { padding: 20px 24px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f3ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f3ef;padding:40px 20px;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+      <table class="email-card" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;">
         ${emailHeader(business)}
-        <tr><td style="padding:40px;">${body}</td></tr>
+        <tr><td class="email-body-cell" style="padding:36px 40px;">${body}</td></tr>
         ${emailFooter(business)}
       </table>
     </td></tr>
@@ -114,49 +159,53 @@ function bookingSummaryTable(
   const taxCents = job.tax_amount ?? 0
   const showTax = taxCents > 0
   const subtotalCents = job.total_price - taxCents
-
   const taxLabel = business.tax_name || 'Tax'
+
+  const labelStyle = 'margin:0 0 2px;color:#8a8275;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;'
+  const valueStyle = 'margin:0;color:#1a1a1a;font-size:14px;line-height:1.5;'
+  const cellStyle = 'padding:14px 16px;border-bottom:1px solid #ebe5d9;'
+
   const taxRows = showTax ? `
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Subtotal</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${formatMoney(subtotalCents, business.currency)}</td>
-        </tr></table>
-      </td></tr>
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">${taxLabel}</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${formatMoney(taxCents, business.currency)}</td>
-        </tr></table>
-      </td></tr>` : ''
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Subtotal</p>
+          <p style="${valueStyle}">${formatMoney(subtotalCents, business.currency)}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">${taxLabel}</p>
+          <p style="${valueStyle}">${formatMoney(taxCents, business.currency)}</p>
+        </td>
+      </tr>` : ''
 
   return `
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
-      <tr><td style="padding:6px 0;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Service</td>
-          <td style="text-align:right;color:#111827;font-size:14px;font-weight:600;">${service.name}</td>
-        </tr></table>
-      </td></tr>
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Date &amp; time</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${dateStr}</td>
-        </tr></table>
-      </td></tr>
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Address</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${formatAddr(address)}</td>
-        </tr></table>
-      </td></tr>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#faf7f2;border-radius:8px;border:1px solid #ebe5d9;overflow:hidden;margin-bottom:24px;">
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Service</p>
+          <p style="${valueStyle}font-weight:600;">${service.name}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Date &amp; time</p>
+          <p style="${valueStyle}">${dateStr}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Address</p>
+          <p style="${valueStyle}">${formatAddr(address)}</p>
+        </td>
+      </tr>
       ${taxRows}
-      <tr><td style="padding:6px 0;border-top:2px solid #111827;">
-        <table width="100%"><tr>
-          <td style="color:#111827;font-size:15px;font-weight:700;">Total</td>
-          <td style="text-align:right;color:#111827;font-size:18px;font-weight:700;">${formatMoney(job.total_price, business.currency)}</td>
-        </tr></table>
-      </td></tr>
+      <tr>
+        <td style="padding:14px 16px;background-color:#f0ebe3;">
+          <p style="${labelStyle}">Total</p>
+          <p style="margin:0;color:#1a1a1a;font-size:17px;font-weight:600;">${formatMoney(job.total_price, business.currency)}</p>
+        </td>
+      </tr>
     </table>`
 }
 
@@ -177,6 +226,12 @@ function applyInlineMarkdown(text: string, linkColor: string): string {
 }
 
 function renderParagraph(para: string, linkColor: string): string {
+  const trimmed = para.trim()
+  // Heading: entire paragraph is **...**
+  if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
+    const text = trimmed.slice(2, -2)
+    return `<p style="margin:0 0 12px;color:#6b6258;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">${text}</p>`
+  }
   const lines = para.split('\n').map(l => applyInlineMarkdown(l, linkColor))
   return `<p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">${lines.join('<br>')}</p>`
 }
@@ -196,10 +251,11 @@ export function renderConfirmationHtml(
     `<div style="margin-bottom:24px;">${bookingSummaryTable(job, service, address, business)}</div>`
 
   const paymentButtonHtml = paymentLink
-    ? `<div style="margin-bottom:24px;">
-        <a href="${paymentLink}" style="display:inline-block;background-color:${color};color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600;">
+    ? `<div style="text-align:center;margin:32px 0;">
+        <a href="${paymentLink}" style="display:inline-block;background-color:${color};color:#ffffff;padding:16px 32px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:600;">
           Add card details securely &rarr;
         </a>
+        <p style="margin:10px 0 0;color:#9a8f84;font-size:12px;">Takes about 30 seconds &mdash; your card is held, not charged.</p>
       </div>`
     : ''
 
@@ -243,9 +299,12 @@ export function bookingConfirmationTemplate(data: {
         <p style="margin:0 0 16px;color:#92400e;font-size:14px;line-height:1.6;">
           To secure your booking please save your card details via our secure link. Your card won't be charged until after your service is complete.
         </p>
-        <a href="${cardSetupUrl}" style="display:inline-block;background-color:${color};color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">
-          Add card details securely &rarr;
-        </a>
+        <div style="text-align:center;margin-top:8px;">
+          <a href="${cardSetupUrl}" style="display:inline-block;background-color:${color};color:#ffffff;padding:16px 32px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:600;">
+            Add card details securely &rarr;
+          </a>
+          <p style="margin:10px 0 0;color:#9a8f84;font-size:12px;">Takes about 30 seconds &mdash; your card is held, not charged.</p>
+        </div>
       </div>`
     : `<div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:24px;">
         <p style="margin:0;color:${color};font-size:14px;line-height:1.6;">
@@ -314,18 +373,14 @@ export function receiptTemplate(data: {
       <p style="margin:0 0 4px;color:#6b7280;font-size:13px;">Amount paid</p>
       <p style="margin:0;color:${accent(business)};font-size:28px;font-weight:700;">${formatMoney(paymentAmount, business.currency)}</p>
     </div>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
-      <tr><td style="padding:6px 0;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Booking reference</td>
-          <td style="text-align:right;color:#111827;font-size:14px;font-family:monospace;">#${ref}</td>
-        </tr></table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#faf7f2;border-radius:8px;border:1px solid #ebe5d9;overflow:hidden;margin-bottom:24px;">
+      <tr><td style="padding:14px 16px;border-bottom:1px solid #ebe5d9;">
+        <p style="margin:0 0 2px;color:#8a8275;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Booking reference</p>
+        <p style="margin:0;color:#1a1a1a;font-size:14px;font-family:monospace;">#${ref}</p>
       </td></tr>
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Service date</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${dateStr}</td>
-        </tr></table>
+      <tr><td style="padding:14px 16px;">
+        <p style="margin:0 0 2px;color:#8a8275;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Service date</p>
+        <p style="margin:0;color:#1a1a1a;font-size:14px;">${dateStr}</p>
       </td></tr>
     </table>
     <p style="margin:0;color:#6b7280;font-size:14px;line-height:1.6;">
@@ -370,36 +425,32 @@ export function cancellationTemplate(data: {
     ? `Booking cancelled — ${service.name}`
     : `Booking cancelled — ${service.name} on ${dateStr}`
 
+  const labelStyle = 'margin:0 0 2px;color:#8a8275;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;'
+  const valueStyle = 'margin:0;color:#1a1a1a;font-size:14px;'
+  const cellStyle = 'padding:14px 16px;border-bottom:1px solid #ebe5d9;'
+
   const html = wrapEmail(business, `
     <p style="margin:0 0 16px;color:#374151;font-size:16px;">Hi ${firstName},</p>
     <p style="margin:0 0 16px;color:#6b7280;font-size:15px;line-height:1.6;">
       Your booking has been cancelled. We're sorry for any inconvenience.
     </p>
     ${reasonHtml}
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
-      <tr><td style="padding:6px 0;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Booking reference</td>
-          <td style="text-align:right;color:#111827;font-size:14px;font-family:monospace;">#${ref}</td>
-        </tr></table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#faf7f2;border-radius:8px;border:1px solid #ebe5d9;overflow:hidden;margin-bottom:24px;">
+      <tr><td style="${cellStyle}">
+        <p style="${labelStyle}">Booking reference</p>
+        <p style="${valueStyle}font-family:monospace;">#${ref}</p>
       </td></tr>
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Service</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${service.name}</td>
-        </tr></table>
+      <tr><td style="${cellStyle}">
+        <p style="${labelStyle}">Service</p>
+        <p style="${valueStyle}">${service.name}</p>
       </td></tr>
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Was scheduled</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${dateStr}</td>
-        </tr></table>
+      <tr><td style="${cellStyle}">
+        <p style="${labelStyle}">Was scheduled</p>
+        <p style="${valueStyle}">${dateStr}</p>
       </td></tr>
-      <tr><td style="padding:6px 0;border-top:1px solid #e5e7eb;">
-        <table width="100%"><tr>
-          <td style="color:#6b7280;font-size:14px;">Address</td>
-          <td style="text-align:right;color:#111827;font-size:14px;">${formatAddr(address)}</td>
-        </tr></table>
+      <tr><td style="padding:14px 16px;">
+        <p style="${labelStyle}">Address</p>
+        <p style="${valueStyle}">${formatAddr(address)}</p>
       </td></tr>
     </table>
     <p style="margin:0 0 12px;color:#6b7280;font-size:14px;line-height:1.6;">
