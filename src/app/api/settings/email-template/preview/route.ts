@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { renderConfirmationHtml } from '@/lib/email/templates'
-import { DEFAULT_BOOKING_CONFIRMATION } from '@/lib/email/defaultTemplates'
+import { DEFAULT_BOOKING_CONFIRMATION_BODY } from '@/lib/email/defaultTemplates'
 
 export async function POST(request: NextRequest) {
   const supabase = createClient()
@@ -25,12 +25,12 @@ export async function POST(request: NextRequest) {
     .eq('id', profile.business_id)
     .single()
 
-  const { sections: incomingSections } = await request.json()
-  const sections = { ...DEFAULT_BOOKING_CONFIRMATION, ...incomingSections }
+  const { body: incomingBody } = await request.json()
+  const templateBody: string = typeof incomingBody === 'string' ? incomingBody : DEFAULT_BOOKING_CONFIRMATION_BODY
 
   const cancellationFeeCents: number = business?.cancellation_fee_cents ?? 5000
-  const cancellationCutoff: string = business?.cancellation_cutoff ?? '5 PM'
-  const businessName: string = business?.name ?? 'Your Business'
+  const cancellationCutoff: string  = business?.cancellation_cutoff ?? '5 PM'
+  const businessName: string        = business?.name ?? 'Your Business'
 
   const sampleVars: Record<string, string> = {
     customer_name:       'Jonathan Test',
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   }
 
   const html = renderConfirmationHtml(
-    sections,
+    templateBody,
     sampleVars,
     businessData,
     sampleJob,

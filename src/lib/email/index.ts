@@ -13,7 +13,7 @@ import {
   type ServiceEmailData,
   type JobEmailData,
 } from './templates'
-import { DEFAULT_BOOKING_CONFIRMATION, type BookingConfirmationSections } from './defaultTemplates'
+import { DEFAULT_BOOKING_CONFIRMATION_BODY } from './defaultTemplates'
 import { formatBusinessDateTime } from '@/lib/datetime'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -59,9 +59,32 @@ export async function sendBookingConfirmation(params: {
           .single(),
       ])
 
-      const sections: BookingConfirmationSections = templateRow?.sections
-        ? { ...DEFAULT_BOOKING_CONFIRMATION, ...(templateRow.sections as Partial<BookingConfirmationSections>) }
-        : { ...DEFAULT_BOOKING_CONFIRMATION }
+      // Extract body string — new schema: { body: string }
+      // Graceful fallback for old sectioned schema: concatenate fields on-the-fly
+      const rawSections: any = templateRow?.sections ?? null
+      let templateBody: string
+      if (typeof rawSections?.body === 'string') {
+        templateBody = rawSections.body
+      } else if (rawSections?.greeting) {
+        console.warn('[email] Old sectioned template detected — migrating to body format on-the-fly')
+        const parts: string[] = []
+        if (rawSections.greeting)              parts.push(rawSections.greeting)
+        parts.push('{{booking_details}}')
+        if (rawSections.extras_note_heading)   parts.push(`**${rawSections.extras_note_heading}**`)
+        if (rawSections.extras_note_body)      parts.push(rawSections.extras_note_body)
+        if (rawSections.payment_heading)       parts.push(`**${rawSections.payment_heading}**`)
+        if (rawSections.payment_body)          parts.push(rawSections.payment_body)
+        parts.push('{{payment_button}}')
+        if (rawSections.payment_disclosure)    parts.push(rawSections.payment_disclosure)
+        if (rawSections.cancellation_heading)  parts.push(`**${rawSections.cancellation_heading}**`)
+        if (rawSections.cancellation_body)     parts.push(rawSections.cancellation_body)
+        if (rawSections.walkthrough_heading)   parts.push(`**${rawSections.walkthrough_heading}**`)
+        if (rawSections.walkthrough_body)      parts.push(rawSections.walkthrough_body)
+        if (rawSections.sign_off)              parts.push(rawSections.sign_off)
+        templateBody = parts.join('\n\n')
+      } else {
+        templateBody = DEFAULT_BOOKING_CONFIRMATION_BODY
+      }
 
       const cancellationFeeCents: number = (bizExtra as any)?.cancellation_fee_cents ?? 5000
       const cancellationCutoff: string = (bizExtra as any)?.cancellation_cutoff ?? '5 PM'
@@ -93,27 +116,25 @@ export async function sendBookingConfirmation(params: {
       }
 
       html = renderConfirmationHtml(
-        sections, vars, params.business,
+        templateBody, vars, params.business,
         params.job, params.service, params.address,
         params.cardSetupUrl,
       )
       subject = params.job.is_flexible_time
         ? `Booking confirmed — ${params.service.name}`
         : `Booking confirmed — ${params.service.name} on ${dateStr}`
-      text = [
-        substituteVars(sections.greeting, vars),
-        '',
-        `Service: ${params.service.name}`,
-        `Date: ${dateStr}`,
-        `Address: ${vars.address}`,
-        `Total: ${vars.total}`,
-        '',
-        params.cardSetupUrl
-          ? `Add your card on file: ${params.cardSetupUrl}`
-          : substituteVars(sections.payment_disclosure, vars),
-        '',
-        substituteVars(sections.sign_off, vars),
-      ].join('\n')
+      // Plain-text: strip markdown, replace block tokens
+      text = substituteVars(
+        templateBody
+          .replace(/\*\*([^*]+)\*\*/g, '$1')
+          .replace(/\*([^*]+)\*/g, '$1')
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+          .replace(/\{\{booking_details\}\}/g,
+            `---\nService: ${params.service.name}\nDate: ${dateStr}\nAddress: ${vars.address}\nTotal: ${vars.total}\n---`)
+          .replace(/\{\{payment_button\}\}/g,
+            params.cardSetupUrl ? `Add card details securely: ${params.cardSetupUrl}` : ''),
+        vars,
+      )
     } else {
       const result = bookingConfirmationTemplate(params)
       subject = result.subject

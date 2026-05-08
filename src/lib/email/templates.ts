@@ -1,5 +1,4 @@
 import { formatBusinessDateTime } from '@/lib/datetime'
-import type { BookingConfirmationSections } from './defaultTemplates'
 
 // ─── Shared data shapes ────────────────────────────────────────────────────
 
@@ -167,30 +166,23 @@ export function substituteVars(text: string, vars: Record<string, string>): stri
   return text.replace(/\{\{(\w+)\}\}/g, (match, key) => vars[key] ?? match)
 }
 
-// ─── Custom template renderer ─────────────────────────────────────────────
+// ─── Markdown-light body renderer ─────────────────────────────────────────
 
-function textToHtmlParagraphs(text: string): string {
-  return text.split('\n')
-    .map(line => line
-      ? `<p style="margin:0 0 8px;color:#374151;font-size:15px;line-height:1.6;">${line}</p>`
-      : '<p style="margin:0 0 8px;">&nbsp;</p>'
-    )
-    .join('')
+function applyInlineMarkdown(text: string, linkColor: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) =>
+      `<a href="${u}" style="color:${linkColor};text-decoration:underline;">${t}</a>`)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
 }
 
-function calloutBox(heading: string, body: string, bg: string, border: string, textColor: string): string {
-  const headingHtml = heading
-    ? `<p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:0.06em;color:#6b7280;">${heading}</p>`
-    : ''
-  return `
-    <div style="background-color:${bg};border:1px solid ${border};border-radius:8px;padding:20px;margin-bottom:20px;">
-      ${headingHtml}
-      <p style="margin:0;color:${textColor};font-size:14px;line-height:1.65;">${body.replace(/\n/g, '<br>')}</p>
-    </div>`
+function renderParagraph(para: string, linkColor: string): string {
+  const lines = para.split('\n').map(l => applyInlineMarkdown(l, linkColor))
+  return `<p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">${lines.join('<br>')}</p>`
 }
 
 export function renderConfirmationHtml(
-  sections: BookingConfirmationSections,
+  body: string,
   vars: Record<string, string>,
   business: BusinessEmailData,
   job: JobEmailData,
@@ -199,57 +191,33 @@ export function renderConfirmationHtml(
   paymentLink?: string,
 ): string {
   const color = accent(business)
-  const sub = (s: string) => substituteVars(s, vars)
 
-  const greetingHtml = textToHtmlParagraphs(sub(sections.greeting))
-  const detailsIntroHtml = sections.details_intro
-    ? `<p style="margin:0 0 16px;color:#6b7280;font-size:15px;line-height:1.6;">${sub(sections.details_intro)}</p>`
-    : ''
+  const detailsTableHtml =
+    `<div style="margin-bottom:24px;">${bookingSummaryTable(job, service, address, business)}</div>`
 
-  const extrasNote = calloutBox(
-    sub(sections.extras_note_heading),
-    sub(sections.extras_note_body),
-    '#f9fafb', '#e5e7eb', '#374151',
-  )
-
-  const paymentSection = paymentLink
-    ? `<div style="background-color:#fefce8;border:1px solid #fde047;border-radius:8px;padding:20px;margin-bottom:20px;">
-        <p style="margin:0 0 8px;color:#854d0e;font-size:14px;font-weight:700;letter-spacing:0.06em;">${sub(sections.payment_heading)}</p>
-        <p style="margin:0 0 16px;color:#92400e;font-size:14px;line-height:1.65;">${sub(sections.payment_body)}</p>
-        <a href="${paymentLink}" style="display:inline-block;background-color:${color};color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">
+  const paymentButtonHtml = paymentLink
+    ? `<div style="margin-bottom:24px;">
+        <a href="${paymentLink}" style="display:inline-block;background-color:${color};color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600;">
           Add card details securely &rarr;
         </a>
-        <p style="margin:16px 0 0;color:#92400e;font-size:13px;line-height:1.65;">${sub(sections.payment_disclosure)}</p>
       </div>`
-    : `<div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:20px;">
-        <p style="margin:0;color:${color};font-size:14px;line-height:1.65;">${sub(sections.payment_disclosure)}</p>
-      </div>`
+    : ''
 
-  const cancellationSection = calloutBox(
-    sub(sections.cancellation_heading),
-    sub(sections.cancellation_body),
-    '#fff7ed', '#fed7aa', '#9a3412',
-  )
+  const paragraphs = body.split(/\n\n+/)
+  let hasDetails = false
+  let hasPayment = false
 
-  const walkthroughSection = calloutBox(
-    sub(sections.walkthrough_heading),
-    sub(sections.walkthrough_body),
-    '#f9fafb', '#e5e7eb', '#374151',
-  )
+  const rendered = paragraphs.map(para => {
+    const trimmed = para.trim()
+    if (trimmed === '{{booking_details}}') { hasDetails = true; return detailsTableHtml }
+    if (trimmed === '{{payment_button}}')  { hasPayment = true; return paymentButtonHtml }
+    return renderParagraph(substituteVars(trimmed, vars), color)
+  })
 
-  const signOffHtml = textToHtmlParagraphs(sub(sections.sign_off))
+  if (!hasDetails) rendered.splice(1, 0, detailsTableHtml)
+  if (!hasPayment && paymentLink) rendered.splice(rendered.length - 1, 0, paymentButtonHtml)
 
-  const body = `
-    <div style="margin-bottom:20px;">${greetingHtml}</div>
-    ${detailsIntroHtml}
-    ${bookingSummaryTable(job, service, address, business)}
-    ${extrasNote}
-    ${paymentSection}
-    ${cancellationSection}
-    ${walkthroughSection}
-    <div style="margin-top:24px;">${signOffHtml}</div>`
-
-  return wrapEmail(business, body)
+  return wrapEmail(business, rendered.join('\n'))
 }
 
 // ─── Booking confirmation ──────────────────────────────────────────────────
