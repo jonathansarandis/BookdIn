@@ -4,7 +4,13 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { loadStripe } from '@stripe/stripe-js'
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import {
+  Elements,
+  ExpressCheckoutElement,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js'
 import { Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,16 +36,19 @@ function PaymentForm({
   token,
   info,
   stripeCustomerId,
+  clientSecret,
 }: {
   token: string
   info: BookingInfo
   stripeCustomerId: string
+  clientSecret: string
 }) {
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showExpressCheckout, setShowExpressCheckout] = useState(false)
 
   const brand = info.brandColor
 
@@ -51,6 +60,48 @@ function PaymentForm({
 
   const formattedTotal = `$${(info.total / 100).toFixed(2)} ${info.currency}`
 
+  async function saveCard(paymentMethodId: string) {
+    const res = await fetch('/api/secure-card/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, paymentMethodId, stripeCustomerId }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to save card')
+    setSuccess(true)
+  }
+
+  // Express Checkout (Apple Pay / Google Pay / Link) confirm handler
+  const handleExpressCheckoutConfirm = async () => {
+    if (!stripe || !elements) return
+    setError(null)
+
+    const { setupIntent, error: confirmError } = await stripe.confirmSetup({
+      elements,
+      clientSecret,
+      confirmParams: { return_url: window.location.href },
+      redirect: 'if_required',
+    })
+
+    if (confirmError) {
+      setError(confirmError.message || 'Apple Pay failed. Please try the card form below.')
+      return
+    }
+
+    if (setupIntent?.payment_method) {
+      const paymentMethodId =
+        typeof setupIntent.payment_method === 'string'
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id
+      try {
+        await saveCard(paymentMethodId)
+      } catch (err: any) {
+        setError(err.message)
+      }
+    }
+  }
+
+  // Card form submit handler
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!stripe || !elements) return
@@ -76,16 +127,8 @@ function PaymentForm({
         typeof setupIntent.payment_method === 'string'
           ? setupIntent.payment_method
           : setupIntent.payment_method?.id
-
       try {
-        const res = await fetch('/api/secure-card/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, paymentMethodId, stripeCustomerId }),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to save card')
-        setSuccess(true)
+        await saveCard(paymentMethodId)
       } catch (err: any) {
         setError(err.message)
       }
@@ -128,9 +171,36 @@ function PaymentForm({
         </div>
       </div>
 
-      {/* PaymentElement: renders Apple Pay / Google Pay on supported devices above the card form */}
+      {/*
+        ExpressCheckoutElement is always mounted so onReady fires.
+        It renders as empty when no wallets are available on the device.
+        The divider below only appears once we know wallets are present.
+      */}
+      <ExpressCheckoutElement
+        options={{
+          buttonType: { applePay: 'plain', googlePay: 'plain' },
+          buttonTheme: { applePay: 'black', googlePay: 'black' },
+          layout: { maxColumns: 1, maxRows: 2 },
+        }}
+        onReady={({ availablePaymentMethods }) => {
+          if (availablePaymentMethods) setShowExpressCheckout(true)
+        }}
+        onConfirm={handleExpressCheckoutConfirm}
+      />
+
+      {/* Divider — only shown when at least one wallet is available */}
+      {showExpressCheckout && (
+        <div style={{ position: 'relative', textAlign: 'center', margin: '4px 0' }}>
+          <div style={{ height: 1, background: '#e5e7eb', position: 'absolute', top: '50%', left: 0, right: 0 }} />
+          <span style={{ position: 'relative', background: '#fff', padding: '0 12px', color: '#6b7280', fontSize: 13 }}>
+            Or pay with card
+          </span>
+        </div>
+      )}
+
+      {/* Card form via PaymentElement */}
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment details</label>
+        <label className="block text-xs font-medium text-gray-600 mb-1.5">Card details</label>
         <PaymentElement />
       </div>
 
@@ -271,7 +341,12 @@ export default function SecureCardPage() {
           </p>
 
           <Elements stripe={stripePromise} options={elementsOptions}>
-            <PaymentForm token={token} info={info} stripeCustomerId={stripeCustomerId} />
+            <PaymentForm
+              token={token}
+              info={info}
+              stripeCustomerId={stripeCustomerId}
+              clientSecret={clientSecret}
+            />
           </Elements>
         </div>
       </div>
