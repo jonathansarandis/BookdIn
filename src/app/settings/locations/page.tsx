@@ -72,7 +72,7 @@ export default function LocationsListPage() {
   function handleNameChange(val: string) {
     setNewName(val)
     if (!slugManual) {
-      const bizSlug = business?.booking_url_slug || ''
+      const bizSlug = (business?.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       const namePart = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       setNewSlug(bizSlug ? `${bizSlug}-${namePart}` : namePart)
     }
