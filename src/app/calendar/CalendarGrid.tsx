@@ -20,7 +20,7 @@ const STATUS_CHIP: Record<string, string> = {
   assigned:    'bg-purple-100 text-purple-800',
   on_the_way:  'bg-blue-100 text-blue-800',
   in_progress: 'bg-blue-100 text-blue-800',
-  completed:   'bg-gray-100 text-gray-600',
+  completed:   'bg-gray-200 text-gray-700',
   cancelled:   'bg-red-100 text-red-600',
 }
 

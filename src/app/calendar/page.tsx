@@ -86,7 +86,7 @@ export default async function CalendarPage({
           { label: 'Pending', color: 'bg-amber-100' },
           { label: 'Assigned', color: 'bg-purple-100' },
           { label: 'In progress', color: 'bg-blue-100' },
-          { label: 'Completed', color: 'bg-gray-100' },
+          { label: 'Completed', color: 'bg-gray-200' },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1.5">
             <div className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
