@@ -86,6 +86,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Service not found' }, { status: 404 })
     }
 
+    // Get location-specific base price (Phase 2 multi-location)
+    const { data: locService } = await supabase
+      .from('location_services')
+      .select('base_price, is_enabled')
+      .eq('location_id', location.id)
+      .eq('service_id', service_id)
+      .single()
+    if (!locService || !locService.is_enabled) {
+      return NextResponse.json({ error: 'Service not available at this location' }, { status: 400 })
+    }
+
     // 2a. Frequency discount: DB first, hardcoded fallback
     const { data: freqRow } = await supabase
       .from('frequency_discounts')
@@ -95,23 +106,34 @@ export async function POST(request: NextRequest) {
       .single()
     const discountPct = freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0
 
-    // 2b. Fetch extras early (tightened: service_id + business_id prevents cross-tenant/cross-service borrowing)
+    // 2b. Fetch extras early — location-specific prices, scoped to this location + service + business
     let extraDetails: any[] = []
     if (extras?.length > 0) {
       const { data } = await supabase
-        .from('service_extras')
-        .select('*')
-        .in('id', extras)
-        .eq('service_id', service_id)
-        .eq('business_id', business_id)
-      extraDetails = data || []
+        .from('location_extras')
+        .select(`
+          price,
+          is_enabled,
+          service_extras!inner ( id, name, is_quote_only, service_id, business_id )
+        `)
+        .eq('location_id', location.id)
+        .in('extra_id', extras)
+        .eq('is_enabled', true)
+        .eq('service_extras.service_id', service_id)
+        .eq('service_extras.business_id', business_id)
+      extraDetails = (data || []).map((row: any) => ({
+        id: row.service_extras.id,
+        name: row.service_extras.name,
+        price: row.price,
+        is_quote_only: row.service_extras.is_quote_only,
+      }))
     }
 
     // 2c. Server-side price recalculation
     const breakdown = calcJobPrice({
       service: {
         id: service.id,
-        base_price: service.base_price,
+        base_price: locService.base_price,
         pricing_type: service.pricing_type,
         duration_minutes: service.duration_minutes,
       },
