@@ -340,7 +340,7 @@ export async function POST(request: NextRequest) {
         brand_color: business.brand_color,
         logo_url: business.logo_url,
         contact_email: business.contact_email,
-        timezone: business.timezone,
+        timezone: tz,
         plan: business.plan,
         currency: business.currency,
       },
