@@ -5,6 +5,7 @@ import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toBusinessDateTime, fromBusinessDateTime } from '@/lib/datetime'
 import CalendarGrid from './CalendarGrid'
+import LocationFilter from './LocationFilter'
 
 export const metadata = { title: 'Calendar' }
 
@@ -16,7 +17,7 @@ function getDaysInMonth(year: number, month: number) {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: { month?: string; year?: string }
+  searchParams: { month?: string; year?: string; location?: string }
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -33,14 +34,26 @@ export default async function CalendarPage({
   const monthStart = fromBusinessDateTime(`${year}-${pad(month + 1)}-01`, '00:00', businessTimezone)
   const monthEnd = fromBusinessDateTime(`${year}-${pad(month + 1)}-${pad(daysInMonthForRange)}`, '23:59', businessTimezone)
 
-  const { data: jobs } = await supabase
+  const { data: locations } = await supabase
+    .from('locations')
+    .select('id, name')
+    .eq('business_id', profile!.business_id!)
+    .order('name')
+
+  let jobsQuery = supabase
     .from('jobs')
-    .select('*, customer:customers(full_name, email, phone), service:services(name, pricing_type), provider:providers(display_name, color), address:addresses(line1, city, state, postcode), job_extras(id, name, price)')
+    .select('*, customer:customers(full_name, email, phone), service:services(name, pricing_type), provider:providers(display_name, color), address:addresses(line1, city, state, postcode), location:locations(id, name), job_extras(id, name, price)')
     .eq('business_id', profile!.business_id!)
     .gte('scheduled_at', monthStart)
     .lte('scheduled_at', monthEnd)
     .neq('status', 'cancelled')
     .order('scheduled_at')
+
+  if (searchParams.location) {
+    jobsQuery = jobsQuery.eq('location_id', searchParams.location)
+  }
+
+  const { data: jobs } = await jobsQuery
 
   const prevMonth = month === 0 ? 11 : month - 1
   const prevYear = month === 0 ? year - 1 : year
@@ -72,11 +85,21 @@ export default async function CalendarPage({
             </Link>
           </div>
         </div>
-        <Link href="/booking"
-          className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
-          <Plus className="w-4 h-4" />
-          New booking
-        </Link>
+        <div className="flex items-center gap-3">
+          {locations && locations.length > 1 && (
+            <LocationFilter
+              locations={locations}
+              currentLocationId={searchParams.location || ''}
+              month={month}
+              year={year}
+            />
+          )}
+          <Link href="/booking"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <Plus className="w-4 h-4" />
+            New booking
+          </Link>
+        </div>
       </div>
 
       {/* Legend */}

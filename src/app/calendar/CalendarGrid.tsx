@@ -102,6 +102,9 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                         STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-800'
                       )}
                     >
+                      {job.location?.name && (
+                        <span className="opacity-60 mr-1">{job.location.name.slice(0,3).toUpperCase()}</span>
+                      )}
                       {job.is_flexible_time ? 'Flexible · ' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a') + ' '}
                       {job.customer?.full_name?.split(' ')[0]}
                     </button>
@@ -157,6 +160,9 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold truncate">
+                      {job.location?.name && (
+                        <span className="opacity-60 mr-2 text-xs">{job.location.name.slice(0,3).toUpperCase()}</span>
+                      )}
                       {job.customer?.full_name || 'Unknown'}
                     </span>
                     <span className="text-sm font-medium flex-shrink-0">
