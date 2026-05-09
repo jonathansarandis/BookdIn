@@ -29,7 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 const PAYMENT_CHIP: Record<string, string> = {
   paid:     'bg-green-100 text-green-700',
   unpaid:   'bg-yellow-100 text-yellow-700',
-  pending:  'bg-yellow-100 text-yellow-700',
+  pending:  'bg-amber-200 text-amber-900',
   refunded: 'bg-gray-100 text-gray-600',
   failed:   'bg-red-100 text-red-700',
 }
