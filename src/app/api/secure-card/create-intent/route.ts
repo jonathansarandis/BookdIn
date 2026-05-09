@@ -52,6 +52,16 @@ export async function POST(request: NextRequest) {
   const stripeAccountId = job.business?.stripe_account_id
   const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 
+  // Diagnostic: log which Apple Pay domains are registered on the connected account
+  if (stripeAccountId) {
+    try {
+      const domains = await stripe.paymentMethodDomains.list({}, { stripeAccount: stripeAccountId })
+      console.log('[create-intent] Apple Pay domains on connected account:', JSON.stringify(domains.data.map(d => d.domain_name)))
+    } catch (e: any) {
+      console.error('[create-intent] Domain list failed:', e.message)
+    }
+  }
+
   // Create customer on the connected account
   let stripeCustomerId: string
   try {

@@ -106,8 +106,16 @@ function PaymentForm({ token, info }: { token: string; info: BookingInfo }) {
   }
 
   // onReady: show ECE section only if the device has wallets available
-  const handleExpressCheckoutReady = ({ availablePaymentMethods }) => {
-    if (availablePaymentMethods) setShowExpressCheckout(true)
+  const handleExpressCheckoutReady = (event) => {
+    console.log('[ExpressCheckout onReady] availablePaymentMethods:', event.availablePaymentMethods)
+    console.log('[ExpressCheckout onReady] full event:', event)
+    if (event.availablePaymentMethods && Object.keys(event.availablePaymentMethods).length > 0) {
+      setShowExpressCheckout(true)
+    }
+  }
+
+  const handleExpressCheckoutLoadError = (event) => {
+    console.error('[ExpressCheckout onLoadError]:', event.error)
   }
 
   // Card form submit
@@ -188,6 +196,7 @@ function PaymentForm({ token, info }: { token: string; info: BookingInfo }) {
           layout: { maxColumns: 1, maxRows: 2 },
         }}
         onReady={handleExpressCheckoutReady}
+        onLoadError={handleExpressCheckoutLoadError}
         onConfirm={handleExpressCheckoutConfirm}
       />
 

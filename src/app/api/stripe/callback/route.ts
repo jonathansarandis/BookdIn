@@ -47,6 +47,19 @@ export async function GET(request: NextRequest) {
       })
       .eq('id', businessId)
 
+    // Register the platform domain on the newly-connected account so Apple Pay works
+    const appDomain = new URL(appUrl).hostname
+    try {
+      await stripe.paymentMethodDomains.create(
+        { domain_name: appDomain },
+        { stripeAccount: business.stripe_account_id }
+      )
+      console.log(`[stripe/callback] Registered Apple Pay domain ${appDomain} on ${business.stripe_account_id}`)
+    } catch (domainErr: any) {
+      // Non-fatal — may already be registered, or account may not support it yet
+      console.warn(`[stripe/callback] Apple Pay domain registration skipped: ${domainErr.message}`)
+    }
+
     return NextResponse.redirect(`${appUrl}/settings?stripe_success=true`)
   } catch (err: any) {
     console.error('Stripe callback error:', err)
