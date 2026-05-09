@@ -1,6 +1,7 @@
 // @ts-nocheck
-// POST /api/secure-card/save  { token, paymentMethodId, stripeCustomerId }
-// SetupIntent has already attached the PM to the customer — just persist to DB.
+// POST /api/secure-card/save  { token, paymentMethodId }
+// create-intent already wrote stripe_customer_id to the job.
+// This endpoint just persists the confirmed payment method and consumes the token.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -12,18 +13,16 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
   let token: string
   let paymentMethodId: string
-  let stripeCustomerId: string
 
   try {
     const body = await request.json()
     token = body.token
     paymentMethodId = body.paymentMethodId
-    stripeCustomerId = body.stripeCustomerId
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  if (!token || !paymentMethodId || !stripeCustomerId) {
+  if (!token || !paymentMethodId) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -43,13 +42,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Link has expired' }, { status: 410 })
   }
 
-  // Stripe already attached the PM to the customer via SetupIntent confirmation.
-  // Persist the result to the database and consume the token.
+  // stripe_customer_id is already on the job (set by create-intent).
+  // Just record the confirmed payment method and consume the token.
   const { error: updateError } = await supabase
     .from('jobs')
     .update({
       stripe_payment_method_id: paymentMethodId,
-      stripe_customer_id: stripeCustomerId,
       payment_status: 'card_on_file',
       card_setup_token: null,
       card_setup_token_expires_at: null,

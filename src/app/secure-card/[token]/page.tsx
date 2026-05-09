@@ -32,17 +32,7 @@ interface BookingInfo {
 
 // ─── Inner form (must be inside <Elements>) ───────────────────────────────────
 
-function PaymentForm({
-  token,
-  info,
-  stripeCustomerId,
-  clientSecret,
-}: {
-  token: string
-  info: BookingInfo
-  stripeCustomerId: string
-  clientSecret: string
-}) {
+function PaymentForm({ token, info }: { token: string; info: BookingInfo }) {
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
@@ -60,21 +50,18 @@ function PaymentForm({
 
   const formattedTotal = `$${(info.total / 100).toFixed(2)} ${info.currency}`
 
-  async function saveCard(paymentMethodId: string) {
-    const res = await fetch('/api/secure-card/save', {
+  // Shared: call create-intent to get a clientSecret, then confirmSetup
+  async function confirmWithIntent() {
+    const intRes = await fetch('/api/secure-card/create-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, paymentMethodId, stripeCustomerId }),
+      body: JSON.stringify({ token }),
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to save card')
-    setSuccess(true)
-  }
-
-  // Express Checkout (Apple Pay / Google Pay / Link) confirm handler
-  const handleExpressCheckoutConfirm = async () => {
-    if (!stripe || !elements) return
-    setError(null)
+    if (!intRes.ok) {
+      const d = await intRes.json().catch(() => ({}))
+      throw new Error(d.error || 'Failed to initialise payment')
+    }
+    const { clientSecret } = await intRes.json()
 
     const { setupIntent, error: confirmError } = await stripe.confirmSetup({
       elements,
@@ -82,58 +69,68 @@ function PaymentForm({
       confirmParams: { return_url: window.location.href },
       redirect: 'if_required',
     })
+    if (confirmError) throw new Error(confirmError.message || 'Payment setup failed')
+    return setupIntent
+  }
 
-    if (confirmError) {
-      setError(confirmError.message || 'Apple Pay failed. Please try the card form below.')
-      return
-    }
+  // Shared: persist confirmed PM to DB
+  async function saveCard(paymentMethodId: string) {
+    const res = await fetch('/api/secure-card/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, paymentMethodId }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to save card')
+  }
 
-    if (setupIntent?.payment_method) {
-      const paymentMethodId =
-        typeof setupIntent.payment_method === 'string'
+  // Express Checkout (Apple Pay / Google Pay) — fires when user authorises in the wallet sheet
+  const handleExpressCheckoutConfirm = async () => {
+    if (!stripe || !elements) return
+    setError(null)
+    try {
+      const { error: submitError } = await elements.submit()
+      if (submitError) throw new Error(submitError.message)
+
+      const setupIntent = await confirmWithIntent()
+      if (setupIntent?.payment_method) {
+        const pmId = typeof setupIntent.payment_method === 'string'
           ? setupIntent.payment_method
           : setupIntent.payment_method?.id
-      try {
-        await saveCard(paymentMethodId)
-      } catch (err: any) {
-        setError(err.message)
+        await saveCard(pmId)
+        setSuccess(true)
       }
+    } catch (err: any) {
+      setError(err.message || 'Apple Pay failed. Please try the card form below.')
     }
   }
 
-  // Card form submit handler
+  // onReady: show ECE section only if the device has wallets available
+  const handleExpressCheckoutReady = ({ availablePaymentMethods }) => {
+    if (availablePaymentMethods) setShowExpressCheckout(true)
+  }
+
+  // Card form submit
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!stripe || !elements) return
     setSubmitting(true)
     setError(null)
+    try {
+      const { error: submitError } = await elements.submit()
+      if (submitError) throw new Error(submitError.message)
 
-    const { setupIntent, error: confirmError } = await stripe.confirmSetup({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/secure-card/${token}?status=complete`,
-      },
-      redirect: 'if_required',
-    })
-
-    if (confirmError) {
-      setError(confirmError.message || 'Payment setup failed. Please try again.')
-      setSubmitting(false)
-      return
-    }
-
-    if (setupIntent?.status === 'succeeded') {
-      const paymentMethodId =
-        typeof setupIntent.payment_method === 'string'
+      const setupIntent = await confirmWithIntent()
+      if (setupIntent?.status === 'succeeded') {
+        const pmId = typeof setupIntent.payment_method === 'string'
           ? setupIntent.payment_method
           : setupIntent.payment_method?.id
-      try {
-        await saveCard(paymentMethodId)
-      } catch (err: any) {
-        setError(err.message)
+        await saveCard(pmId)
+        setSuccess(true)
       }
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.')
     }
-
     setSubmitting(false)
   }
 
@@ -173,22 +170,28 @@ function PaymentForm({
 
       {/*
         ExpressCheckoutElement is always mounted so onReady fires.
-        It renders as empty when no wallets are available on the device.
-        The divider below only appears once we know wallets are present.
+        paymentMethods config restricts to Apple Pay + Google Pay only — Link is
+        deliberately excluded because it already appears inside PaymentElement.
       */}
       <ExpressCheckoutElement
         options={{
+          paymentMethods: {
+            applePay: 'always',
+            googlePay: 'always',
+            link: 'never',
+            paypal: 'never',
+            amazonPay: 'never',
+            klarna: 'never',
+          },
           buttonType: { applePay: 'plain', googlePay: 'plain' },
           buttonTheme: { applePay: 'black', googlePay: 'black' },
           layout: { maxColumns: 1, maxRows: 2 },
         }}
-        onReady={({ availablePaymentMethods }) => {
-          if (availablePaymentMethods) setShowExpressCheckout(true)
-        }}
+        onReady={handleExpressCheckoutReady}
         onConfirm={handleExpressCheckoutConfirm}
       />
 
-      {/* Divider — only shown when at least one wallet is available */}
+      {/* Divider — only shown when device has Apple Pay or Google Pay */}
       {showExpressCheckout && (
         <div style={{ position: 'relative', textAlign: 'center', margin: '4px 0' }}>
           <div style={{ height: 1, background: '#e5e7eb', position: 'absolute', top: '50%', left: 0, right: 0 }} />
@@ -198,7 +201,7 @@ function PaymentForm({
         </div>
       )}
 
-      {/* Card form via PaymentElement */}
+      {/* Card form */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1.5">Card details</label>
         <PaymentElement />
@@ -236,34 +239,21 @@ export default function SecureCardPage() {
 
   const [loading, setLoading] = useState(true)
   const [info, setInfo] = useState<BookingInfo | null>(null)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null)
   const [invalid, setInvalid] = useState(false)
   const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null)
 
   useEffect(() => {
     async function setup() {
       try {
-        // 1. Validate token and load booking info
-        const validateRes = await fetch(`/api/secure-card/validate?token=${encodeURIComponent(token)}`)
-        if (!validateRes.ok) { setInvalid(true); setLoading(false); return }
-        const data: BookingInfo = await validateRes.json()
+        const res = await fetch(`/api/secure-card/validate?token=${encodeURIComponent(token)}`)
+        if (!res.ok) { setInvalid(true); setLoading(false); return }
+        const data: BookingInfo = await res.json()
         setInfo(data)
 
+        // Create stripePromise scoped to the connected account
         const pubKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
         const opts = data.stripeAccountId ? { stripeAccount: data.stripeAccountId } : undefined
         setStripePromise(loadStripe(pubKey, opts))
-
-        // 2. Create SetupIntent on the connected account and get clientSecret
-        const initRes = await fetch('/api/secure-card/init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        })
-        if (!initRes.ok) { setInvalid(true); setLoading(false); return }
-        const initData = await initRes.json()
-        setClientSecret(initData.clientSecret)
-        setStripeCustomerId(initData.stripeCustomerId)
       } catch {
         setInvalid(true)
       }
@@ -280,7 +270,7 @@ export default function SecureCardPage() {
     )
   }
 
-  if (invalid || !info || !stripePromise || !clientSecret || !stripeCustomerId) {
+  if (invalid || !info || !stripePromise) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-sm w-full text-center">
@@ -303,12 +293,17 @@ export default function SecureCardPage() {
     )
   }
 
+  // Deferred Elements mode: currency declared upfront so Apple Pay can display the
+  // correct currency label; SetupIntent is created lazily inside the confirm handlers.
   const elementsOptions = {
-    clientSecret,
+    mode: 'setup' as const,
+    currency: info.currency.toLowerCase(),
+    paymentMethodCreation: 'manual' as const,
+    paymentMethodTypes: ['card'],
     appearance: {
       theme: 'stripe' as const,
       variables: {
-        colorPrimary: '#1E9BFF',
+        colorPrimary: info.brandColor || '#1E9BFF',
         borderRadius: '8px',
         fontFamily: 'system-ui, -apple-system, sans-serif',
       },
@@ -341,12 +336,7 @@ export default function SecureCardPage() {
           </p>
 
           <Elements stripe={stripePromise} options={elementsOptions}>
-            <PaymentForm
-              token={token}
-              info={info}
-              stripeCustomerId={stripeCustomerId}
-              clientSecret={clientSecret}
-            />
+            <PaymentForm token={token} info={info} />
           </Elements>
         </div>
       </div>
