@@ -405,7 +405,12 @@ export async function POST(request: NextRequest) {
         console.error('Lead source insert threw:', err)
       }
     }
-    return NextResponse.json({ success: true, job_id: job.id })
+    return NextResponse.json({
+      success: true,
+      job_id: job.id,
+      total_cents: taxSplit.total,
+      service_name: service?.name || null,
+    })
   } catch (err: any) {
     console.error('Public booking error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

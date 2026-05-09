@@ -34,6 +34,7 @@ export default function PublicBookingPage() {
   const [freqDiscounts, setFreqDiscounts] = useState<Record<string, { discount_percent: number; is_enabled: boolean }>>({})
   const [locationId, setLocationId] = useState<string | null>(null)
   const [locationTimezone, setLocationTimezone] = useState<string | null>(null)
+  const [locationThankYouUrl, setLocationThankYouUrl] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     service_id: '',
@@ -60,7 +61,7 @@ export default function PublicBookingPage() {
     async function load() {
       const { data: loc } = await supabase
         .from('locations_public')
-        .select('location_id, location_timezone, business_id, business_name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode')
+        .select('location_id, location_timezone, location_thank_you_url, location_slug, business_id, business_name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode')
         .eq('location_slug', slug)
         .single()
 
@@ -78,6 +79,7 @@ export default function PublicBookingPage() {
       })
       setLocationId(loc.location_id)
       setLocationTimezone(loc.location_timezone)
+      setLocationThankYouUrl(loc.location_thank_you_url || null)
 
       const [{ data: locSvcsRaw }, { data: locExtrasRaw }, { data: fdData }] = await Promise.all([
         supabase.from('location_services')
@@ -239,6 +241,20 @@ export default function PublicBookingPage() {
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Booking failed')
+
+      // If location has a thank_you_url configured, redirect there with conversion params.
+      // Otherwise fall back to the inline success state.
+      if (locationThankYouUrl) {
+        const params = new URLSearchParams({
+          booking_id: data.job_id,
+          amount: ((data.total_cents || 0) / 100).toFixed(2),
+          service: selectedService?.name || '',
+        })
+        const sep = locationThankYouUrl.includes('?') ? '&' : '?'
+        window.location.replace(`${locationThankYouUrl}${sep}${params.toString()}`)
+        return  // don't fall through to setSuccess
+      }
+
       setSuccess(true)
     } catch (err: any) {
       setError(err.message)
