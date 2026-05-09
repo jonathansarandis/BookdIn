@@ -260,25 +260,25 @@ export default function PublicBookingPage() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="max-w-2xl mx-auto px-4 py-8 overflow-x-hidden">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Book a service</h1>
           <p className="text-gray-500 text-sm mt-1">Fill in your details and we'll confirm your booking shortly.</p>
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center mb-6">
           {[1, 2, 3].map(s => (
-            <div key={s} className="flex items-center gap-2">
+            <div key={s} className="flex items-center">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${step >= s ? 'text-white' : 'bg-gray-200 text-gray-500'}`}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 transition-colors ${step >= s ? 'text-white' : 'bg-gray-200 text-gray-500'}`}
                 style={step >= s ? { backgroundColor: brand } : undefined}>
                 {step > s ? '✓' : s}
               </div>
-              <span className={`text-xs font-medium ${step >= s ? 'text-gray-900' : 'text-gray-400'}`}>
+              <span className={`hidden sm:inline text-xs font-medium ml-2 ${step >= s ? 'text-gray-900' : 'text-gray-400'}`}>
                 {s === 1 ? 'Service' : s === 2 ? 'Your details' : 'Confirm'}
               </span>
-              {s < 3 && <div className="w-8 h-px bg-gray-200 mx-1" />}
+              {s < 3 && <div className="flex-1 sm:flex-none sm:w-8 h-px bg-gray-200 mx-2" />}
             </div>
           ))}
         </div>
@@ -527,9 +527,9 @@ export default function PublicBookingPage() {
                 ] : []),
                 { label: 'Total', value: `$${(totalToCharge / 100).toFixed(2)}`, bold: true },
               ].map(item => (
-                <div key={item.label} className="flex justify-between text-sm">
-                  <span className="text-gray-500">{item.label}</span>
-                  <span className={`${item.bold ? 'font-semibold' : 'text-gray-900'} text-right max-w-xs`} style={item.bold ? { color: brand } : undefined}>{item.value}</span>
+                <div key={item.label} className="flex justify-between gap-3 text-sm">
+                  <span className="text-gray-500 flex-shrink-0">{item.label}</span>
+                  <span className={`${item.bold ? 'font-semibold' : 'text-gray-900'} text-right break-words min-w-0`} style={item.bold ? { color: brand } : undefined}>{item.value}</span>
                 </div>
               ))}
             </div>
