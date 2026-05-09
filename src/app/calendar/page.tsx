@@ -83,7 +83,7 @@ export default async function CalendarPage({
       <div className="flex gap-4 text-xs text-gray-500">
         {[
           { label: 'Confirmed', color: 'bg-green-100' },
-          { label: 'Pending', color: 'bg-amber-200' },
+          { label: 'Pending', color: 'bg-amber-100' },
           { label: 'Assigned', color: 'bg-purple-100' },
           { label: 'In progress', color: 'bg-blue-100' },
           { label: 'Completed', color: 'bg-gray-100' },

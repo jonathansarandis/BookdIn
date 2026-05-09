@@ -7,7 +7,7 @@ import { formatBusinessDateTime } from '@/lib/datetime'
 import { cn } from '@/lib/utils'
 
 const STATUS_CHIP: Record<string, string> = {
-  pending:     'bg-amber-200 text-amber-900',
+  pending:     'bg-amber-100 text-amber-800',
   confirmed:   'bg-green-100 text-green-800',
   assigned:    'bg-purple-100 text-purple-800',
   on_the_way:  'bg-blue-100 text-blue-800',
@@ -29,7 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 const PAYMENT_CHIP: Record<string, string> = {
   paid:     'bg-green-100 text-green-700',
   unpaid:   'bg-yellow-100 text-yellow-700',
-  pending:  'bg-amber-200 text-amber-900',
+  pending:  'bg-amber-100 text-amber-800',
   refunded: 'bg-gray-100 text-gray-600',
   failed:   'bg-red-100 text-red-700',
 }

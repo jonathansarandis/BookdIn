@@ -15,7 +15,7 @@ interface Props {
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 const STATUS_CHIP: Record<string, string> = {
-  pending:     'bg-amber-200 text-amber-900',
+  pending:     'bg-amber-100 text-amber-800',
   confirmed:   'bg-green-100 text-green-800',
   assigned:    'bg-purple-100 text-purple-800',
   on_the_way:  'bg-blue-100 text-blue-800',
