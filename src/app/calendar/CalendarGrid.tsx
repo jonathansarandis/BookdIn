@@ -155,11 +155,13 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                     STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-800'
                   )}
                 >
-                  <div className="text-xs font-medium">
-                    {job.is_flexible_time ? 'Flexible time' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
-                  </div>
-                  <div className="text-sm font-semibold mt-0.5">
-                    {job.customer?.full_name || 'Unknown'}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold truncate">
+                      {job.customer?.full_name || 'Unknown'}
+                    </span>
+                    <span className="text-sm font-medium flex-shrink-0">
+                      {job.is_flexible_time ? 'Flexible' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
+                    </span>
                   </div>
                 </button>
               ))}
