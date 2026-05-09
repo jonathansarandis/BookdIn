@@ -219,6 +219,18 @@ export default function SettingsPage() {
             {/* Business details */}
             <BusinessDetailsCard businessId={business?.id} />
 
+            {/* Locations */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">Locations</h3>
+              <p className="text-xs text-gray-500 mb-4">Manage your service locations and per-location pricing.</p>
+              <a
+                href="/settings/locations"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Manage locations
+              </a>
+            </div>
+
             {/* Business info */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">Business info</h3>
