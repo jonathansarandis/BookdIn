@@ -34,6 +34,7 @@ function getFirstDayOfMonth(year: number, month: number) {
 
 export default function CalendarGrid({ jobs, businessTimezone, year, month }: Props) {
   const [selectedJob, setSelectedJob] = useState<any>(null)
+  const [dayModal, setDayModal] = useState<{ day: number; jobs: any[] } | null>(null)
 
   const nowInBusiness = toBusinessDateTime(new Date().toISOString(), businessTimezone)
   const isCurrentMonth = nowInBusiness.getMonth() === month && nowInBusiness.getFullYear() === year
@@ -106,9 +107,12 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                     </button>
                   ))}
                   {dayJobs.length > 3 && (
-                    <div className="text-[10px] text-gray-400 px-1.5">
+                    <button
+                      onClick={() => setDayModal({ day, jobs: dayJobs })}
+                      className="block w-full text-left text-[10px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded px-1.5 py-0.5 transition-colors"
+                    >
                       +{dayJobs.length - 3} more
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -116,6 +120,53 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
           })}
         </div>
       </div>
+
+      {dayModal && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setDayModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900">
+                {dayModal.jobs.length} {dayModal.jobs.length === 1 ? 'booking' : 'bookings'} on day {dayModal.day}
+              </h3>
+              <button
+                onClick={() => setDayModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-y-auto p-3 space-y-2">
+              {dayModal.jobs.map((job: any) => (
+                <button
+                  key={job.id}
+                  onClick={() => {
+                    setSelectedJob(job)
+                    setDayModal(null)
+                  }}
+                  className={cn(
+                    'block w-full text-left px-3 py-2 rounded-lg hover:opacity-80 transition-opacity',
+                    STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-800'
+                  )}
+                >
+                  <div className="text-xs font-medium">
+                    {job.is_flexible_time ? 'Flexible time' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
+                  </div>
+                  <div className="text-sm font-semibold mt-0.5">
+                    {job.customer?.full_name || 'Unknown'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <JobPopover
         job={selectedJob}
