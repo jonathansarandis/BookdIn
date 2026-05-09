@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const {
     business_id,
+    location_id,
     service_id,
     frequency,
     scheduled_date,
@@ -58,6 +59,20 @@ export async function POST(request: NextRequest) {
 
     if (!business) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+    }
+
+    // Validate location belongs to this business
+    if (!location_id) {
+      return NextResponse.json({ error: 'Location is required' }, { status: 400 })
+    }
+    const { data: location } = await supabase
+      .from('locations')
+      .select('id, timezone')
+      .eq('id', location_id)
+      .eq('business_id', business_id)
+      .single()
+    if (!location) {
+      return NextResponse.json({ error: 'Location not found or does not belong to this business' }, { status: 404 })
     }
 
     // 2. Get service details (with room_pricing for server-side recalculation)
@@ -161,12 +176,13 @@ export async function POST(request: NextRequest) {
       .single()
 
     // 5. Create job (pending status — no card yet)
-    const tz = business.timezone || 'Australia/Melbourne'
+    const tz = location.timezone || business.timezone || 'Australia/Melbourne'
     const scheduledAtIso = fromBusinessDateTime(scheduled_date, effectiveTime, tz)
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .insert({
         business_id,
+        location_id,
         customer_id: customerId,
         address_id: addr?.id,
         service_id,

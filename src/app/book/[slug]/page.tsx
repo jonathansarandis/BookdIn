@@ -211,6 +211,7 @@ export default function PublicBookingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           business_id: business.id,
+          location_id: locationId,
           service_id: form.service_id,
           frequency: form.frequency,
           scheduled_date: form.scheduled_date,
