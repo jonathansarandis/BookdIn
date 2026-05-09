@@ -32,6 +32,8 @@ export default function PublicBookingPage() {
   const [step, setStep] = useState(1)
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
   const [freqDiscounts, setFreqDiscounts] = useState<Record<string, { discount_percent: number; is_enabled: boolean }>>({})
+  const [locationId, setLocationId] = useState<string | null>(null)
+  const [locationTimezone, setLocationTimezone] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     service_id: '',
@@ -56,22 +58,62 @@ export default function PublicBookingPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: biz } = await supabase
-        .from('businesses_public')
-        .select('id, name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode')
-        .eq('booking_url_slug', slug)
+      const { data: loc } = await supabase
+        .from('locations_public')
+        .select('location_id, location_timezone, business_id, business_name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode')
+        .eq('location_slug', slug)
         .single()
 
-      if (!biz) { setLoading(false); return }
-      setBusiness(biz)
+      if (!loc) { setLoading(false); return }
 
-      const [{ data: svcs }, { data: fdData }] = await Promise.all([
-        supabase.from('services').select('*, service_extras(*)').eq('business_id', biz.id).eq('is_active', true).order('sort_order'),
-        supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', biz.id),
+      setBusiness({
+        id: loc.business_id,
+        name: loc.business_name,
+        logo_url: loc.logo_url,
+        brand_color: loc.brand_color,
+        tax_rate: loc.tax_rate,
+        tax_name: loc.tax_name,
+        show_tax: loc.show_tax,
+        tax_mode: loc.tax_mode,
+      })
+      setLocationId(loc.location_id)
+      setLocationTimezone(loc.location_timezone)
+
+      const [{ data: locSvcsRaw }, { data: fdData }] = await Promise.all([
+        supabase.from('location_services')
+          .select(`
+            base_price,
+            is_enabled,
+            services!inner (
+              id, name, description, pricing_type, duration_minutes,
+              is_active, sort_order, is_popular, is_quote_only, tax_included,
+              service_extras (
+                id, name, description, duration_minutes, is_active,
+                sort_order, is_popular, is_quote_only,
+                location_extras!inner ( price, is_enabled, location_id )
+              )
+            )
+          `)
+          .eq('location_id', loc.location_id)
+          .eq('is_enabled', true)
+          .eq('services.is_active', true)
+          .order('sort_order', { foreignTable: 'services' }),
+        supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', loc.business_id),
       ])
 
-      setServices(svcs || [])
-      if (svcs?.[0]) update('service_id', svcs[0].id)
+      const flattenedServices = (locSvcsRaw || []).map((row: any) => ({
+        ...row.services,
+        base_price: row.base_price,
+        service_extras: (row.services.service_extras || [])
+          .map((ex: any) => {
+            const locExtra = (ex.location_extras || []).find((le: any) => le.location_id === loc.location_id && le.is_enabled)
+            if (!locExtra) return null
+            return { ...ex, price: locExtra.price, location_extras: undefined }
+          })
+          .filter(Boolean)
+      }))
+      setServices(flattenedServices)
+      if (flattenedServices[0]) update('service_id', flattenedServices[0].id)
       const freqMap: Record<string, { discount_percent: number; is_enabled: boolean }> = {}
       for (const row of fdData || []) freqMap[row.frequency] = { discount_percent: row.discount_percent, is_enabled: row.is_enabled }
       setFreqDiscounts(freqMap)
