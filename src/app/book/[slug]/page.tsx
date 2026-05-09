@@ -477,7 +477,7 @@ export default function PublicBookingPage() {
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-xs text-amber-700">
+              <p className="text-sm text-gray-900">
                 <strong>No payment required now.</strong> After booking you'll receive a secure link by email to save your card details. Your card won't be charged until after your service is complete.
               </p>
             </div>
@@ -535,7 +535,7 @@ export default function PublicBookingPage() {
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-xs text-amber-700">
+              <p className="text-sm text-gray-900">
                 <strong>Next step:</strong> After confirming, we'll call you to confirm the booking and you'll receive an email with a secure link to save your card details.
               </p>
             </div>
