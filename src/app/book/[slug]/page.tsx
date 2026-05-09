@@ -86,7 +86,7 @@ export default function PublicBookingPage() {
             is_enabled,
             services!inner (
               id, name, description, pricing_type, duration_minutes,
-              is_active, sort_order, is_popular, is_quote_only, tax_included,
+              is_active, sort_order,
               service_extras (
                 id, name, description, duration_minutes, is_active,
                 sort_order, is_popular, is_quote_only
