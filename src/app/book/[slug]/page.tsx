@@ -79,7 +79,7 @@ export default function PublicBookingPage() {
       setLocationId(loc.location_id)
       setLocationTimezone(loc.location_timezone)
 
-      const [{ data: locSvcsRaw }, { data: fdData }] = await Promise.all([
+      const [{ data: locSvcsRaw }, { data: locExtrasRaw }, { data: fdData }] = await Promise.all([
         supabase.from('location_services')
           .select(`
             base_price,
@@ -89,8 +89,7 @@ export default function PublicBookingPage() {
               is_active, sort_order, is_popular, is_quote_only, tax_included,
               service_extras (
                 id, name, description, duration_minutes, is_active,
-                sort_order, is_popular, is_quote_only,
-                location_extras!inner ( price, is_enabled, location_id )
+                sort_order, is_popular, is_quote_only
               )
             )
           `)
@@ -98,19 +97,24 @@ export default function PublicBookingPage() {
           .eq('is_enabled', true)
           .eq('services.is_active', true)
           .order('sort_order', { foreignTable: 'services' }),
+        supabase.from('location_extras')
+          .select('extra_id, price, is_enabled')
+          .eq('location_id', loc.location_id)
+          .eq('is_enabled', true),
         supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', loc.business_id),
       ])
+
+      const extraPriceMap: Record<string, number> = {}
+      for (const le of (locExtrasRaw || [])) {
+        extraPriceMap[le.extra_id] = le.price
+      }
 
       const flattenedServices = (locSvcsRaw || []).map((row: any) => ({
         ...row.services,
         base_price: row.base_price,
         service_extras: (row.services.service_extras || [])
-          .map((ex: any) => {
-            const locExtra = (ex.location_extras || []).find((le: any) => le.location_id === loc.location_id && le.is_enabled)
-            if (!locExtra) return null
-            return { ...ex, price: locExtra.price, location_extras: undefined }
-          })
-          .filter(Boolean)
+          .filter((ex: any) => extraPriceMap[ex.id] !== undefined)
+          .map((ex: any) => ({ ...ex, price: extraPriceMap[ex.id] }))
       }))
       setServices(flattenedServices)
       if (flattenedServices[0]) update('service_id', flattenedServices[0].id)
