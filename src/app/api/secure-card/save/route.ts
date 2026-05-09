@@ -1,47 +1,36 @@
 // @ts-nocheck
-// POST /api/secure-card/save  { token, paymentMethodId }
-// No auth required — token IS the proof of identity.
+// POST /api/secure-card/save  { token, paymentMethodId, stripeCustomerId }
+// SetupIntent has already attached the PM to the customer — just persist to DB.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import Stripe from 'stripe'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
-})
-
 export async function POST(request: NextRequest) {
   let token: string
   let paymentMethodId: string
+  let stripeCustomerId: string
 
   try {
     const body = await request.json()
     token = body.token
     paymentMethodId = body.paymentMethodId
+    stripeCustomerId = body.stripeCustomerId
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  if (!token || !paymentMethodId) {
-    return NextResponse.json({ error: 'Missing token or paymentMethodId' }, { status: 400 })
+  if (!token || !paymentMethodId || !stripeCustomerId) {
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  // Re-validate token (same conditions as validate endpoint)
+  // Re-validate token (expired check + not-yet-saved guard)
   const { data: job, error: jobError } = await supabase
     .from('jobs')
-    .select(`
-      id,
-      total_price,
-      customer_id,
-      card_setup_token_expires_at,
-      stripe_payment_method_id,
-      customer:customers(full_name, email),
-      business:businesses(name, stripe_account_id, currency)
-    `)
+    .select('id, card_setup_token_expires_at')
     .eq('card_setup_token', token)
     .is('stripe_payment_method_id', null)
     .single()
@@ -54,40 +43,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Link has expired' }, { status: 410 })
   }
 
-  const stripeAccountId = job.business?.stripe_account_id
-  const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
-
-  let stripeCustomerId: string
-
-  try {
-    // Create a Stripe customer on the connected account for this booking
-    const stripeCustomer = await stripe.customers.create(
-      {
-        email: job.customer?.email,
-        name: job.customer?.full_name,
-        metadata: { job_id: job.id },
-      },
-      stripeOpts
-    )
-    stripeCustomerId = stripeCustomer.id
-  } catch (err: any) {
-    console.error('[secure-card/save] Stripe customer create failed:', err.message)
-    return NextResponse.json({ error: 'Failed to create customer record' }, { status: 500 })
-  }
-
-  try {
-    // Attach the payment method to the customer on the connected account
-    await stripe.paymentMethods.attach(
-      paymentMethodId,
-      { customer: stripeCustomerId },
-      stripeOpts
-    )
-  } catch (err: any) {
-    console.error('[secure-card/save] PaymentMethod attach failed:', err.message)
-    return NextResponse.json({ error: err.message || 'Failed to save card' }, { status: 400 })
-  }
-
-  // Consume token and record the payment method
+  // Stripe already attached the PM to the customer via SetupIntent confirmation.
+  // Persist the result to the database and consume the token.
   const { error: updateError } = await supabase
     .from('jobs')
     .update({

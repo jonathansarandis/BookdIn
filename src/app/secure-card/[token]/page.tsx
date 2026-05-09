@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { loadStripe } from '@stripe/stripe-js'
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,7 +26,15 @@ interface BookingInfo {
 
 // ─── Inner form (must be inside <Elements>) ───────────────────────────────────
 
-function CardForm({ token, info }: { token: string; info: BookingInfo }) {
+function PaymentForm({
+  token,
+  info,
+  stripeCustomerId,
+}: {
+  token: string
+  info: BookingInfo
+  stripeCustomerId: string
+}) {
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
@@ -34,46 +42,6 @@ function CardForm({ token, info }: { token: string; info: BookingInfo }) {
   const [error, setError] = useState<string | null>(null)
 
   const brand = info.brandColor
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!stripe || !elements) return
-    setSubmitting(true)
-    setError(null)
-
-    const cardEl = elements.getElement(CardElement)
-    if (!cardEl) { setSubmitting(false); return }
-
-    const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
-      type: 'card',
-      card: cardEl,
-      billing_details: {
-        name: info.customerName,
-        email: info.customerEmail,
-      },
-    })
-
-    if (pmError) {
-      setError(pmError.message || 'Card error')
-      setSubmitting(false)
-      return
-    }
-
-    try {
-      const res = await fetch('/api/secure-card/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, paymentMethodId: paymentMethod.id }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to save card')
-      setSuccess(true)
-    } catch (err: any) {
-      setError(err.message)
-    }
-
-    setSubmitting(false)
-  }
 
   const formattedDate = info.isFlexibleTime
     ? "Flexible — we'll confirm the exact time closer to your booking"
@@ -83,6 +51,49 @@ function CardForm({ token, info }: { token: string; info: BookingInfo }) {
 
   const formattedTotal = `$${(info.total / 100).toFixed(2)} ${info.currency}`
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!stripe || !elements) return
+    setSubmitting(true)
+    setError(null)
+
+    const { setupIntent, error: confirmError } = await stripe.confirmSetup({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/secure-card/${token}?status=complete`,
+      },
+      redirect: 'if_required',
+    })
+
+    if (confirmError) {
+      setError(confirmError.message || 'Payment setup failed. Please try again.')
+      setSubmitting(false)
+      return
+    }
+
+    if (setupIntent?.status === 'succeeded') {
+      const paymentMethodId =
+        typeof setupIntent.payment_method === 'string'
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id
+
+      try {
+        const res = await fetch('/api/secure-card/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, paymentMethodId, stripeCustomerId }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to save card')
+        setSuccess(true)
+      } catch (err: any) {
+        setError(err.message)
+      }
+    }
+
+    setSubmitting(false)
+  }
+
   if (success) {
     return (
       <div className="text-center py-8">
@@ -91,7 +102,7 @@ function CardForm({ token, info }: { token: string; info: BookingInfo }) {
         </div>
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Card saved!</h2>
         <p className="text-gray-600 text-sm leading-relaxed max-w-sm mx-auto">
-          We'll charge <strong>{formattedTotal}</strong> one day before your service on {' '}
+          We'll charge <strong>{formattedTotal}</strong> one day before your service on{' '}
           {info.isFlexibleTime ? 'your confirmed service date' : formattedDate}.
           You'll receive a receipt by email.
         </p>
@@ -117,25 +128,10 @@ function CardForm({ token, info }: { token: string; info: BookingInfo }) {
         </div>
       </div>
 
-      {/* Card element */}
+      {/* PaymentElement: renders Apple Pay / Google Pay on supported devices above the card form */}
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1.5">Card details</label>
-        <div className="border border-gray-300 rounded-lg px-3 py-3 bg-white focus-within:ring-2 focus-within:ring-offset-0"
-          style={{ '--tw-ring-color': brand } as React.CSSProperties}>
-          <CardElement
-            options={{
-              style: {
-                base: {
-                  fontSize: '14px',
-                  color: '#111827',
-                  fontFamily: "'DM Sans', sans-serif",
-                  '::placeholder': { color: '#9ca3af' },
-                },
-                invalid: { color: '#dc2626' },
-              },
-            }}
-          />
-        </div>
+        <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment details</label>
+        <PaymentElement />
       </div>
 
       {error && (
@@ -170,27 +166,40 @@ export default function SecureCardPage() {
 
   const [loading, setLoading] = useState(true)
   const [info, setInfo] = useState<BookingInfo | null>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null)
   const [invalid, setInvalid] = useState(false)
   const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null)
 
   useEffect(() => {
-    async function validate() {
+    async function setup() {
       try {
-        const res = await fetch(`/api/secure-card/validate?token=${encodeURIComponent(token)}`)
-        if (!res.ok) { setInvalid(true); setLoading(false); return }
-        const data: BookingInfo = await res.json()
+        // 1. Validate token and load booking info
+        const validateRes = await fetch(`/api/secure-card/validate?token=${encodeURIComponent(token)}`)
+        if (!validateRes.ok) { setInvalid(true); setLoading(false); return }
+        const data: BookingInfo = await validateRes.json()
         setInfo(data)
 
-        // Load Stripe with connected account if present
         const pubKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
         const opts = data.stripeAccountId ? { stripeAccount: data.stripeAccountId } : undefined
         setStripePromise(loadStripe(pubKey, opts))
+
+        // 2. Create SetupIntent on the connected account and get clientSecret
+        const initRes = await fetch('/api/secure-card/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        })
+        if (!initRes.ok) { setInvalid(true); setLoading(false); return }
+        const initData = await initRes.json()
+        setClientSecret(initData.clientSecret)
+        setStripeCustomerId(initData.stripeCustomerId)
       } catch {
         setInvalid(true)
       }
       setLoading(false)
     }
-    validate()
+    setup()
   }, [token])
 
   if (loading) {
@@ -201,7 +210,7 @@ export default function SecureCardPage() {
     )
   }
 
-  if (invalid || !info || !stripePromise) {
+  if (invalid || !info || !stripePromise || !clientSecret || !stripeCustomerId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl border border-gray-200 p-8 max-w-sm w-full text-center">
@@ -222,6 +231,18 @@ export default function SecureCardPage() {
         </div>
       </div>
     )
+  }
+
+  const elementsOptions = {
+    clientSecret,
+    appearance: {
+      theme: 'stripe' as const,
+      variables: {
+        colorPrimary: '#1E9BFF',
+        borderRadius: '8px',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+      },
+    },
   }
 
   return (
@@ -249,8 +270,8 @@ export default function SecureCardPage() {
             A pre-authorisation will be processed one day before your appointment to reserve the funds, this is not a charge. Once your clean is complete, the final amount will be processed.
           </p>
 
-          <Elements stripe={stripePromise}>
-            <CardForm token={token} info={info} />
+          <Elements stripe={stripePromise} options={elementsOptions}>
+            <PaymentForm token={token} info={info} stripeCustomerId={stripeCustomerId} />
           </Elements>
         </div>
       </div>

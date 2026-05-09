@@ -44,6 +44,7 @@ export async function middleware(request: NextRequest) {
     '/api/stripe/webhook',
     '/provider/login',
     '/provider/accept',
+    '/.well-known',
   ]
   const isPublic = publicPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
 
