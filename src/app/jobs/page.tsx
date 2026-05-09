@@ -40,19 +40,26 @@ function formatDateTime(dateStr: string) {
 export default async function JobsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; filter?: string }
+  searchParams: { status?: string; filter?: string; location?: string }
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
 
+  const { data: locations } = await supabase
+    .from('locations')
+    .select('id, name')
+    .eq('business_id', profile!.business_id!)
+    .order('name')
+
   let query = supabase
     .from('jobs')
-    .select('*, customer:customers(full_name, email), service:services(name), provider:providers(display_name, color), address:addresses(line1, city)')
+    .select('*, customer:customers(full_name, email), service:services(name), provider:providers(display_name, color), address:addresses(line1, city), location:locations(id, name)')
     .eq('business_id', profile!.business_id!)
     .order('scheduled_at', { ascending: false })
 
   if (searchParams.status) query = query.eq('status', searchParams.status)
+  if (searchParams.location) query = query.eq('location_id', searchParams.location)
 
   const today = new Date()
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
@@ -132,6 +139,43 @@ export default async function JobsPage({
         </div>
       </div>
 
+      {locations && locations.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href={`/jobs?${new URLSearchParams({
+              ...(searchParams.filter ? { filter: searchParams.filter } : {}),
+              ...(searchParams.status ? { status: searchParams.status } : {}),
+            }).toString()}`}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+              !searchParams.location
+                ? 'bg-brand-500 text-white'
+                : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300'
+            )}
+          >
+            All locations
+          </Link>
+          {locations.map(loc => (
+            <Link
+              key={loc.id}
+              href={`/jobs?${new URLSearchParams({
+                ...(searchParams.filter ? { filter: searchParams.filter } : {}),
+                ...(searchParams.status ? { status: searchParams.status } : {}),
+                location: loc.id,
+              }).toString()}`}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                searchParams.location === loc.id
+                  ? 'bg-brand-500 text-white'
+                  : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300'
+              )}
+            >
+              {loc.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {/* Table */}
       {jobs && jobs.length > 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -161,7 +205,14 @@ export default async function JobsPage({
                           {getInitials(job.customer?.full_name || '?')}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{job.customer?.full_name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{job.customer?.full_name}</p>
+                            {job.location?.name && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                {job.location.name.slice(0, 3)}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-400">{job.address?.line1 || job.customer?.email || ''}</p>
                         </div>
                       </Link>
