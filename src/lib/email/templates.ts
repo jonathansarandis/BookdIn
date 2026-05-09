@@ -153,9 +153,11 @@ function bookingSummaryTable(
   service: ServiceEmailData,
   address: AddressEmailData,
   business: BusinessEmailData,
-  flexDateText = 'Flexible time',
 ): string {
-  const dateStr = job.is_flexible_time ? flexDateText : formatBusinessDateTime(job.scheduled_at, business.timezone)
+  const dateStr = formatBusinessDateTime(job.scheduled_at, business.timezone, 'EEEE, d MMMM yyyy')
+  const timeStr = job.is_flexible_time
+    ? "Flexible — we'll confirm closer to your booking"
+    : formatBusinessDateTime(job.scheduled_at, business.timezone, 'h:mm a')
   const taxCents = job.tax_amount ?? 0
   const showTax = taxCents > 0
   const subtotalCents = job.total_price - taxCents
@@ -189,8 +191,14 @@ function bookingSummaryTable(
       </tr>
       <tr>
         <td style="${cellStyle}">
-          <p style="${labelStyle}">Date &amp; time</p>
+          <p style="${labelStyle}">Date</p>
           <p style="${valueStyle}">${dateStr}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Time</p>
+          <p style="${valueStyle}">${timeStr}</p>
         </td>
       </tr>
       <tr>
@@ -289,9 +297,10 @@ export function bookingConfirmationTemplate(data: {
   const { job, customer, business, address, service, cardSetupUrl } = data
   const color = accent(business)
   const firstName = customer.full_name.split(' ')[0]
-  const dateStr = job.is_flexible_time
+  const dateStr = formatBusinessDateTime(job.scheduled_at, business.timezone, 'EEEE, d MMMM yyyy')
+  const timeStr = job.is_flexible_time
     ? "Flexible — we'll confirm a specific time closer to your booking"
-    : formatBusinessDateTime(job.scheduled_at, business.timezone)
+    : formatBusinessDateTime(job.scheduled_at, business.timezone, 'h:mm a')
 
   const paymentSection = cardSetupUrl
     ? `<div style="background-color:#fefce8;border:1px solid #fde047;border-radius:8px;padding:20px;margin-bottom:24px;">
@@ -321,7 +330,7 @@ export function bookingConfirmationTemplate(data: {
     <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6;">
       Thanks for booking with us! Your booking has been received and we'll be in touch shortly to confirm.
     </p>
-    ${bookingSummaryTable(job, service, address, business, "Flexible — we'll confirm a specific time closer to your booking")}
+    ${bookingSummaryTable(job, service, address, business)}
     ${paymentSection}
     <p style="margin:0;color:#6b7280;font-size:14px;line-height:1.6;">
       Questions? Simply reply to this email and we'll get back to you.
@@ -334,6 +343,7 @@ export function bookingConfirmationTemplate(data: {
     '',
     `Service: ${service.name}`,
     `Date: ${dateStr}`,
+    `Time: ${timeStr}`,
     `Address: ${formatAddr(address)}`,
     `Total: ${formatMoney(job.total_price, business.currency)}`,
     '',
@@ -488,7 +498,10 @@ export function reminderTemplate(data: {
   const { job, customer, business, address, service } = data
   const color = accent(business)
   const firstName = customer.full_name.split(' ')[0]
-  const dateStr = job.is_flexible_time ? "Flexible time (we'll text you 1 hour before)" : formatBusinessDateTime(job.scheduled_at, business.timezone)
+  const dateStr = formatBusinessDateTime(job.scheduled_at, business.timezone, 'EEEE, d MMMM yyyy')
+  const timeStr = job.is_flexible_time
+    ? "Flexible — we'll text you 1 hour before"
+    : formatBusinessDateTime(job.scheduled_at, business.timezone, 'h:mm a')
 
   const subject = `Reminder: ${service.name} is tomorrow`
 
@@ -497,7 +510,7 @@ export function reminderTemplate(data: {
     <p style="margin:0 0 24px;color:#6b7280;font-size:15px;line-height:1.6;">
       This is a friendly reminder that your service is scheduled for <strong>tomorrow</strong>. We look forward to seeing you!
     </p>
-    ${bookingSummaryTable(job, service, address, business, "Flexible time (we'll text you 1 hour before)")}
+    ${bookingSummaryTable(job, service, address, business)}
     <div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:24px;">
       <p style="margin:0;color:${color};font-size:14px;line-height:1.6;">
         Please ensure someone is home and the property is accessible at the scheduled time.
@@ -514,6 +527,7 @@ export function reminderTemplate(data: {
     '',
     `Service: ${service.name}`,
     `Date: ${dateStr}`,
+    `Time: ${timeStr}`,
     `Address: ${formatAddr(address)}`,
     `Total: ${formatMoney(job.total_price, business.currency)}`,
     '',

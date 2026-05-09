@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
+import { fromBusinessDateTime } from '@/lib/datetime'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -160,7 +161,8 @@ export async function POST(request: NextRequest) {
       .single()
 
     // 5. Create job (pending status — no card yet)
-    const scheduledAt = new Date(`${scheduled_date}T${effectiveTime}:00`)
+    const tz = business.timezone || 'Australia/Melbourne'
+    const scheduledAtIso = fromBusinessDateTime(scheduled_date, effectiveTime, tz)
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .insert({
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
         address_id: addr?.id,
         service_id,
         status: 'pending',
-        scheduled_at: scheduledAt.toISOString(),
+        scheduled_at: scheduledAtIso,
         duration_minutes: service?.duration_minutes || 120,
         price: taxSplit.subtotal,
         total_price: taxSplit.total,
@@ -311,7 +313,7 @@ export async function POST(request: NextRequest) {
     await sendBookingConfirmation({
       job: {
         id: job.id,
-        scheduled_at: scheduledAt.toISOString(),
+        scheduled_at: scheduledAtIso,
         total_price: taxSplit.total,
         tax_amount: taxSplit.tax,
         is_flexible_time: isFlexible,

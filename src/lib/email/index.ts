@@ -90,11 +90,9 @@ export async function sendBookingConfirmation(params: {
       const cancellationCutoff: string = (bizExtra as any)?.cancellation_cutoff ?? '5 PM'
 
       const tz = params.business.timezone
-      const dateStr = params.job.is_flexible_time
-        ? "Flexible — we'll confirm a specific time closer to your booking"
-        : formatBusinessDateTime(params.job.scheduled_at, tz, 'EEEE, d MMMM yyyy')
+      const dateStr = formatBusinessDateTime(params.job.scheduled_at, tz, 'EEEE, d MMMM yyyy')
       const arrivalStr = params.job.is_flexible_time
-        ? 'Flexible'
+        ? "Flexible — we'll confirm a specific time closer to your booking"
         : formatBusinessDateTime(params.job.scheduled_at, tz, 'h:mm a')
 
       const taxCents = params.job.tax_amount ?? 0
@@ -143,7 +141,7 @@ export async function sendBookingConfirmation(params: {
           .replace(/\*([^*]+)\*/g, '$1')
           .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
           .replace(/\{\{booking_details\}\}/g,
-            `---\nService: ${params.service.name}\nDate: ${dateStr}\nAddress: ${vars.address}\nTotal: ${vars.total}\n---`)
+            `---\nService: ${params.service.name}\nDate: ${dateStr}\nTime: ${arrivalStr}\nAddress: ${vars.address}\nTotal: ${vars.total}\n---`)
           .replace(/\{\{payment_button\}\}/g,
             params.cardSetupUrl ? `Add card details securely: ${params.cardSetupUrl}` : ''),
         vars,
