@@ -17,7 +17,7 @@ interface Props {
   stateOptions?: string[]
 }
 
-const cls = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent'
+const cls = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent'
 const lbl = 'block text-xs font-medium text-gray-600 mb-1.5'
 
 export default function AddressAutocomplete({ value, onChange, stateOptions }: Props) {
