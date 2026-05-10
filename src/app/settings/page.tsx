@@ -8,6 +8,7 @@ import Topbar from '@/components/layout/Topbar'
 import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react'
 import EmailTemplateCard from '@/app/settings/EmailTemplateCard'
 import BusinessDetailsCard from '@/app/settings/BusinessDetailsCard'
+import SmsConfigCard from '@/app/settings/SmsConfigCard'
 
 const TIMEZONES = [
   { label: 'Melbourne / Sydney (AEST)', value: 'Australia/Melbourne' },
@@ -230,6 +231,9 @@ export default function SettingsPage() {
                 Manage locations
               </a>
             </div>
+
+            {/* SMS notifications */}
+            <SmsConfigCard businessId={business?.id} />
 
             {/* Business info */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
