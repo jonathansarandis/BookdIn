@@ -1,4 +1,5 @@
 import { decrypt } from '@/lib/crypto'
+import { normalizeAuPhone } from './phone'
 
 export interface BusinessSmsConfig {
   sms_provider: string | null
@@ -67,10 +68,9 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
     return { status: 'failed', error: `decrypt failed: ${err.message}`, rendered_text: text }
   }
 
-  // Normalize phone to E.164. Dialpad requires + prefix and country code.
-  // Caller should pass already-normalized; we do a basic sanity check.
-  if (!toPhone.startsWith('+')) {
-    return { status: 'failed', error: `phone not in E.164 format: ${toPhone}`, rendered_text: text }
+  const normalizedPhone = normalizeAuPhone(toPhone)
+  if (!normalizedPhone) {
+    return { status: 'failed', error: `phone could not be normalized to E.164: ${toPhone}`, rendered_text: text }
   }
 
   try {
@@ -82,7 +82,7 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
       },
       body: JSON.stringify({
         user_id: business.sms_user_id,
-        to_numbers: [toPhone],
+        to_numbers: [normalizedPhone],
         text,
       }),
     })
