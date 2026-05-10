@@ -17,6 +17,77 @@ export interface SmsTemplateVars {
   time: string         // pre-formatted, e.g. "10:30 AM" or "Flexible time"
   business_name: string
   business_phone: string
+  // NEW (for contact upsert; optional)
+  customer_id?: string
+  customer_first_name?: string
+  customer_last_name?: string
+  customer_email?: string
+}
+
+export interface UpsertDialpadContactParams {
+  apiKey: string                 // already decrypted (caller's responsibility)
+  uid: string                    // YOUR stable identifier for this contact (we use bookdin-cust-{customer_id})
+  firstName: string
+  lastName?: string
+  phone: string                  // E.164 format
+  email?: string
+  companyName?: string
+}
+
+export interface UpsertDialpadContactResult {
+  status: 'upserted' | 'failed' | 'skipped'
+  error?: string
+  contact_id?: string
+}
+
+/**
+ * Idempotently upserts a contact in Dialpad. Uses the "create_with_uid" endpoint
+ * which treats the same uid as upsert. Safe to call repeatedly for the same customer.
+ *
+ * Errors are returned, never thrown. Non-blocking by design — caller continues even on failure.
+ */
+export async function upsertDialpadContact(p: UpsertDialpadContactParams): Promise<UpsertDialpadContactResult> {
+  if (!p.apiKey) return { status: 'skipped', error: 'no api key' }
+  if (!p.uid) return { status: 'skipped', error: 'no uid' }
+  if (!p.phone) return { status: 'skipped', error: 'no phone' }
+  if (!p.phone.startsWith('+')) return { status: 'skipped', error: `phone not E.164: ${p.phone}` }
+
+  const url = `https://dialpad.com/api/v2/contacts/${encodeURIComponent(p.uid)}`
+
+  const body: Record<string, any> = {
+    first_name: p.firstName || 'Customer',
+    phones: [p.phone],
+  }
+  if (p.lastName) body.last_name = p.lastName
+  if (p.email) body.emails = [p.email]
+  if (p.companyName) body.company_name = p.companyName
+
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${p.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '<no body>')
+      return {
+        status: 'failed',
+        error: `dialpad contacts http ${response.status}: ${errText.slice(0, 500)}`,
+      }
+    }
+
+    const data = await response.json().catch(() => null)
+    return {
+      status: 'upserted',
+      contact_id: data?.id ? String(data.id) : undefined,
+    }
+  } catch (err: any) {
+    return { status: 'failed', error: `network: ${err.message}` }
+  }
 }
 
 const DEFAULT_TEMPLATE = "Hi {{customer_name}}, Thanks so much for booking with {{business_name}}! All details can be found in your confirmation email. Don't hesitate to reach out if you have any questions. We look forward to working with you!"
@@ -71,6 +142,27 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
   const normalizedPhone = normalizeAuPhone(toPhone)
   if (!normalizedPhone) {
     return { status: 'failed', error: `phone could not be normalized to E.164: ${toPhone}`, rendered_text: text }
+  }
+
+  // Best-effort: upsert the contact in Dialpad so it's saved under the customer's real name.
+  // Non-blocking — any failure is logged and ignored, the SMS still attempts to send.
+  if (vars.customer_id && vars.customer_first_name) {
+    try {
+      const contactResult = await upsertDialpadContact({
+        apiKey,
+        uid: `bookdin-cust-${vars.customer_id}`,
+        firstName: vars.customer_first_name,
+        lastName: vars.customer_last_name,
+        phone: normalizedPhone,
+        email: vars.customer_email,
+        companyName: vars.business_name,
+      })
+      if (contactResult.status === 'failed') {
+        console.warn('Dialpad contact upsert failed (non-blocking):', contactResult.error)
+      }
+    } catch (err: any) {
+      console.warn('Dialpad contact upsert threw (non-blocking):', err.message)
+    }
   }
 
   try {

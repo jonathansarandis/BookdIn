@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       },
       toPhone: to_phone,
       vars: {
+        // No customer_id passed → no Dialpad contact upsert. Tests don't pollute the contact list.
         customer_name: 'Test User',
         service_name: 'Test Service',
         date: 'Today',
