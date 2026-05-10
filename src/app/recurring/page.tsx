@@ -23,8 +23,10 @@ function formatCurrency(cents: number) {
 export default function RecurringPage() {
   const [schedules, setSchedules] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
-  const [services, setServices] = useState<any[]>([])
+  const [locationServices, setLocationServices] = useState<any[]>([])
   const [providers, setProviders] = useState<any[]>([])
+  const [locations, setLocations] = useState<any[]>([])
+  const [filterLocationId, setFilterLocationId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -32,6 +34,7 @@ export default function RecurringPage() {
   const supabase = createClient()
 
   const [form, setForm] = useState({
+    location_id: '',
     customer_id: '',
     service_id: '',
     provider_id: '',
@@ -42,6 +45,14 @@ export default function RecurringPage() {
     notes: '',
   })
 
+  const filteredServicesForForm = locationServices
+    .filter((ls: any) => ls.location_id === form.location_id)
+    .map((ls: any) => ({
+      id: ls.services.id,
+      name: ls.services.name,
+      base_price: ls.base_price,
+    }))
+
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -49,17 +60,22 @@ export default function RecurringPage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
       setBusinessId(profile?.business_id)
 
-      const [{ data: scheds }, { data: custs }, { data: svcs }, { data: prvs }] = await Promise.all([
-        supabase.from('recurring_schedules').select('*, customer:customers(full_name), service:services(name), provider:providers(display_name)').eq('business_id', profile?.business_id).order('next_scheduled_at'),
+      const [{ data: scheds }, { data: custs }, { data: locSvcs }, { data: prvs }, { data: locs }] = await Promise.all([
+        supabase.from('recurring_schedules').select('*, customer:customers(full_name), service:services(name), provider:providers(display_name), location:locations(id, name)').eq('business_id', profile?.business_id).order('next_scheduled_at'),
         supabase.from('customers').select('id, full_name').eq('business_id', profile?.business_id).order('full_name'),
-        supabase.from('services').select('id, name, base_price').eq('business_id', profile?.business_id).eq('is_active', true),
+        supabase.from('location_services').select('location_id, base_price, is_enabled, services!inner(id, name, business_id, is_active)').eq('services.business_id', profile?.business_id).eq('is_enabled', true).eq('services.is_active', true),
         supabase.from('providers').select('id, display_name').eq('business_id', profile?.business_id).eq('is_active', true),
+        supabase.from('locations').select('id, name').eq('business_id', profile?.business_id).eq('is_active', true).order('name'),
       ])
 
       setSchedules(scheds || [])
       setCustomers(custs || [])
-      setServices(svcs || [])
+      setLocationServices(locSvcs || [])
       setProviders(prvs || [])
+      setLocations(locs || [])
+      if (locs && locs.length > 0) {
+        setForm(f => ({ ...f, location_id: locs[0].id }))
+      }
       setLoading(false)
     }
     load()
@@ -67,16 +83,17 @@ export default function RecurringPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.customer_id || !form.service_id || !form.next_scheduled_at) return
+    if (!form.customer_id || !form.service_id || !form.next_scheduled_at || !form.location_id) return
     setSaving(true)
 
-    const selectedService = services.find(s => s.id === form.service_id)
+    const selectedService = filteredServicesForForm.find(s => s.id === form.service_id)
     const price = form.price ? Math.round(parseFloat(form.price) * 100) : selectedService?.base_price || 0
 
     const { data, error } = await supabase
       .from('recurring_schedules')
       .insert({
         business_id: businessId,
+        location_id: form.location_id,
         customer_id: form.customer_id,
         service_id: form.service_id,
         provider_id: form.provider_id || null,
@@ -87,14 +104,14 @@ export default function RecurringPage() {
         auto_charge: form.auto_charge,
         notes: form.notes || null,
       })
-      .select('*, customer:customers(full_name), service:services(name), provider:providers(display_name)')
+      .select('*, customer:customers(full_name), service:services(name), provider:providers(display_name), location:locations(id, name)')
       .single()
 
     setSaving(false)
     if (!error && data) {
       setSchedules(prev => [...prev, data])
       setShowForm(false)
-      setForm({ customer_id: '', service_id: '', provider_id: '', frequency: 'fortnightly', next_scheduled_at: '', price: '', auto_charge: true, notes: '' })
+      setForm({ location_id: locations[0]?.id || '', customer_id: '', service_id: '', provider_id: '', frequency: 'fortnightly', next_scheduled_at: '', price: '', auto_charge: true, notes: '' })
     }
   }
 
@@ -114,6 +131,8 @@ export default function RecurringPage() {
     const multiplier = s.frequency === 'weekly' ? 4 : s.frequency === 'fortnightly' ? 2 : 1
     return sum + (s.price || 0) * multiplier
   }, 0)
+
+  const visibleSchedules = schedules.filter(s => !filterLocationId || s.location_id === filterLocationId)
 
   return (
     <div className="space-y-6">
@@ -156,6 +175,13 @@ export default function RecurringPage() {
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-500 mb-1">Location *</label>
+                <select required value={form.location_id} onChange={e => setForm(f => ({ ...f, location_id: e.target.value, service_id: '', price: '' }))}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Customer *</label>
                 <select required value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}
@@ -167,12 +193,12 @@ export default function RecurringPage() {
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Service *</label>
                 <select required value={form.service_id} onChange={e => {
-                  const svc = services.find(s => s.id === e.target.value)
+                  const svc = filteredServicesForForm.find(s => s.id === e.target.value)
                   setForm(f => ({ ...f, service_id: e.target.value, price: svc ? (svc.base_price / 100).toFixed(2) : '' }))
                 }}
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
                   <option value="">Select service...</option>
-                  {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {filteredServicesForForm.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
             </div>
@@ -236,9 +262,22 @@ export default function RecurringPage() {
       )}
 
       {/* Schedules list */}
+      {locations.length > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">Filter by location:</span>
+          <select
+            value={filterLocationId}
+            onChange={e => setFilterLocationId(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white"
+          >
+            <option value="">All locations</option>
+            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+      )}
       {loading ? (
         <div className="text-sm text-gray-400 py-8 text-center">Loading...</div>
-      ) : schedules.length === 0 ? (
+      ) : visibleSchedules.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <RefreshCw className="w-10 h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">No recurring schedules yet</p>
@@ -259,9 +298,18 @@ export default function RecurringPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {schedules.map(schedule => (
+              {visibleSchedules.map(schedule => (
                 <tr key={schedule.id} className={`hover:bg-gray-50 ${!schedule.is_active ? 'opacity-60' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{schedule.customer?.full_name || '—'}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    <div className="flex items-center gap-2">
+                      <span>{schedule.customer?.full_name || '—'}</span>
+                      {schedule.location?.name && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                          {schedule.location.name.slice(0, 3)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{schedule.service?.name || '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{FREQ_LABELS[schedule.frequency] || schedule.frequency}</td>
                   <td className="px-4 py-3 text-gray-600">{schedule.next_scheduled_at ? formatDate(schedule.next_scheduled_at) : '—'}</td>
