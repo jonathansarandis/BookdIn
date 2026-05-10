@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     // 1. Get business details
     const { data: business } = await supabase
       .from('businesses')
-      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded, stripe_charges_enabled, plan, currency, tax_rate, tax_mode, show_tax')
+      .select('id, name, slug, logo_url, brand_color, contact_email, timezone, stripe_onboarded, stripe_charges_enabled, plan, currency, tax_rate, tax_mode, show_tax, sms_provider, sms_api_key_encrypted, sms_api_key_iv, sms_user_id, sms_from_number, sms_template, sms_enabled, phone')
       .eq('id', business_id)
       .single()
 
@@ -377,6 +377,57 @@ export async function POST(request: NextRequest) {
       business_id: business_id,
     })
 
+
+    // 13. Send confirmation SMS to customer (non-blocking — booking succeeds even if SMS fails)
+    try {
+      const { sendDialpadSms } = await import('@/lib/sms/dialpad')
+      const { formatDateForSms, formatTimeForSms } = await import('@/lib/sms/format')
+
+      const smsResult = await sendDialpadSms({
+        business: {
+          sms_provider: business.sms_provider,
+          sms_api_key_encrypted: business.sms_api_key_encrypted,
+          sms_api_key_iv: business.sms_api_key_iv,
+          sms_user_id: business.sms_user_id,
+          sms_template: business.sms_template,
+          sms_enabled: business.sms_enabled,
+        },
+        toPhone: customer.phone || '',
+        vars: {
+          customer_name: customer.full_name?.split(' ')[0] || customer.full_name || '',  // first name only for warmth
+          service_name: service?.name || 'Service',
+          date: formatDateForSms(scheduledAtIso, tz),
+          time: formatTimeForSms(scheduledAtIso, tz, isFlexible),
+          business_name: business.name,
+          business_phone: business.phone || '',
+        },
+      })
+
+      // Persist SMS audit info on the job row
+      const updates: Record<string, any> = { sms_status: smsResult.status }
+      if (smsResult.error) updates.sms_error = smsResult.error.slice(0, 500)
+      if (smsResult.status === 'sent') updates.sms_sent_at = new Date().toISOString()
+
+      const { error: updateError } = await supabase.from('jobs').update(updates).eq('id', job.id)
+      if (updateError) console.error('Failed to persist SMS audit:', updateError)
+
+      if (smsResult.status === 'failed') {
+        console.error('SMS failed:', smsResult.error, 'job:', job.id)
+      } else if (smsResult.status === 'skipped') {
+        console.log('SMS skipped:', smsResult.error, 'job:', job.id)
+      } else {
+        console.log('SMS sent:', smsResult.message_id, 'job:', job.id)
+      }
+    } catch (err: any) {
+      // Even if the SMS module itself throws (e.g., env var missing), don't block the booking
+      console.error('SMS handler threw (booking still successful):', err)
+      try {
+        await supabase.from('jobs').update({
+          sms_status: 'failed',
+          sms_error: `handler threw: ${err.message?.slice(0, 400)}`,
+        }).eq('id', job.id)
+      } catch { /* best-effort audit */ }
+    }
 
     // Save lead source attribution
     if (utm_data) {
