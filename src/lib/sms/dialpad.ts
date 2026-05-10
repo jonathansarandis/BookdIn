@@ -145,10 +145,15 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
   }
 
   // Best-effort: upsert the contact in Dialpad so it's saved under the customer's real name.
-  // Non-blocking — any failure is logged and ignored, the SMS still attempts to send.
+  console.log('[sms] contact upsert check:', {
+    has_customer_id: !!vars.customer_id,
+    has_customer_first_name: !!vars.customer_first_name,
+    customer_id: vars.customer_id,
+    customer_first_name: vars.customer_first_name,
+  })
   if (vars.customer_id && vars.customer_first_name) {
     try {
-      const contactResult = await upsertDialpadContact({
+      const upsertParams = {
         apiKey,
         uid: `bookdin-cust-${vars.customer_id}`,
         firstName: vars.customer_first_name,
@@ -156,7 +161,10 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
         phone: normalizedPhone,
         email: vars.customer_email,
         companyName: vars.business_name,
-      })
+      }
+      console.log('[sms] upsertDialpadContact params:', { ...upsertParams, apiKey: '[redacted]' })
+      const contactResult = await upsertDialpadContact(upsertParams)
+      console.log('[sms] upsertDialpadContact result:', contactResult)
       if (contactResult.status === 'failed') {
         console.warn('Dialpad contact upsert failed (non-blocking):', contactResult.error)
       }
