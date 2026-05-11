@@ -19,11 +19,15 @@ const INPUT_CLASS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-color)] focus:border-transparent'
 
 export default function CustomFieldInput({ field, value, onChange, disabled }: Props) {
-  const opts: string[] = Array.isArray(field.options?.options)
-    ? field.options.options
-    : Array.isArray(field.options)
+  // options are stored as [{ label, value }] by the form builder
+  const rawOpts: { label: string; value: string }[] = Array.isArray(field.options)
     ? field.options
+    : Array.isArray(field.options?.options)
+    ? field.options.options
     : []
+  const opts = rawOpts.map(o =>
+    typeof o === 'string' ? { label: o, value: o } : { label: o.label ?? String(o), value: o.value ?? o.label ?? String(o) }
+  )
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
@@ -78,7 +82,7 @@ export default function CustomFieldInput({ field, value, onChange, disabled }: P
         >
           <option value="">Select an option</option>
           {opts.map(o => (
-            <option key={o} value={o}>{o}</option>
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
       )}
@@ -86,17 +90,17 @@ export default function CustomFieldInput({ field, value, onChange, disabled }: P
       {field.field_type === 'radio' && (
         <div className="space-y-2">
           {opts.map(o => (
-            <label key={o} className="flex items-center gap-2 cursor-pointer">
+            <label key={o.value} className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 name={field.id}
-                value={o}
-                checked={value === o}
-                onChange={() => onChange(o)}
+                value={o.value}
+                checked={value === o.value}
+                onChange={() => onChange(o.value)}
                 disabled={disabled}
                 className="h-4 w-4 border-gray-300"
               />
-              <span className="text-sm text-gray-700">{o}</span>
+              <span className="text-sm text-gray-700">{o.label}</span>
             </label>
           ))}
         </div>
