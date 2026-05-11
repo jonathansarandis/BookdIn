@@ -196,14 +196,44 @@ export default function BookingFormRenderer({
     }
   }
 
-  if (loading) return <div className="p-4 text-sm text-gray-500">Loading booking form…</div>
-  if (loadError) return <div className="p-4 text-sm text-red-600">Error: {loadError}</div>
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-sm text-gray-500">Loading booking form…</div>
+  )
+  if (loadError) return (
+    <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">
+      <strong>Error loading form:</strong> {loadError}
+    </div>
+  )
 
   return (
-    <div className="p-4">
-      <pre className="text-xs whitespace-pre-wrap break-all bg-gray-50 border border-gray-200 rounded-lg p-4">
-        {JSON.stringify(formData, null, 2)}
-      </pre>
+    <div className="space-y-6">
+      <DebugSection title="Form" data={formData.form} />
+      <DebugSection title={`Steps (${formData.steps.length})`} data={formData.steps} />
+      <DebugSection title={`Placements (${formData.placements.length})`} data={formData.placements} />
+      <DebugSection title={`Custom Fields (${formData.customFields.length})`} data={formData.customFields} />
+      <DebugSection title={`Services (${formData.services.length})`} data={formData.services} />
+      <DebugSection title="Business" data={formData.business} />
+      <DebugSection title={`Frequency Discounts (${formData.frequencyDiscounts.length})`} data={formData.frequencyDiscounts} />
+    </div>
+  )
+}
+
+function DebugSection({ title, data }: { title: string; data: any }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+      >
+        <span className="text-sm font-semibold text-gray-900">{title}</span>
+        <span className="text-xs text-gray-400">{open ? 'Collapse' : 'Expand'}</span>
+      </button>
+      {open && (
+        <pre className="text-xs text-gray-700 bg-gray-50 px-4 py-3 overflow-x-auto border-t border-gray-200 leading-relaxed">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      )}
     </div>
   )
 }
