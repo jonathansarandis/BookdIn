@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { sendBookingConfirmation } from '@/lib/email'
+import { sendBookingConfirmation, sendOwnerBookingNotification } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { fromBusinessDateTime } from '@/lib/datetime'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
@@ -420,7 +420,54 @@ export async function POST(request: NextRequest) {
       await logStep(supabase, submissionId!, { step: 'customer_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_email })
     }
 
-    // 13. Send confirmation SMS to customer (non-critical)
+    // 13. Send owner notification email (non-critical)
+    const t_owner_email = Date.now()
+    try {
+      if (!business.contact_email) {
+        await logStep(supabase, submissionId!, { step: 'owner_email', status: 'failed', error: 'no contact_email configured', duration_ms: Date.now() - t_owner_email })
+      } else {
+        const jobUrl = `${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}`
+        const ownerResult = await sendOwnerBookingNotification({
+          job: {
+            id: job.id,
+            scheduled_at: scheduledAtIso,
+            total_price: taxSplit.total,
+            tax_amount: taxSplit.tax,
+            is_flexible_time: isFlexible,
+          },
+          customer: { full_name: customer.full_name, email: customer.email, phone: customer.phone || null },
+          business: {
+            name: business.name,
+            brand_color: business.brand_color,
+            logo_url: business.logo_url,
+            contact_email: business.contact_email,
+            timezone: tz,
+            plan: business.plan,
+            currency: business.currency,
+          },
+          address: {
+            line1: address.line1,
+            city: address.city,
+            state: address.state,
+            postcode: address.postcode,
+          },
+          service: { name: service?.name || 'Service' },
+          frequency: frequency ?? null,
+          jobUrl,
+          ownerEmail: business.contact_email,
+        })
+        await logStep(supabase, submissionId!, {
+          step: 'owner_email',
+          status: ownerResult.success ? 'ok' : 'failed',
+          duration_ms: Date.now() - t_owner_email,
+          ...(ownerResult.success ? {} : { error: ownerResult.error }),
+        })
+      }
+    } catch (e: any) {
+      await logStep(supabase, submissionId!, { step: 'owner_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_owner_email })
+    }
+
+    // 14. Send confirmation SMS to customer (non-critical)
     const t_sms = Date.now()
     try {
       const { sendDialpadSms } = await import('@/lib/sms/dialpad')

@@ -359,6 +359,123 @@ export function bookingConfirmationTemplate(data: {
   return { subject, html, text: textLines.join('\n') }
 }
 
+// ─── Owner booking notification ───────────────────────────────────────────
+
+export function ownerBookingNotificationTemplate(data: {
+  job: JobEmailData
+  customer: CustomerEmailData & { phone?: string | null }
+  business: BusinessEmailData
+  address: AddressEmailData
+  service: ServiceEmailData
+  frequency?: string | null
+  jobUrl: string
+}): TemplateResult {
+  const { job, customer, business, address, service, frequency, jobUrl } = data
+  const color = accent(business)
+  const dateShort = formatBusinessDateTime(job.scheduled_at, business.timezone, 'd MMM yyyy')
+  const dateLong  = formatBusinessDateTime(job.scheduled_at, business.timezone, 'EEEE, d MMMM yyyy')
+  const timeStr   = job.is_flexible_time
+    ? 'Flexible — confirm closer to booking'
+    : formatBusinessDateTime(job.scheduled_at, business.timezone, 'h:mm a')
+
+  const subject = job.is_flexible_time
+    ? `New booking — ${customer.full_name} (flexible date)`
+    : `New booking — ${customer.full_name} — ${dateShort}`
+
+  const freqMap: Record<string, string> = {
+    one_time:    'One time',
+    weekly:      'Weekly',
+    fortnightly: 'Fortnightly',
+    monthly:     'Monthly',
+  }
+  const freqLabel = frequency ? (freqMap[frequency] ?? frequency) : null
+
+  const labelStyle = 'margin:0 0 2px;color:#8a8275;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;'
+  const valueStyle = 'margin:0;color:#1a1a1a;font-size:14px;line-height:1.5;'
+  const cellStyle  = 'padding:14px 16px;border-bottom:1px solid #ebe5d9;'
+
+  const frequencyRow = freqLabel ? `
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Frequency</p>
+          <p style="${valueStyle}">${freqLabel}</p>
+        </td>
+      </tr>` : ''
+
+  const contactParts: string[] = []
+  if (customer.phone) {
+    contactParts.push(`<a href="tel:${customer.phone}" style="color:${color};text-decoration:none;">${customer.phone}</a>`)
+  }
+  contactParts.push(`<a href="mailto:${customer.email}" style="color:${color};text-decoration:none;">${customer.email}</a>`)
+
+  const html = wrapEmail(business, `
+    <p style="margin:0 0 8px;text-align:center;color:${color};font-size:24px;font-weight:700;">New Booking</p>
+    <p style="margin:0 0 12px;text-align:center;color:#6b7280;font-size:15px;line-height:1.6;">
+      You have a new booking from <strong>${customer.full_name}</strong>.
+    </p>
+    <p style="margin:0 0 24px;text-align:center;font-size:13px;line-height:1.8;">
+      ${contactParts.join(' &nbsp;&middot;&nbsp; ')}
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#faf7f2;border-radius:8px;border:1px solid #ebe5d9;overflow:hidden;margin-bottom:24px;">
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Date</p>
+          <p style="${valueStyle}">${dateLong}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Time</p>
+          <p style="${valueStyle}">${timeStr}</p>
+        </td>
+      </tr>
+      ${frequencyRow}
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Address</p>
+          <p style="${valueStyle}">${formatAddr(address)}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${labelStyle}">Service</p>
+          <p style="${valueStyle}">${service.name}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:14px 16px;background-color:#f0ebe3;">
+          <p style="${labelStyle}">Total</p>
+          <p style="margin:0;color:#1a1a1a;font-size:17px;font-weight:600;">${formatMoney(job.total_price, business.currency)}</p>
+        </td>
+      </tr>
+    </table>
+    <div style="text-align:center;margin:32px 0;">
+      <a href="${jobUrl}" style="display:inline-block;background-color:${color};color:#ffffff;padding:16px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:600;">
+        View booking in BookdIn &rarr;
+      </a>
+    </div>`)
+
+  const textLines = [
+    `New booking — ${customer.full_name}`,
+    '',
+    `Phone: ${customer.phone || 'Not provided'}`,
+    `Email: ${customer.email}`,
+    '',
+    `Date: ${dateLong}`,
+    `Time: ${timeStr}`,
+    ...(freqLabel ? [`Frequency: ${freqLabel}`] : []),
+    `Address: ${formatAddr(address)}`,
+    `Service: ${service.name}`,
+    `Total: ${formatMoney(job.total_price, business.currency)}`,
+    '',
+    `View in BookdIn: ${jobUrl}`,
+    '',
+    '— BookdIn',
+  ]
+
+  return { subject, html, text: textLines.join('\n') }
+}
+
 // ─── Receipt ───────────────────────────────────────────────────────────────
 
 export function receiptTemplate(data: {
