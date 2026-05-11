@@ -607,15 +607,16 @@ export default function FormBuilderPage() {
 
     if (!formRes.data) { setLoadError('No booking form found for this business. Please contact support.'); setLoading(false); return }
 
-    const [stepsRes, placementsRes] = await Promise.all([
-      supabase.from('booking_form_steps').select('*').eq('form_id', formRes.data.id).order('sort_order'),
-      supabase.from('booking_form_field_placements').select('*').eq('form_id', formRes.data.id).order('sort_order'),
-    ])
+    const stepsRes = await supabase.from('booking_form_steps').select('*').eq('form_id', formRes.data.id).order('sort_order')
+    const stepIds = (stepsRes.data ?? []).map((s: any) => s.id)
+    const placementsRes = stepIds.length > 0
+      ? await supabase.from('booking_form_field_placements').select('*').in('step_id', stepIds).order('sort_order')
+      : { data: [] }
 
     const state: AppState = {
       form: { id: formRes.data.id, title: formRes.data.title ?? '', subtitle: formRes.data.subtitle ?? '' },
       steps: (stepsRes.data ?? []).map(s => ({ id: s.id, form_id: s.form_id, sort_order: s.sort_order, next_button_label: s.next_button_label ?? '' })),
-      placements: (placementsRes.data ?? []).map(p => ({ id: p.id, step_id: p.step_id, field_key: p.field_key, field_type: p.field_type, sort_order: p.sort_order })),
+      placements: (placementsRes.data ?? []).map((p: any) => ({ id: p.id, step_id: p.step_id, field_key: p.builtin_field_key ?? p.custom_field_id, field_type: p.builtin_field_key ? 'builtin' : 'custom', sort_order: p.sort_order })),
       customFields: customFieldsRes.data ?? [],
     }
 
@@ -682,7 +683,10 @@ export default function FormBuilderPage() {
       const newPlacements = resolvedPlacements.filter(p => p.id.startsWith('tmp-'))
       if (newPlacements.length > 0) {
         await supabase.from('booking_form_field_placements').insert(newPlacements.map(p => ({
-          form_id: form.id, step_id: p.step_id, field_key: p.field_key, field_type: p.field_type, sort_order: p.sort_order,
+          step_id: p.step_id,
+          builtin_field_key: p.field_type === 'builtin' ? p.field_key : null,
+          custom_field_id: p.field_type === 'custom' ? p.field_key : null,
+          sort_order: p.sort_order,
         })))
       }
 
