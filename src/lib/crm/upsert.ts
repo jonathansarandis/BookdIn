@@ -31,27 +31,37 @@ export async function upsertCrmContact(
 ): Promise<UpsertCrmContactResult> {
   const { business_id, customer_id, full_name, email, phone, source } = params
 
-  // Build a query that matches by email OR phone, scoped to this business.
-  const filters: string[] = []
-  if (email) filters.push(`email.eq.${email}`)
-  if (phone) filters.push(`phone.eq.${phone}`)
-
   let existingId: string | null = null
 
-  if (filters.length > 0) {
-    const { data: existing, error: findError } = await supabase
+  // Try email match first (most reliable identifier)
+  if (email) {
+    const { data, error } = await supabase
       .from('crm_contacts')
       .select('id')
       .eq('business_id', business_id)
-      .or(filters.join(','))
+      .eq('email', email)
       .limit(1)
       .maybeSingle()
+    if (error) {
+      console.error('[crm] email lookup failed:', error.message)
+    } else if (data) {
+      existingId = data.id
+    }
+  }
 
-    if (findError) {
-      console.error('[crm] dedupe lookup failed:', findError.message)
-      // Fall through to insert — better to potentially create a duplicate than fail the booking
-    } else if (existing) {
-      existingId = existing.id
+  // Fall back to phone match if no email hit
+  if (!existingId && phone) {
+    const { data, error } = await supabase
+      .from('crm_contacts')
+      .select('id')
+      .eq('business_id', business_id)
+      .eq('phone', phone)
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      console.error('[crm] phone lookup failed:', error.message)
+    } else if (data) {
+      existingId = data.id
     }
   }
 
