@@ -7,7 +7,6 @@ import {
   reminderTemplate,
   renderConfirmationHtml,
   substituteVars,
-  ownerBookingNotificationTemplate,
   type BusinessEmailData,
   type CustomerEmailData,
   type AddressEmailData,
@@ -167,36 +166,6 @@ export async function sendBookingConfirmation(params: {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error)
     console.error('[email] sendBookingConfirmation failed:', error, { jobId: params.job.id })
-    return { success: false, error: msg }
-  }
-}
-
-export async function sendOwnerBookingNotification(params: {
-  job: JobEmailData
-  customer: CustomerEmailData & { phone?: string | null }
-  business: BusinessEmailData
-  address: AddressEmailData
-  service: ServiceEmailData
-  frequency?: string | null
-  jobUrl: string
-  ownerEmail: string
-}): Promise<SendResult> {
-  try {
-    const { subject, html, text } = ownerBookingNotificationTemplate(params)
-    const { data, error } = await resend.emails.send({
-      from: FROM,
-      to: params.ownerEmail,
-      bcc: 'jonathan.sarandis@gmail.com',
-      reply_to: params.customer.email,
-      subject,
-      html,
-      text,
-    })
-    if (error) throw error
-    return { success: true, id: data!.id }
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error)
-    console.error('[email] sendOwnerBookingNotification failed:', error, { jobId: params.job.id })
     return { success: false, error: msg }
   }
 }

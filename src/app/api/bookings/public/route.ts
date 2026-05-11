@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { sendBookingConfirmation, sendOwnerBookingNotification } from '@/lib/email'
+import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { fromBusinessDateTime } from '@/lib/datetime'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
       await logStep(supabase, submissionId!, { step: 'crm_upsert', status: 'failed', error: e.message, duration_ms: Date.now() - t_crm })
     }
 
-    // 9-11. Staff notifications: in-app + email (non-critical)
+    // 9-10. Staff in-app notifications (non-critical)
     const t_notif = Date.now()
     try {
       const { data: staffProfiles } = await supabase
@@ -344,36 +344,6 @@ export async function POST(request: NextRequest) {
             action_url: `/jobs/${job.id}`,
           }))
         )
-
-        for (const staff of staffProfiles) {
-          if (staff.email) {
-            try {
-              await resend.emails.send({
-                from: `BookdIn <hello@bookdin.co>`,
-                to: staff.email,
-                subject: `📞 New booking — call ${customer.full_name} now`,
-                html: `
-                  <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-                    <h2 style="color: ${business.brand_color || '#1A6B4A'};">New online booking received</h2>
-                    <p>A new booking has come in and requires a confirmation call.</p>
-                    <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Customer</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">${customer.full_name}</td></tr>
-                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Phone</td><td style="padding: 8px; font-size: 14px;"><a href="tel:${customer.phone}">${customer.phone}</a></td></tr>
-                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px; font-size: 14px;">${customer.email}</td></tr>
-                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Service</td><td style="padding: 8px; font-size: 14px;">${service?.name}</td></tr>
-                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Date</td><td style="padding: 8px; font-size: 14px;">${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}</td></tr>
-                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(taxSplit.total / 100).toFixed(2)}</td></tr>
-                    </table>
-                    <p style="color: #dc2626; font-weight: 600;">Action required: Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
-                    <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
-                  </div>
-                `,
-              })
-            } catch (err) {
-              console.error('Staff notification email failed:', err)
-            }
-          }
-        }
       }
       await logStep(supabase, submissionId!, { step: 'staff_notification', status: 'ok', duration_ms: Date.now() - t_notif })
     } catch (e: any) {
@@ -426,41 +396,34 @@ export async function POST(request: NextRequest) {
       if (!business.contact_email) {
         await logStep(supabase, submissionId!, { step: 'owner_email', status: 'failed', error: 'no contact_email configured', duration_ms: Date.now() - t_owner_email })
       } else {
-        const jobUrl = `${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}`
-        const ownerResult = await sendOwnerBookingNotification({
-          job: {
-            id: job.id,
-            scheduled_at: scheduledAtIso,
-            total_price: taxSplit.total,
-            tax_amount: taxSplit.tax,
-            is_flexible_time: isFlexible,
-          },
-          customer: { full_name: customer.full_name, email: customer.email, phone: customer.phone || null },
-          business: {
-            name: business.name,
-            brand_color: business.brand_color,
-            logo_url: business.logo_url,
-            contact_email: business.contact_email,
-            timezone: tz,
-            plan: business.plan,
-            currency: business.currency,
-          },
-          address: {
-            line1: address.line1,
-            city: address.city,
-            state: address.state,
-            postcode: address.postcode,
-          },
-          service: { name: service?.name || 'Service' },
-          frequency: frequency ?? null,
-          jobUrl,
-          ownerEmail: business.contact_email,
+        const { error: ownerEmailErr } = await resend.emails.send({
+          from: `BookdIn <hello@bookdin.co>`,
+          to: business.contact_email,
+          bcc: 'jonathan.sarandis@gmail.com',
+          reply_to: customer.email,
+          subject: `📞 New booking — call ${customer.full_name} now`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
+              <h2 style="color: ${business.brand_color || '#1A6B4A'};">New online booking received</h2>
+              <p>A new booking has come in and requires a confirmation call.</p>
+              <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Customer</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">${customer.full_name}</td></tr>
+                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Phone</td><td style="padding: 8px; font-size: 14px;"><a href="tel:${customer.phone}">${customer.phone}</a></td></tr>
+                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px; font-size: 14px;">${customer.email}</td></tr>
+                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Service</td><td style="padding: 8px; font-size: 14px;">${service?.name}</td></tr>
+                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Date</td><td style="padding: 8px; font-size: 14px;">${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}</td></tr>
+                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(taxSplit.total / 100).toFixed(2)}</td></tr>
+              </table>
+              <p style="color: #dc2626; font-weight: 600;">Action required: Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
+            </div>
+          `,
         })
         await logStep(supabase, submissionId!, {
           step: 'owner_email',
-          status: ownerResult.success ? 'ok' : 'failed',
+          status: ownerEmailErr ? 'failed' : 'ok',
           duration_ms: Date.now() - t_owner_email,
-          ...(ownerResult.success ? {} : { error: ownerResult.error }),
+          ...(ownerEmailErr ? { error: String(ownerEmailErr) } : {}),
         })
       }
     } catch (e: any) {
