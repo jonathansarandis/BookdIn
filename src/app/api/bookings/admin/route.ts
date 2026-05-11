@@ -5,6 +5,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // 3. Fetch business (pricing fields + email fields)
   const { data: business } = await admin
     .from('businesses')
-    .select('id, name, brand_color, logo_url, contact_email, timezone, stripe_onboarded, plan, currency, tax_rate, tax_mode, show_tax')
+    .select('id, name, brand_color, logo_url, contact_email, timezone, stripe_onboarded, plan, currency, tax_rate, tax_mode, show_tax, sms_provider, sms_api_key_encrypted, sms_api_key_iv, sms_user_id, sms_template, sms_enabled, phone')
     .eq('id', businessId)
     .single()
   if (!business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
@@ -390,7 +393,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Confirmation email — fetch customer + address for email assembly
     const { data: jobForEmail } = await admin
       .from('jobs')
-      .select('customer:customers(full_name, email), address:addresses(line1, city, state, postcode)')
+      .select('customer:customers(full_name, email, phone), address:addresses(line1, city, state, postcode)')
       .eq('id', job.id)
       .single()
 
@@ -440,6 +443,146 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     } catch (e: any) {
       emailStatus = 'failed'
       await logStep(admin, submissionId!, { step: 'customer_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_email })
+    }
+
+    // Owner notification email (non-critical)
+    const t_owner_email = Date.now()
+    try {
+      if (!business.contact_email) {
+        await logStep(admin, submissionId!, { step: 'owner_email', status: 'failed', error: 'no contact_email configured', duration_ms: Date.now() - t_owner_email })
+      } else {
+        const ownerTz = business.timezone || 'Australia/Melbourne'
+        const ownerDateStr = new Date(scheduled_at).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: ownerTz })
+        const ownerTimeStr = (is_flexible_time ?? false)
+          ? 'Flexible time'
+          : new Date(scheduled_at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: ownerTz })
+        const ownerCustomer = jobForEmail?.customer
+        const ownerAddress = jobForEmail?.address
+        const frequencyLabel = frequency ? (({ one_time: 'One Time', weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly' } as Record<string, string>)[frequency] || frequency) : null
+        const { error: ownerEmailErr } = await resend.emails.send({
+          from: `BookdIn <hello@bookdin.co>`,
+          to: business.contact_email,
+          bcc: 'jonathan.sarandis@gmail.com',
+          reply_to: ownerCustomer?.email,
+          subject: `📞 New booking — call ${ownerCustomer?.full_name} now`,
+          html: `
+            <div style="margin: 0; padding: 40px 20px; background: #f5f3ef; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+              <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 48px 40px; text-align: center;">
+                <div style="margin: 0 0 40px 0;"><div style="display: inline-block; background: #0a1228; padding: 12px 24px; border-radius: 10px; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;"><span style="color: #ffffff;">Bookd</span><span style="color: #2563EB;">In</span></div></div>
+                <h1 style="font-size: 28px; font-weight: 700; color: #0a1929; margin: 0 0 24px 0;">New Booking</h1>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 40px 0;">You have a new booking from <strong>${ownerCustomer?.full_name}</strong></p>
+                <p style="font-size: 14px; color: #6b7280; margin: 0 0 32px 0;">${ownerCustomer?.phone ? `<a href="tel:${ownerCustomer.phone}" style="color: ${business.brand_color || '#1E9BFF'}; text-decoration: none;">${ownerCustomer.phone}</a> &middot; ` : ''}<a href="mailto:${ownerCustomer?.email}" style="color: ${business.brand_color || '#1E9BFF'}; text-decoration: none;">${ownerCustomer?.email}</a></p>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${ownerDateStr}</p>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${ownerTimeStr}</p>
+                ${frequencyLabel ? `<p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${frequencyLabel}</p>` : ''}
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${ownerAddress?.line1}, ${ownerAddress?.city} ${ownerAddress?.state} ${ownerAddress?.postcode}</p>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${service?.name}</p>
+                <p style="font-size: 18px; font-weight: 700; color: #0a1929; margin: 8px 0 32px 0;"><strong>Total: $${(taxSplit.total / 100).toFixed(2)}</strong></p>
+                <p style="font-size: 14px; color: #dc2626; font-weight: 500; margin: 0 0 40px 0; line-height: 1.6;"><strong>Action required:</strong> Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
+                <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1E9BFF'}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600;">View booking →</a>
+              </div>
+            </div>
+          `,
+        })
+        await logStep(admin, submissionId!, {
+          step: 'owner_email',
+          status: ownerEmailErr ? 'failed' : 'ok',
+          duration_ms: Date.now() - t_owner_email,
+          ...(ownerEmailErr ? { error: String(ownerEmailErr) } : {}),
+        })
+      }
+    } catch (e: any) {
+      await logStep(admin, submissionId!, { step: 'owner_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_owner_email })
+    }
+
+    // Customer SMS (non-critical)
+    const t_sms = Date.now()
+    try {
+      const { sendDialpadSms } = await import('@/lib/sms/dialpad')
+      const { formatDateForSms, formatTimeForSms } = await import('@/lib/sms/format')
+      const smsCustomer = jobForEmail?.customer
+      const smsTz = business.timezone || 'Australia/Melbourne'
+      const smsIsFlexible = is_flexible_time ?? false
+
+      const smsResult = await sendDialpadSms({
+        business: {
+          sms_provider: business.sms_provider,
+          sms_api_key_encrypted: business.sms_api_key_encrypted,
+          sms_api_key_iv: business.sms_api_key_iv,
+          sms_user_id: business.sms_user_id,
+          sms_template: business.sms_template,
+          sms_enabled: business.sms_enabled,
+        },
+        toPhone: smsCustomer?.phone || '',
+        vars: {
+          customer_name: smsCustomer?.full_name?.split(' ')[0] || smsCustomer?.full_name || '',
+          service_name: service?.name || 'Service',
+          date: formatDateForSms(scheduled_at, smsTz),
+          time: formatTimeForSms(scheduled_at, smsTz, smsIsFlexible),
+          business_name: business.name,
+          business_phone: business.phone || '',
+          customer_id: resolvedCustomerId || undefined,
+          customer_first_name: smsCustomer?.full_name?.split(' ')[0] || smsCustomer?.full_name || '',
+          customer_last_name: smsCustomer?.full_name?.split(' ').slice(1).join(' ') || undefined,
+          customer_email: smsCustomer?.email || undefined,
+        },
+      })
+
+      const smsUpdates: Record<string, any> = { sms_status: smsResult.status }
+      if (smsResult.error) smsUpdates.sms_error = smsResult.error.slice(0, 500)
+      if (smsResult.status === 'sent') smsUpdates.sms_sent_at = new Date().toISOString()
+
+      const { error: smsUpdateError } = await admin.from('jobs').update(smsUpdates).eq('id', job.id)
+      if (smsUpdateError) console.error('Failed to persist SMS audit:', smsUpdateError)
+
+      if (smsResult.status === 'failed') {
+        console.error('SMS failed:', smsResult.error, 'job:', job.id)
+      } else if (smsResult.status === 'skipped') {
+        console.log('SMS skipped:', smsResult.error, 'job:', job.id)
+      } else {
+        console.log('SMS sent:', smsResult.message_id, 'job:', job.id)
+      }
+      await logStep(admin, submissionId!, { step: 'sms', status: 'ok', duration_ms: Date.now() - t_sms })
+    } catch (e: any) {
+      console.error('SMS handler threw (booking still successful):', e)
+      try {
+        await admin.from('jobs').update({
+          sms_status: 'failed',
+          sms_error: `handler threw: ${e.message?.slice(0, 400)}`,
+        }).eq('id', job.id)
+      } catch { /* best-effort audit */ }
+      await logStep(admin, submissionId!, { step: 'sms', status: 'failed', error: e.message, duration_ms: Date.now() - t_sms })
+    }
+
+    // Staff in-app notifications (non-critical)
+    const t_notif = Date.now()
+    try {
+      const { data: staffProfiles } = await admin
+        .from('profiles')
+        .select('id, email, full_name')
+        .eq('business_id', businessId)
+
+      const notifCustomer = jobForEmail?.customer
+      const notifTz = business.timezone || 'Australia/Melbourne'
+      const notifDateStr = new Date(scheduled_at).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: notifTz })
+
+      if (staffProfiles?.length) {
+        await admin.from('notifications').insert(
+          staffProfiles.map(staff => ({
+            business_id: businessId,
+            user_id: staff.id,
+            type: 'call_prompt',
+            title: `📞 Call ${notifCustomer?.full_name} to confirm booking`,
+            body: `New admin booking for ${service?.name} on ${notifDateStr}. Call to confirm and ensure they complete the card details link.`,
+            entity_type: 'job',
+            entity_id: job.id,
+            action_url: `/jobs/${job.id}`,
+          }))
+        )
+      }
+      await logStep(admin, submissionId!, { step: 'staff_notification', status: 'ok', duration_ms: Date.now() - t_notif })
+    } catch (e: any) {
+      await logStep(admin, submissionId!, { step: 'staff_notification', status: 'failed', error: e.message, duration_ms: Date.now() - t_notif })
     }
 
     await markProcessed(admin, submissionId!, job.id)
