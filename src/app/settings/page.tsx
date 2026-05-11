@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
-import { CheckCircle2, ExternalLink, Loader2, ListPlus } from 'lucide-react'
+import { CheckCircle2, ExternalLink, Loader2, Layers } from 'lucide-react'
 import EmailTemplateCard from '@/app/settings/EmailTemplateCard'
 import BusinessDetailsCard from '@/app/settings/BusinessDetailsCard'
 import SmsConfigCard from '@/app/settings/SmsConfigCard'
@@ -232,18 +232,18 @@ export default function SettingsPage() {
               </a>
             </div>
 
-            {/* Custom Fields */}
+            {/* Form Builder */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-1">
-                <ListPlus className="w-4 h-4 text-gray-400" />
-                <h3 className="text-sm font-semibold text-gray-900">Custom Fields</h3>
+                <Layers className="w-4 h-4 text-gray-400" />
+                <h3 className="text-sm font-semibold text-gray-900">Form Builder</h3>
               </div>
-              <p className="text-xs text-gray-500 mb-4">Add extra fields to your public booking form to collect information from customers.</p>
+              <p className="text-xs text-gray-500 mb-4">Build and customize your public booking form.</p>
               <a
-                href="/settings/custom-fields"
+                href="/settings/form-builder"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                Manage custom fields
+                Open form builder
               </a>
             </div>
 
