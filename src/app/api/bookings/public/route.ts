@@ -406,7 +406,7 @@ export async function POST(request: NextRequest) {
           html: `
             <div style="margin: 0; padding: 40px 20px; background: #f5f3ef; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
               <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 48px 40px; text-align: center;">
-                <div style="font-size: 28px; font-weight: 800; margin-bottom: 40px;"><span style="color: #1E9BFF;">Bookd</span><span style="color: #0a1929;">In</span></div>
+                <div style="margin: 0 0 40px 0;"><div style="display: inline-block; background: #0a1228; padding: 12px 24px; border-radius: 10px; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;"><span style="color: #ffffff;">Bookd</span><span style="color: #2563EB;">In</span></div></div>
                 <h1 style="font-size: 28px; font-weight: 700; color: #0a1929; margin: 0 0 24px 0;">New Booking</h1>
                 <p style="font-size: 16px; color: #4b5563; margin: 0 0 40px 0;">You have a new booking from <strong>${customer.full_name}</strong></p>
                 <p style="font-size: 14px; color: #6b7280; margin: 0 0 32px 0;">${customer.phone ? `<a href="tel:${customer.phone}" style="color: ${business.brand_color || '#1E9BFF'}; text-decoration: none;">${customer.phone}</a> &middot; ` : ''}<a href="mailto:${customer.email}" style="color: ${business.brand_color || '#1E9BFF'}; text-decoration: none;">${customer.email}</a></p>
