@@ -37,6 +37,8 @@ export default function BookingPage() {
   const [services, setServices] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [providers, setProviders] = useState<any[]>([])
+  const [locations, setLocations] = useState<any[]>([])
+  const [locationId, setLocationId] = useState<string>('')
   const [form, setForm] = useState({
     service_id: '',
     frequency: 'one_time',
@@ -89,17 +91,20 @@ export default function BookingPage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
       const bid = profile!.business_id!
 
-      const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }, { data: biz }, { data: fdData }] = await Promise.all([
+      const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }, { data: biz }, { data: fdData }, { data: locs }] = await Promise.all([
         supabase.from('services').select('*, service_extras(*), room_pricing(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
         supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax, tax_mode').eq('id', bid).single(),
         supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', bid),
+        supabase.from('locations').select('id, name').eq('business_id', bid).eq('is_active', true).order('name'),
       ])
       setServices(svcs || [])
       setCustomers(cxs || [])
       setProviders(prvs || [])
+      setLocations(locs || [])
+      if (!editJobId && locs?.[0] && !locationId) setLocationId(locs[0].id)
       const uniqueCampaigns = [...new Set((campaigns || []).map((r: any) => r.manual_campaign_label).filter(Boolean))]
       setExistingCampaigns(uniqueCampaigns)
       if (biz?.timezone) setBusinessTimezone(biz.timezone)
@@ -304,6 +309,7 @@ export default function BookingPage() {
           body: JSON.stringify({
             editJobId,
             service_id: form.service_id,
+            location_id: locationId,
             frequency: form.frequency,
             bedrooms: form.bedrooms,
             bathrooms: form.bathrooms,
@@ -376,6 +382,7 @@ export default function BookingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           service_id: form.service_id,
+          location_id: locationId,
           frequency: form.frequency,
           bedrooms: form.bedrooms,
           bathrooms: form.bathrooms,
@@ -493,6 +500,14 @@ export default function BookingPage() {
         <div className="space-y-5">
           <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Service details</h3>
+            {locations.length > 1 && (
+              <div>
+                <label className={labelClass}>Location</label>
+                <select value={locationId} onChange={e => setLocationId(e.target.value)} className={inputClass}>
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className={labelClass}>Service *</label>
               <select value={form.service_id} onChange={e => { update('service_id', e.target.value); setSelectedExtras([]) }} className={inputClass}>
