@@ -196,6 +196,40 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
   }
 
+  // CRM: fetch customer, upsert contact, log activity
+  try {
+    const { data: customerForCrm } = await admin
+      .from('customers')
+      .select('full_name, email, phone')
+      .eq('id', customer_id)
+      .single()
+
+    if (customerForCrm) {
+      const { upsertCrmContact, logCrmActivity } = await import('@/lib/crm/upsert')
+      const crmResult = await upsertCrmContact(admin, {
+        business_id: businessId,
+        customer_id,
+        full_name: customerForCrm.full_name,
+        email: customerForCrm.email,
+        phone: customerForCrm.phone || null,
+        source: 'admin',
+      })
+      if (crmResult.contact_id) {
+        await logCrmActivity(admin, {
+          business_id: businessId,
+          contact_id: crmResult.contact_id,
+          type: 'note',
+          title: crmResult.created ? 'Booking created in admin (new lead)' : 'Booking created in admin',
+          body: `Booked ${service.name} via admin. Total: $${(taxSplit.total / 100).toFixed(2)}`,
+        })
+      } else if (crmResult.error) {
+        console.error('[admin booking] CRM upsert failed (non-blocking):', crmResult.error)
+      }
+    }
+  } catch (err: any) {
+    console.error('[admin booking] CRM block threw (non-blocking):', err.message)
+  }
+
   if (extraDetails.length > 0) {
     await admin.from('job_extras').insert(
       extraDetails.map(ex => ({

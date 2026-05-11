@@ -249,45 +249,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 7. Create CRM contact
-    const now = new Date()
-    const isPM = now.getHours() >= 14
-
-    // Follow up: same day if before 2pm, next day 9am if after 2pm
-    const followupDate = new Date()
-    if (isPM) {
-      followupDate.setDate(followupDate.getDate() + 1)
-      followupDate.setHours(9, 0, 0, 0)
-    } else {
-      followupDate.setHours(15, 0, 0, 0) // 3pm same day
-    }
-
-    const { data: crmContact } = await supabase
-      .from('crm_contacts')
-      .insert({
+    // 7-8. CRM: upsert contact (dedupe by email or phone) and log activity
+    const { upsertCrmContact, logCrmActivity } = await import('@/lib/crm/upsert')
+    const crmResult = await upsertCrmContact(supabase, {
+      business_id,
+      customer_id: customerId,
+      full_name: customer.full_name,
+      email: customer.email,
+      phone: customer.phone || null,
+      source: 'website',
+    })
+    if (crmResult.contact_id) {
+      await logCrmActivity(supabase, {
         business_id,
-        customer_id: customerId,
-        full_name: customer.full_name,
-        email: customer.email,
-        phone: customer.phone || null,
-        source: 'website',
-        stage: 'lead',
-        notes: `Online booking for ${service?.name} on ${formatDate(scheduled_date)}`,
-        last_activity_at: now.toISOString(),
-        next_followup_at: followupDate.toISOString(),
-      })
-      .select('id')
-      .single()
-
-    // 8. Log CRM activity
-    if (crmContact) {
-      await supabase.from('crm_activities').insert({
-        business_id,
-        contact_id: crmContact.id,
+        contact_id: crmResult.contact_id,
         type: 'note',
-        title: 'Online booking submitted',
+        title: crmResult.created ? 'Online booking submitted (new lead)' : 'Repeat online booking',
         body: `Booked ${service?.name} for ${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}. Total: $${(taxSplit.total / 100).toFixed(2)}`,
       })
+    } else if (crmResult.error) {
+      console.error('[public booking] CRM upsert failed (non-blocking):', crmResult.error)
     }
 
     // 9. Get all staff to notify
