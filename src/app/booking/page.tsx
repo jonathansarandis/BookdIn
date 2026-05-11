@@ -165,6 +165,7 @@ export default function BookingPage() {
         provider_id: job.provider_id || '',
         notes: job.notes || '',
       }))
+      if (job.location_id) setLocationId(job.location_id)
       setSelectedExtras(
         (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
       )
@@ -324,7 +325,7 @@ export default function BookingPage() {
         })
         const editData = await editRes.json()
         if (!editRes.ok) {
-          throw new Error(editRes.status === 400 ? 'Pricing changed — refresh and try again' : (editData.error || 'Failed to update booking'))
+          throw new Error(editData.error || 'Failed to update booking')
         }
 
         router.push('/calendar')
@@ -402,7 +403,7 @@ export default function BookingPage() {
       })
       const createData = await createRes.json()
       if (!createRes.ok) {
-        throw new Error(createRes.status === 400 ? 'Pricing changed — refresh and try again' : (createData.error || 'Failed to create booking'))
+        throw new Error(createData.error || 'Failed to create booking')
       }
       const jobId = createData.job_id
 
