@@ -36,7 +36,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     tax_amount: clientTax,
     scheduled_at,
     customer_id,
+    customer,
     address_id,
+    address,
     provider_id,
     notes,
     booking_source,
@@ -82,6 +84,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Location not found or does not belong to this business' }, { status: 404 })
   }
 
+  // Validate customer + address present for create path (before submission row)
+  if (!editJobId) {
+    if (!customer_id && !customer) {
+      return NextResponse.json({ error: 'Customer details are required' }, { status: 400 })
+    }
+    if (!address_id && !address) {
+      return NextResponse.json({ error: 'Address details are required' }, { status: 400 })
+    }
+  }
+
   // Create submission audit row — throws → 503 (fail closed)
   let submissionId: string | null = null
   try {
@@ -99,6 +111,70 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    // Customer resolution (create path only)
+    let resolvedCustomerId: string = customer_id || ''
+    if (!editJobId && !resolvedCustomerId) {
+      const t_cx = Date.now()
+      try {
+        const { data: existing } = await admin
+          .from('customers')
+          .select('id')
+          .eq('business_id', businessId)
+          .eq('email', customer.email)
+          .single()
+
+        if (existing) {
+          resolvedCustomerId = existing.id
+          await logStep(admin, submissionId!, { step: 'customer_lookup', status: 'ok', duration_ms: Date.now() - t_cx })
+        } else {
+          const { data: newCx, error: cxErr } = await admin
+            .from('customers')
+            .insert({
+              business_id: businessId,
+              full_name: customer.full_name,
+              email: customer.email,
+              phone: customer.phone || null,
+            })
+            .select('id')
+            .single()
+          if (cxErr) throw new Error(cxErr.message)
+          resolvedCustomerId = newCx!.id
+          await logStep(admin, submissionId!, { step: 'customer_upsert', status: 'ok', duration_ms: Date.now() - t_cx })
+        }
+      } catch (e: any) {
+        await logStep(admin, submissionId!, { step: 'customer_upsert', status: 'failed', error: e.message, duration_ms: Date.now() - t_cx })
+        throw e
+      }
+    }
+
+    // Address resolution (create path, when no address_id provided)
+    let resolvedAddressId: string = address_id || ''
+    if (!editJobId && !resolvedAddressId) {
+      const t_addr = Date.now()
+      try {
+        const { data: addr, error: addrErr } = await admin
+          .from('addresses')
+          .insert({
+            business_id: businessId,
+            customer_id: resolvedCustomerId,
+            line1: address.line1,
+            city: address.city,
+            state: address.state,
+            postcode: address.postcode,
+            country: 'AU',
+            is_default: true,
+          })
+          .select('id')
+          .single()
+        if (addrErr) throw new Error(addrErr.message)
+        resolvedAddressId = addr!.id
+        await logStep(admin, submissionId!, { step: 'address_upsert', status: 'ok', duration_ms: Date.now() - t_addr })
+      } catch (e: any) {
+        await logStep(admin, submissionId!, { step: 'address_upsert', status: 'failed', error: e.message, duration_ms: Date.now() - t_addr })
+        throw e
+      }
+    }
+
     // 4. Fetch service + room_pricing (eq business_id prevents cross-tenant service use)
     const { data: service } = await admin
       .from('services')
@@ -209,7 +285,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
 
       await markProcessed(admin, submissionId!, editJobId)
-      return NextResponse.json({ job_id: editJobId })
+      return NextResponse.json({ job_id: editJobId, customer_id: resolvedCustomerId, address_id: resolvedAddressId })
     }
 
     // ── Create branch ────────────────────────────────────────────────────────────
@@ -221,8 +297,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         .insert({
           business_id: businessId,
           location_id,
-          customer_id,
-          address_id,
+          customer_id: resolvedCustomerId,
+          address_id: resolvedAddressId,
           service_id,
           provider_id: provider_id ?? null,
           status: status ?? (provider_id ? 'assigned' : 'pending'),
@@ -260,7 +336,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const { data: customerForCrm } = await admin
         .from('customers')
         .select('full_name, email, phone')
-        .eq('id', customer_id)
+        .eq('id', resolvedCustomerId)
         .single()
 
       if (customerForCrm) {
@@ -367,7 +443,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     await markProcessed(admin, submissionId!, job.id)
-    return NextResponse.json({ job_id: job.id, emailStatus })
+    return NextResponse.json({ job_id: job.id, emailStatus, customer_id: resolvedCustomerId, address_id: resolvedAddressId })
   } catch (err: any) {
     console.error('[admin booking] Unhandled error:', err)
     if (submissionId) {

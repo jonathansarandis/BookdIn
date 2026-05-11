@@ -342,42 +342,18 @@ export default function BookingPage() {
     const bid = profile!.business_id!
 
     try {
-      let customerId = form.customer_id
-      let addressId: string
-
-      // Create or use existing customer
-      if (form.new_customer || !customerId) {
-        const { data: newCx, error: cxErr } = await supabase.from('customers').insert({
-          business_id: bid,
-          full_name: form.customer_name,
-          email: form.customer_email,
-          phone: form.customer_phone || null,
-        }).select().single()
-        if (cxErr) throw new Error('Failed to create customer: ' + cxErr.message)
-        customerId = newCx.id
-      }
-
-      // Create address — skip for rebook and reuse the source job's address_id
-      if (rebookJobId) {
-        addressId = editAddressId
-      } else {
-        const { data: addr, error: addrErr } = await supabase.from('addresses').insert({
-          business_id: bid,
-          customer_id: customerId,
-          line1: form.line1,
-          city: form.city,
-          state: form.state,
-          postcode: form.postcode,
-          country: 'AU',
-          is_default: true,
-        }).select().single()
-        if (addrErr) throw new Error('Failed to save address: ' + addrErr.message)
-        addressId = addr.id
-      }
-
-      // Create job via API route (server-side price verification + extras + activity log + email)
+      // Customer/address creation happens server-side — build payload only
       const isFlexible = form.scheduled_time === 'flexible'
       const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, isFlexible ? '09:00' : form.scheduled_time, businessTimezone)
+
+      const customerPayload = (form.customer_id && !form.new_customer)
+        ? { customer_id: form.customer_id }
+        : { customer: { full_name: form.customer_name, email: form.customer_email, phone: form.customer_phone || null } }
+
+      const addressPayload = rebookJobId
+        ? { address_id: editAddressId }
+        : { address: { line1: form.line1, city: form.city, state: form.state, postcode: form.postcode } }
+
       const createRes = await fetch('/api/bookings/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -392,8 +368,8 @@ export default function BookingPage() {
           extras: selectedExtras,
           total_price: totalToCharge,
           tax_amount: taxCents,
-          customer_id: customerId,
-          address_id: addressId,
+          ...customerPayload,
+          ...addressPayload,
           provider_id: form.provider_id || null,
           notes: form.notes || null,
           booking_source: 'admin',
@@ -405,7 +381,7 @@ export default function BookingPage() {
       if (!createRes.ok) {
         throw new Error(createData.error || 'Failed to create booking')
       }
-      const jobId = createData.job_id
+      const { job_id: jobId, customer_id: resolvedCustomerId } = createData
 
       // Save lead source attribution if selected
       if (leadSource) {
@@ -415,7 +391,7 @@ export default function BookingPage() {
           body: JSON.stringify({
             booking_id: jobId,
             business_id: bid,
-            customer_id: customerId,
+            customer_id: resolvedCustomerId,
             source_type: leadSource,
             manually_entered: true,
             manual_campaign_label: campaignLabel || null,
@@ -442,7 +418,7 @@ export default function BookingPage() {
         total_bookings: supabase.rpc as any,
         last_booking_at: new Date().toISOString(),
         lifetime_value: totalToCharge,
-      }).eq('id', customerId)
+      }).eq('id', resolvedCustomerId)
 
       setSuccess(true)
       setTimeout(() => router.push(`/jobs/${jobId}`), 1500)
