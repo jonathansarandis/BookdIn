@@ -41,10 +41,15 @@ export interface UpsertDialpadContactResult {
 }
 
 /**
- * Idempotently upserts a contact in Dialpad. Uses the "create_with_uid" endpoint
- * which treats the same uid as upsert. Safe to call repeatedly for the same customer.
+ * Create a Dialpad shared contact. Uses PUT /api/v2/contacts ("create_with_uid" endpoint).
  *
- * Errors are returned, never thrown. Non-blocking by design — caller continues even on failure.
+ * KNOWN LIMITATION: Dialpad's `uid` field is NOT a true upsert key. Per their dev forum,
+ * repeated calls with the same uid create new contacts each time, NOT updates. This means
+ * repeat customers may accumulate duplicate contacts in Dialpad over time. Acceptable for
+ * MVP. If duplicates become a real problem, manually de-dupe in the Dialpad UI or build
+ * a separate periodic cleanup job.
+ *
+ * Errors are returned, never thrown. Non-blocking by design.
  */
 export async function upsertDialpadContact(p: UpsertDialpadContactParams): Promise<UpsertDialpadContactResult> {
   if (!p.apiKey) return { status: 'skipped', error: 'no api key' }
@@ -52,9 +57,10 @@ export async function upsertDialpadContact(p: UpsertDialpadContactParams): Promi
   if (!p.phone) return { status: 'skipped', error: 'no phone' }
   if (!p.phone.startsWith('+')) return { status: 'skipped', error: `phone not E.164: ${p.phone}` }
 
-  const url = `https://dialpad.com/api/v2/contacts/${encodeURIComponent(p.uid)}`
+  const url = `https://dialpad.com/api/v2/contacts`
 
   const body: Record<string, any> = {
+    uid: p.uid,
     first_name: p.firstName || 'Customer',
     phones: [p.phone],
   }
@@ -145,15 +151,10 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
   }
 
   // Best-effort: upsert the contact in Dialpad so it's saved under the customer's real name.
-  console.log('[sms] contact upsert check:', {
-    has_customer_id: !!vars.customer_id,
-    has_customer_first_name: !!vars.customer_first_name,
-    customer_id: vars.customer_id,
-    customer_first_name: vars.customer_first_name,
-  })
+  // Non-blocking — any failure is logged and ignored, the SMS still attempts to send.
   if (vars.customer_id && vars.customer_first_name) {
     try {
-      const upsertParams = {
+      const contactResult = await upsertDialpadContact({
         apiKey,
         uid: `bookdin-cust-${vars.customer_id}`,
         firstName: vars.customer_first_name,
@@ -161,10 +162,7 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
         phone: normalizedPhone,
         email: vars.customer_email,
         companyName: vars.business_name,
-      }
-      console.log('[sms] upsertDialpadContact params:', { ...upsertParams, apiKey: '[redacted]' })
-      const contactResult = await upsertDialpadContact(upsertParams)
-      console.log('[sms] upsertDialpadContact result:', contactResult)
+      })
       if (contactResult.status === 'failed') {
         console.warn('Dialpad contact upsert failed (non-blocking):', contactResult.error)
       }
