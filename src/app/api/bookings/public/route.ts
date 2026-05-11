@@ -6,6 +6,7 @@ import { Resend } from 'resend'
 import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { fromBusinessDateTime } from '@/lib/datetime'
+import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,6 +50,8 @@ export async function POST(request: NextRequest) {
   const effectiveTime = isFlexible ? '09:00' : scheduled_time
   const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
+  let submissionId: string | null = null
+
   try {
     // 1. Get business details
     const { data: business } = await supabase
@@ -75,6 +78,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Location not found or does not belong to this business' }, { status: 404 })
     }
 
+    // Create submission audit row — throws → 503 (fail closed)
+    try {
+      submissionId = await createSubmission(supabase, {
+        businessId: business_id,
+        locationId: location_id,
+        source: 'public',
+        rawPayload: body,
+        ipAddress: request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip'),
+        userAgent: request.headers.get('user-agent'),
+      })
+    } catch (e: any) {
+      console.error('[public booking] Failed to create submission record:', e)
+      return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 })
+    }
+
     // 2. Get service details (with room_pricing for server-side recalculation)
     const { data: service } = await supabase
       .from('services')
@@ -83,6 +101,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!service) {
+      await markFailed(supabase, submissionId!, 'Service not found')
       return NextResponse.json({ error: 'Service not found' }, { status: 404 })
     }
 
@@ -94,6 +113,7 @@ export async function POST(request: NextRequest) {
       .eq('service_id', service_id)
       .single()
     if (!locService || !locService.is_enabled) {
+      await markFailed(supabase, submissionId!, 'Service not available at this location')
       return NextResponse.json({ error: 'Service not available at this location' }, { status: 400 })
     }
 
@@ -147,59 +167,81 @@ export async function POST(request: NextRequest) {
     const taxSplit = calcTaxSplit(discountedPrice, business.tax_mode ?? 'exclusive', effectiveTaxRate)
 
     // 2d. Mismatch check: ±1 cent tolerance
+    const t_validation = Date.now()
     if (Math.abs(taxSplit.total - clientTotal) > 1) {
+      await logStep(supabase, submissionId!, { step: 'validation', status: 'failed', duration_ms: Date.now() - t_validation, error: 'pricing mismatch' })
+      await markFailed(supabase, submissionId!, 'Pricing mismatch — client total does not match server total')
       return NextResponse.json(
         { error: 'Pricing mismatch — please refresh and try again' },
         { status: 400 },
       )
     }
+    await logStep(supabase, submissionId!, { step: 'validation', status: 'ok', duration_ms: Date.now() - t_validation })
 
     // 3. Create or find customer
     let customerId: string
-    const { data: existingCustomer } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('business_id', business_id)
-      .eq('email', customer.email)
-      .single()
-
-    if (existingCustomer) {
-      customerId = existingCustomer.id
-    } else {
-      const { data: newCustomer, error: customerError } = await supabase
+    const t_cx = Date.now()
+    try {
+      const { data: existingCustomer } = await supabase
         .from('customers')
-        .insert({
-          business_id,
-          full_name: customer.full_name,
-          email: customer.email,
-          phone: customer.phone || null,
-        })
         .select('id')
+        .eq('business_id', business_id)
+        .eq('email', customer.email)
         .single()
 
-      if (customerError) throw new Error('Failed to create customer')
-      customerId = newCustomer.id
+      if (existingCustomer) {
+        customerId = existingCustomer.id
+      } else {
+        const { data: newCustomer, error: customerError } = await supabase
+          .from('customers')
+          .insert({
+            business_id,
+            full_name: customer.full_name,
+            email: customer.email,
+            phone: customer.phone || null,
+          })
+          .select('id')
+          .single()
+
+        if (customerError) throw new Error('Failed to create customer')
+        customerId = newCustomer.id
+      }
+      await logStep(supabase, submissionId!, { step: 'customer_upsert', status: 'ok', duration_ms: Date.now() - t_cx })
+    } catch (e: any) {
+      await logStep(supabase, submissionId!, { step: 'customer_upsert', status: 'failed', error: e.message, duration_ms: Date.now() - t_cx })
+      throw e
     }
 
     // 4. Create address
-    const { data: addr } = await supabase
-      .from('addresses')
-      .insert({
-        business_id,
-        customer_id: customerId,
-        line1: address.line1,
-        city: address.city,
-        state: address.state,
-        postcode: address.postcode,
-        country: 'AU',
-        is_default: true,
-      })
-      .select('id')
-      .single()
+    let addr: { id: string } | null = null
+    const t_addr = Date.now()
+    try {
+      const { data: addrData, error: addrErr } = await supabase
+        .from('addresses')
+        .insert({
+          business_id,
+          customer_id: customerId,
+          line1: address.line1,
+          city: address.city,
+          state: address.state,
+          postcode: address.postcode,
+          country: 'AU',
+          is_default: true,
+        })
+        .select('id')
+        .single()
+      if (addrErr) throw addrErr
+      addr = addrData
+      await logStep(supabase, submissionId!, { step: 'address_upsert', status: 'ok', duration_ms: Date.now() - t_addr })
+    } catch (e: any) {
+      await logStep(supabase, submissionId!, { step: 'address_upsert', status: 'failed', error: e.message, duration_ms: Date.now() - t_addr })
+      throw new Error(`Failed to create address: ${e.message}`)
+    }
 
     // 5. Create job (pending status — no card yet)
     const tz = location.timezone || business.timezone || 'Australia/Melbourne'
     const scheduledAtIso = fromBusinessDateTime(scheduled_date, effectiveTime, tz)
+    const t_job = Date.now()
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .insert({
@@ -226,7 +268,11 @@ export async function POST(request: NextRequest) {
       .select('id')
       .single()
 
-    if (jobError) throw new Error('Failed to create job')
+    if (jobError) {
+      await logStep(supabase, submissionId!, { step: 'job_insert', status: 'failed', error: jobError.message, duration_ms: Date.now() - t_job })
+      throw new Error('Failed to create job')
+    }
+    await logStep(supabase, submissionId!, { step: 'job_insert', status: 'ok', duration_ms: Date.now() - t_job })
 
     // 5a. Generate single-use card-setup token (14-day expiry)
     const { randomBytes } = await import('crypto')
@@ -249,117 +295,133 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 7-8. CRM: upsert contact (dedupe by email or phone) and log activity
-    const { upsertCrmContact, logCrmActivity } = await import('@/lib/crm/upsert')
-    const crmResult = await upsertCrmContact(supabase, {
-      business_id,
-      customer_id: customerId,
-      full_name: customer.full_name,
-      email: customer.email,
-      phone: customer.phone || null,
-      source: 'website',
-    })
-    if (crmResult.contact_id) {
-      await logCrmActivity(supabase, {
+    // 7-8. CRM: upsert contact (dedupe by email or phone) and log activity (non-critical)
+    const t_crm = Date.now()
+    try {
+      const { upsertCrmContact, logCrmActivity } = await import('@/lib/crm/upsert')
+      const crmResult = await upsertCrmContact(supabase, {
         business_id,
-        contact_id: crmResult.contact_id,
-        type: 'note',
-        title: crmResult.created ? 'Online booking submitted (new lead)' : 'Repeat online booking',
-        body: `Booked ${service?.name} for ${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}. Total: $${(taxSplit.total / 100).toFixed(2)}`,
+        customer_id: customerId,
+        full_name: customer.full_name,
+        email: customer.email,
+        phone: customer.phone || null,
+        source: 'website',
       })
-    } else if (crmResult.error) {
-      console.error('[public booking] CRM upsert failed (non-blocking):', crmResult.error)
+      if (crmResult.contact_id) {
+        await logCrmActivity(supabase, {
+          business_id,
+          contact_id: crmResult.contact_id,
+          type: 'note',
+          title: crmResult.created ? 'Online booking submitted (new lead)' : 'Repeat online booking',
+          body: `Booked ${service?.name} for ${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}. Total: $${(taxSplit.total / 100).toFixed(2)}`,
+        })
+      } else if (crmResult.error) {
+        console.error('[public booking] CRM upsert failed (non-blocking):', crmResult.error)
+      }
+      await logStep(supabase, submissionId!, { step: 'crm_upsert', status: 'ok', duration_ms: Date.now() - t_crm })
+    } catch (e: any) {
+      await logStep(supabase, submissionId!, { step: 'crm_upsert', status: 'failed', error: e.message, duration_ms: Date.now() - t_crm })
     }
 
-    // 9. Get all staff to notify
-    const { data: staffProfiles } = await supabase
-      .from('profiles')
-      .select('id, email, full_name')
-      .eq('business_id', business_id)
+    // 9-11. Staff notifications: in-app + email (non-critical)
+    const t_notif = Date.now()
+    try {
+      const { data: staffProfiles } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .eq('business_id', business_id)
 
-    // 10. Create in-app notifications for all staff
-    if (staffProfiles?.length) {
-      await supabase.from('notifications').insert(
-        staffProfiles.map(staff => ({
-          business_id,
-          user_id: staff.id,
-          type: 'call_prompt',
-          title: `📞 Call ${customer.full_name} to confirm booking`,
-          body: `New online booking for ${service?.name} on ${formatDate(scheduled_date)}. Call to confirm and ensure they complete the card details link.`,
-          entity_type: 'job',
-          entity_id: job.id,
-          action_url: `/jobs/${job.id}`,
-        }))
-      )
+      if (staffProfiles?.length) {
+        await supabase.from('notifications').insert(
+          staffProfiles.map(staff => ({
+            business_id,
+            user_id: staff.id,
+            type: 'call_prompt',
+            title: `📞 Call ${customer.full_name} to confirm booking`,
+            body: `New online booking for ${service?.name} on ${formatDate(scheduled_date)}. Call to confirm and ensure they complete the card details link.`,
+            entity_type: 'job',
+            entity_id: job.id,
+            action_url: `/jobs/${job.id}`,
+          }))
+        )
 
-      // 11. Send email notification to staff
-      for (const staff of staffProfiles) {
-        if (staff.email) {
-          try {
-            await resend.emails.send({
-              from: `BookdIn <hello@bookdin.co>`,
-              to: staff.email,
-              subject: `📞 New booking — call ${customer.full_name} now`,
-              html: `
-                <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-                  <h2 style="color: ${business.brand_color || '#1A6B4A'};">New online booking received</h2>
-                  <p>A new booking has come in and requires a confirmation call.</p>
-                  <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-                    <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Customer</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">${customer.full_name}</td></tr>
-                    <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Phone</td><td style="padding: 8px; font-size: 14px;"><a href="tel:${customer.phone}">${customer.phone}</a></td></tr>
-                    <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px; font-size: 14px;">${customer.email}</td></tr>
-                    <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Service</td><td style="padding: 8px; font-size: 14px;">${service?.name}</td></tr>
-                    <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Date</td><td style="padding: 8px; font-size: 14px;">${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}</td></tr>
-                    <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(taxSplit.total / 100).toFixed(2)}</td></tr>
-                  </table>
-                  <p style="color: #dc2626; font-weight: 600;">Action required: Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
-                  <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
-                </div>
-              `,
-            })
-          } catch (err) {
-            console.error('Staff notification email failed:', err)
+        for (const staff of staffProfiles) {
+          if (staff.email) {
+            try {
+              await resend.emails.send({
+                from: `BookdIn <hello@bookdin.co>`,
+                to: staff.email,
+                subject: `📞 New booking — call ${customer.full_name} now`,
+                html: `
+                  <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
+                    <h2 style="color: ${business.brand_color || '#1A6B4A'};">New online booking received</h2>
+                    <p>A new booking has come in and requires a confirmation call.</p>
+                    <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Customer</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">${customer.full_name}</td></tr>
+                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Phone</td><td style="padding: 8px; font-size: 14px;"><a href="tel:${customer.phone}">${customer.phone}</a></td></tr>
+                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px; font-size: 14px;">${customer.email}</td></tr>
+                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Service</td><td style="padding: 8px; font-size: 14px;">${service?.name}</td></tr>
+                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Date</td><td style="padding: 8px; font-size: 14px;">${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}</td></tr>
+                      <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(taxSplit.total / 100).toFixed(2)}</td></tr>
+                    </table>
+                    <p style="color: #dc2626; font-weight: 600;">Action required: Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
+                    <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
+                  </div>
+                `,
+              })
+            } catch (err) {
+              console.error('Staff notification email failed:', err)
+            }
           }
         }
       }
+      await logStep(supabase, submissionId!, { step: 'staff_notification', status: 'ok', duration_ms: Date.now() - t_notif })
+    } catch (e: any) {
+      await logStep(supabase, submissionId!, { step: 'staff_notification', status: 'failed', error: e.message, duration_ms: Date.now() - t_notif })
     }
 
-    // 12. Send confirmation email to customer
+    // 12. Send confirmation email to customer (non-critical)
     const cardSetupUrl = business.stripe_charges_enabled
       ? `${process.env.NEXT_PUBLIC_APP_URL}/secure-card/${cardSetupToken}`
       : undefined
 
-    await sendBookingConfirmation({
-      job: {
-        id: job.id,
-        scheduled_at: scheduledAtIso,
-        total_price: taxSplit.total,
-        tax_amount: taxSplit.tax,
-        is_flexible_time: isFlexible,
-      },
-      customer: { full_name: customer.full_name, email: customer.email },
-      business: {
-        name: business.name,
-        brand_color: business.brand_color,
-        logo_url: business.logo_url,
-        contact_email: business.contact_email,
-        timezone: tz,
-        plan: business.plan,
-        currency: business.currency,
-      },
-      address: {
-        line1: address.line1,
-        city: address.city,
-        state: address.state,
-        postcode: address.postcode,
-      },
-      service: { name: service?.name || 'Service' },
-      cardSetupUrl,
-      business_id: business_id,
-    })
+    const t_email = Date.now()
+    try {
+      await sendBookingConfirmation({
+        job: {
+          id: job.id,
+          scheduled_at: scheduledAtIso,
+          total_price: taxSplit.total,
+          tax_amount: taxSplit.tax,
+          is_flexible_time: isFlexible,
+        },
+        customer: { full_name: customer.full_name, email: customer.email },
+        business: {
+          name: business.name,
+          brand_color: business.brand_color,
+          logo_url: business.logo_url,
+          contact_email: business.contact_email,
+          timezone: tz,
+          plan: business.plan,
+          currency: business.currency,
+        },
+        address: {
+          line1: address.line1,
+          city: address.city,
+          state: address.state,
+          postcode: address.postcode,
+        },
+        service: { name: service?.name || 'Service' },
+        cardSetupUrl,
+        business_id: business_id,
+      })
+      await logStep(supabase, submissionId!, { step: 'customer_email', status: 'ok', duration_ms: Date.now() - t_email })
+    } catch (e: any) {
+      await logStep(supabase, submissionId!, { step: 'customer_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_email })
+    }
 
-
-    // 13. Send confirmation SMS to customer (non-blocking — booking succeeds even if SMS fails)
+    // 13. Send confirmation SMS to customer (non-critical)
+    const t_sms = Date.now()
     try {
       const { sendDialpadSms } = await import('@/lib/sms/dialpad')
       const { formatDateForSms, formatTimeForSms } = await import('@/lib/sms/format')
@@ -375,13 +437,12 @@ export async function POST(request: NextRequest) {
         },
         toPhone: customer.phone || '',
         vars: {
-          customer_name: customer.full_name?.split(' ')[0] || customer.full_name || '',  // first name only for warmth
+          customer_name: customer.full_name?.split(' ')[0] || customer.full_name || '',
           service_name: service?.name || 'Service',
           date: formatDateForSms(scheduledAtIso, tz),
           time: formatTimeForSms(scheduledAtIso, tz, isFlexible),
           business_name: business.name,
           business_phone: business.phone || '',
-          // NEW: passed through to upsertDialpadContact for proper contact name in Dialpad
           customer_id: customer.id || customerId || undefined,
           customer_first_name: customer.full_name?.split(' ')[0] || customer.full_name || '',
           customer_last_name: customer.full_name?.split(' ').slice(1).join(' ') || undefined,
@@ -404,15 +465,16 @@ export async function POST(request: NextRequest) {
       } else {
         console.log('SMS sent:', smsResult.message_id, 'job:', job.id)
       }
-    } catch (err: any) {
-      // Even if the SMS module itself throws (e.g., env var missing), don't block the booking
-      console.error('SMS handler threw (booking still successful):', err)
+      await logStep(supabase, submissionId!, { step: 'sms', status: 'ok', duration_ms: Date.now() - t_sms })
+    } catch (e: any) {
+      console.error('SMS handler threw (booking still successful):', e)
       try {
         await supabase.from('jobs').update({
           sms_status: 'failed',
-          sms_error: `handler threw: ${err.message?.slice(0, 400)}`,
+          sms_error: `handler threw: ${e.message?.slice(0, 400)}`,
         }).eq('id', job.id)
       } catch { /* best-effort audit */ }
+      await logStep(supabase, submissionId!, { step: 'sms', status: 'failed', error: e.message, duration_ms: Date.now() - t_sms })
     }
 
     // Save lead source attribution
@@ -442,6 +504,8 @@ export async function POST(request: NextRequest) {
         console.error('Lead source insert threw:', err)
       }
     }
+
+    await markProcessed(supabase, submissionId!, job.id)
     return NextResponse.json({
       success: true,
       job_id: job.id,
@@ -450,6 +514,10 @@ export async function POST(request: NextRequest) {
     })
   } catch (err: any) {
     console.error('Public booking error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    if (submissionId) await markFailed(supabase, submissionId!, err.message)
+    return NextResponse.json(
+      { error: 'Booking could not be completed. Please try again or contact us.' },
+      { status: 500 }
+    )
   }
 }
