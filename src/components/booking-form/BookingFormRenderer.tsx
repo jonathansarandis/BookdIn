@@ -3,6 +3,15 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import ServicePickerField from './builtins/ServicePickerField'
+import RoomCountsField from './builtins/RoomCountsField'
+import ExtrasPickerField from './builtins/ExtrasPickerField'
+import FrequencyPickerField from './builtins/FrequencyPickerField'
+import DateTimePickerField from './builtins/DateTimePickerField'
+import AddressField from './builtins/AddressField'
+import ContactInfoField from './builtins/ContactInfoField'
+import TncCheckboxField from './builtins/TncCheckboxField'
+import CustomFieldInput from './CustomFieldInput'
 
 export interface BookingFormRendererProps {
   businessId: string
@@ -55,9 +64,32 @@ export default function BookingFormRenderer({
     locationId: string
   } | null>(null)
 
+  const [currentStepIndex, setCurrentStepIndex] = useState(0)
+  const [roomPricing, setRoomPricing] = useState<any[]>([])
+  const [values, setValues] = useState<Record<string, any>>({
+    service_id: null,
+    room_counts: { bedrooms: null, bathrooms: null },
+    extras: [],
+    frequency: 'one_time',
+    date_time: { scheduled_date: '', scheduled_time: 'flexible', is_flexible: false },
+    address: { line1: '', city: '', state: '', postcode: '' },
+    contact_info: { full_name: '', email: '', phone: '', customer_notes: '' },
+    tnc_accepted: false,
+    custom: {},
+  })
+
   useEffect(() => {
     load()
   }, [businessId, locationId, mode])
+
+  useEffect(() => {
+    if (!values.service_id) return
+    supabase
+      .from('room_pricing')
+      .select('*')
+      .eq('service_id', values.service_id)
+      .then(({ data }) => setRoomPricing(data || []))
+  }, [values.service_id])
 
   async function load() {
     setLoading(true)
@@ -137,7 +169,6 @@ export default function BookingFormRenderer({
         placements = previewData.placements
         customFields = previewData.customFields
       } else {
-        // Fetch booking form for this business
         const { data: formRow, error: formErr } = await supabase
           .from('booking_forms')
           .select('id, title, subtitle')
@@ -147,7 +178,6 @@ export default function BookingFormRenderer({
 
         form = formRow
 
-        // Fetch steps
         const { data: stepsData } = await supabase
           .from('booking_form_steps')
           .select('id, form_id, sort_order, next_button_label, is_submit_step, submit_button_label')
@@ -156,7 +186,6 @@ export default function BookingFormRenderer({
 
         steps = stepsData || []
 
-        // Fetch placements via step IDs (no form_id column on placements table)
         const stepIds = steps.map((s: any) => s.id)
         const { data: placementsData } = stepIds.length > 0
           ? await supabase
@@ -168,7 +197,6 @@ export default function BookingFormRenderer({
 
         placements = placementsData || []
 
-        // Fetch active custom fields
         const { data: cfData } = await supabase
           .from('custom_fields')
           .select('id, label, field_type, options, required, sort_order')
@@ -205,15 +233,165 @@ export default function BookingFormRenderer({
     </div>
   )
 
+  if (!formData || formData.steps.length === 0) return (
+    <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg p-4 text-sm">
+      No steps configured for this form yet.
+    </div>
+  )
+
+  const selectedService = formData.services.find(s => s.id === values.service_id) ?? null
+  const currentStep = formData.steps[currentStepIndex]
+  const currentPlacements = formData.placements
+    .filter(p => p.step_id === currentStep.id)
+    .sort((a, b) => a.sort_order - b.sort_order)
+
+  function renderBuiltin(key: string, placementId: string) {
+    switch (key) {
+      case 'service_picker':
+        return (
+          <ServicePickerField
+            key={placementId}
+            value={values.service_id}
+            onChange={v => setValues(prev => ({ ...prev, service_id: v, extras: [] }))}
+            context={{ services: formData.services, business: formData.business }}
+          />
+        )
+      case 'room_counts':
+        return (
+          <RoomCountsField
+            key={placementId}
+            value={values.room_counts}
+            onChange={v => setValues(prev => ({ ...prev, room_counts: v }))}
+            context={{ selectedService, roomPricing }}
+          />
+        )
+      case 'extras_picker':
+        return (
+          <ExtrasPickerField
+            key={placementId}
+            value={values.extras}
+            onChange={v => setValues(prev => ({ ...prev, extras: v }))}
+            context={{ selectedService, business: formData.business }}
+          />
+        )
+      case 'frequency_picker':
+        return (
+          <FrequencyPickerField
+            key={placementId}
+            value={values.frequency}
+            onChange={v => setValues(prev => ({ ...prev, frequency: v }))}
+            context={{ frequencyDiscounts: formData.frequencyDiscounts, business: formData.business }}
+          />
+        )
+      case 'date_time_picker':
+        return (
+          <DateTimePickerField
+            key={placementId}
+            value={values.date_time}
+            onChange={v => setValues(prev => ({ ...prev, date_time: v }))}
+            context={{ businessTimezone: formData.business?.timezone }}
+          />
+        )
+      case 'address':
+        return (
+          <AddressField
+            key={placementId}
+            value={values.address}
+            onChange={v => setValues(prev => ({ ...prev, address: v }))}
+            context={{}}
+          />
+        )
+      case 'contact_info':
+        return (
+          <ContactInfoField
+            key={placementId}
+            value={values.contact_info}
+            onChange={v => setValues(prev => ({ ...prev, contact_info: v }))}
+            context={{}}
+          />
+        )
+      case 'tnc_checkbox':
+        return formData.business?.tnc_url ? (
+          <TncCheckboxField
+            key={placementId}
+            value={values.tnc_accepted}
+            onChange={v => setValues(prev => ({ ...prev, tnc_accepted: v }))}
+            context={{ tncUrl: formData.business.tnc_url }}
+          />
+        ) : null
+      default:
+        return (
+          <div key={placementId} className="text-xs text-red-500 px-1">
+            Unknown built-in: {key}
+          </div>
+        )
+    }
+  }
+
+  function renderPlacement(p: any) {
+    if (p.builtin_field_key) return renderBuiltin(p.builtin_field_key, p.id)
+    if (p.custom_field_id) {
+      const cf = formData.customFields.find(f => f.id === p.custom_field_id)
+      if (!cf) return null
+      return (
+        <CustomFieldInput
+          key={p.id}
+          field={cf}
+          value={values.custom[cf.id] ?? null}
+          onChange={v => setValues(prev => ({ ...prev, custom: { ...prev.custom, [cf.id]: v } }))}
+        />
+      )
+    }
+    return null
+  }
+
   return (
-    <div className="space-y-6">
-      <DebugSection title="Form" data={formData.form} />
-      <DebugSection title={`Steps (${formData.steps.length})`} data={formData.steps} />
-      <DebugSection title={`Placements (${formData.placements.length})`} data={formData.placements} />
-      <DebugSection title={`Custom Fields (${formData.customFields.length})`} data={formData.customFields} />
-      <DebugSection title={`Services (${formData.services.length})`} data={formData.services} />
-      <DebugSection title="Business" data={formData.business} />
-      <DebugSection title={`Frequency Discounts (${formData.frequencyDiscounts.length})`} data={formData.frequencyDiscounts} />
+    <div
+      className="space-y-6"
+      style={{ '--brand-color': formData.business?.brand_color || '#1A6B4A' } as React.CSSProperties}
+    >
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+        {currentStepIndex === 0 && formData.form.title && (
+          <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">{formData.form.title}</h1>
+        )}
+        {currentStepIndex === 0 && formData.form.subtitle && (
+          <p className="text-sm text-gray-600 mb-6 text-center">{formData.form.subtitle}</p>
+        )}
+
+        <p className="text-xs uppercase tracking-wider text-gray-400 mb-4">
+          Step {currentStepIndex + 1} of {formData.steps.length}
+        </p>
+
+        <div className="space-y-5">
+          {currentPlacements.map(p => renderPlacement(p))}
+          {currentPlacements.length === 0 && (
+            <p className="text-sm text-gray-400 italic">No fields on this step.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Temporary navigation strip */}
+      <div className="mt-6 flex items-center justify-between gap-4">
+        <button
+          onClick={() => setCurrentStepIndex(i => Math.max(0, i - 1))}
+          disabled={currentStepIndex === 0}
+          className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg disabled:opacity-30"
+        >
+          Back
+        </button>
+        <button
+          onClick={() => setCurrentStepIndex(i => Math.min(formData.steps.length - 1, i + 1))}
+          disabled={currentStepIndex === formData.steps.length - 1}
+          className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30"
+        >
+          {currentStep.next_button_label || 'Next'}
+        </button>
+      </div>
+
+      <details className="text-xs text-gray-400">
+        <summary className="cursor-pointer">Debug: current values</summary>
+        <pre className="mt-2 bg-gray-50 p-3 rounded text-gray-600">{JSON.stringify(values, null, 2)}</pre>
+      </details>
     </div>
   )
 }
