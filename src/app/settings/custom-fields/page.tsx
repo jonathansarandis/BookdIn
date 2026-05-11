@@ -112,9 +112,13 @@ function FieldModal({ initial, onClose, onSave }: FieldModalProps) {
     }
   }
 
+  const previewLabel = label.trim() || null
+  const realOptions = options.filter(o => o.label.trim())
+  const disabledInputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-400 cursor-not-allowed'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900">
             {initial?.id ? 'Edit field' : 'Add field'}
@@ -124,103 +128,173 @@ function FieldModal({ initial, onClose, onSave }: FieldModalProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className={labelCls}>Label <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={label}
-              onChange={e => setLabel(e.target.value)}
-              placeholder="e.g. Pet name, Access instructions"
-              className={inputCls}
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className={labelCls}>Field type</label>
-            <select value={fieldType} onChange={e => setFieldType(e.target.value)} className={inputCls}>
-              {FIELD_TYPES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {needsOptions && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-0">
+          {/* Left: form */}
+          <form onSubmit={handleSubmit} className="p-5 space-y-4 md:border-r md:border-gray-100">
             <div>
-              <label className={labelCls}>Options <span className="text-red-500">*</span></label>
-              <div className="space-y-2">
-                {options.map((opt, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={opt.label}
-                      onChange={e => updateOption(i, 'label', e.target.value)}
-                      placeholder={`Option ${i + 1}`}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                    {options.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeOption(i)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+              <label className={labelCls}>Label <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={label}
+                onChange={e => setLabel(e.target.value)}
+                placeholder="e.g. Pet name, Access instructions"
+                className={inputCls}
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Field type</label>
+              <select value={fieldType} onChange={e => setFieldType(e.target.value)} className={inputCls}>
+                {FIELD_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
-                <button
-                  type="button"
-                  onClick={addOption}
-                  className="flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium mt-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add option
-                </button>
+              </select>
+            </div>
+
+            {needsOptions && (
+              <div>
+                <label className={labelCls}>Options <span className="text-red-500">*</span></label>
+                <div className="space-y-2">
+                  {options.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={opt.label}
+                        onChange={e => updateOption(i, 'label', e.target.value)}
+                        placeholder={`Option ${i + 1}`}
+                        className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                      {options.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeOption(i)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addOption}
+                    className="flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium mt-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add option
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="flex items-center justify-between py-1">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Required</p>
-              <p className="text-xs text-gray-500">Customers must fill this in before submitting</p>
+            <div className="flex items-center justify-between py-1">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Required</p>
+                <p className="text-xs text-gray-500">Customers must fill this in before submitting</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRequired(r => !r)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${required ? 'bg-brand-500' : 'bg-gray-200'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${required ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setRequired(r => !r)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${required ? 'bg-brand-500' : 'bg-gray-200'}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${required ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
+
+            {error && (
+              <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {saving ? 'Saving…' : 'Save field'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+
+          {/* Right: Preview */}
+          <div className="p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Preview</p>
+            <div className="bg-gray-50 rounded-xl p-5">
+              {fieldType === 'checkbox' ? (
+                <label className="flex items-center gap-2 cursor-not-allowed">
+                  <input type="checkbox" disabled className="w-4 h-4 rounded border-gray-300 text-brand-500 cursor-not-allowed" />
+                  <span className="text-sm text-gray-700">
+                    {previewLabel
+                      ? <>{previewLabel}{required && <span className="text-red-500 ml-0.5">*</span>}</>
+                      : <em className="text-gray-400">Field label</em>
+                    }
+                  </span>
+                </label>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {previewLabel
+                      ? <>{previewLabel}{required && <span className="text-red-500 ml-0.5">*</span>}</>
+                      : <em className="text-gray-400 font-normal">Field label</em>
+                    }
+                  </label>
+
+                  {fieldType === 'text' && (
+                    <input type="text" disabled placeholder="Your answer" className={disabledInputCls} />
+                  )}
+
+                  {fieldType === 'textarea' && (
+                    <textarea disabled placeholder="Your answer" rows={3} className={disabledInputCls} />
+                  )}
+
+                  {fieldType === 'number' && (
+                    <input type="number" disabled placeholder="0" className={disabledInputCls} />
+                  )}
+
+                  {fieldType === 'select' && (
+                    realOptions.length > 0 ? (
+                      <select disabled className={disabledInputCls}>
+                        <option>Select an option…</option>
+                        {realOptions.map((o, i) => (
+                          <option key={i}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic mt-1">Add options on the left</p>
+                    )
+                  )}
+
+                  {fieldType === 'radio' && (
+                    realOptions.length > 0 ? (
+                      <div className="space-y-2">
+                        {realOptions.map((o, i) => (
+                          <label key={i} className="flex items-center gap-2 cursor-not-allowed">
+                            <input type="radio" disabled className="w-4 h-4 border-gray-300 text-brand-500 cursor-not-allowed" />
+                            <span className="text-sm text-gray-700">{o.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic mt-1">Add options on the left</p>
+                    )
+                  )}
+                </>
+              )}
+            </div>
           </div>
-
-          {error && (
-            <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-              {error}
-            </div>
-          )}
-
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-            >
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {saving ? 'Saving…' : 'Save field'}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   )
