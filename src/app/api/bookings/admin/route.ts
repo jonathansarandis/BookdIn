@@ -26,6 +26,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const {
     editJobId,
     service_id,
+    location_id,
     frequency,
     bedrooms,
     bathrooms,
@@ -65,6 +66,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .eq('id', businessId)
     .single()
   if (!business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+
+  // Validate location belongs to this business
+  if (!location_id) {
+    return NextResponse.json({ error: 'Location is required' }, { status: 400 })
+  }
+  const { data: location } = await admin
+    .from('locations')
+    .select('id')
+    .eq('id', location_id)
+    .eq('business_id', businessId)
+    .single()
+  if (!location) {
+    return NextResponse.json({ error: 'Location not found or does not belong to this business' }, { status: 404 })
+  }
 
   // 4. Fetch service + room_pricing (eq business_id prevents cross-tenant service use)
   const { data: service } = await admin
@@ -169,6 +184,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .from('jobs')
     .insert({
       business_id: businessId,
+      location_id,
       customer_id,
       address_id,
       service_id,
