@@ -396,6 +396,7 @@ export async function POST(request: NextRequest) {
       if (!business.contact_email) {
         await logStep(supabase, submissionId!, { step: 'owner_email', status: 'failed', error: 'no contact_email configured', duration_ms: Date.now() - t_owner_email })
       } else {
+        const frequencyLabel = frequency ? (({ one_time: 'One Time', weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly' } as Record<string, string>)[frequency] || frequency) : null
         const { error: ownerEmailErr } = await resend.emails.send({
           from: `BookdIn <hello@bookdin.co>`,
           to: business.contact_email,
@@ -403,19 +404,21 @@ export async function POST(request: NextRequest) {
           reply_to: customer.email,
           subject: `📞 New booking — call ${customer.full_name} now`,
           html: `
-            <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: ${business.brand_color || '#1A6B4A'};">New online booking received</h2>
-              <p>A new booking has come in and requires a confirmation call.</p>
-              <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Customer</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">${customer.full_name}</td></tr>
-                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Phone</td><td style="padding: 8px; font-size: 14px;"><a href="tel:${customer.phone}">${customer.phone}</a></td></tr>
-                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px; font-size: 14px;">${customer.email}</td></tr>
-                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Service</td><td style="padding: 8px; font-size: 14px;">${service?.name}</td></tr>
-                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Date</td><td style="padding: 8px; font-size: 14px;">${formatDate(scheduled_date)} at ${formatTime(scheduled_time)}</td></tr>
-                <tr><td style="padding: 8px; color: #6b7280; font-size: 14px;">Total</td><td style="padding: 8px; font-size: 14px; font-weight: 600;">$${(taxSplit.total / 100).toFixed(2)}</td></tr>
-              </table>
-              <p style="color: #dc2626; font-weight: 600;">Action required: Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1A6B4A'}; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-size: 14px; margin-top: 8px;">View booking →</a>
+            <div style="margin: 0; padding: 40px 20px; background: #f5f3ef; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+              <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 48px 40px; text-align: center;">
+                <div style="font-size: 28px; font-weight: 800; margin-bottom: 40px;"><span style="color: #1E9BFF;">Bookd</span><span style="color: #0a1929;">In</span></div>
+                <h1 style="font-size: 28px; font-weight: 700; color: #0a1929; margin: 0 0 24px 0;">New Booking</h1>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 40px 0;">You have a new booking from <strong>${customer.full_name}</strong></p>
+                <p style="font-size: 14px; color: #6b7280; margin: 0 0 32px 0;">${customer.phone ? `<a href="tel:${customer.phone}" style="color: ${business.brand_color || '#1E9BFF'}; text-decoration: none;">${customer.phone}</a> &middot; ` : ''}<a href="mailto:${customer.email}" style="color: ${business.brand_color || '#1E9BFF'}; text-decoration: none;">${customer.email}</a></p>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${formatDate(scheduled_date)}</p>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${isFlexible ? 'Flexible time' : formatTime(scheduled_time)}</p>
+                ${frequencyLabel ? `<p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${frequencyLabel}</p>` : ''}
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${address.line1}, ${address.city} ${address.state} ${address.postcode}</p>
+                <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px 0;">${service?.name}</p>
+                <p style="font-size: 18px; font-weight: 700; color: #0a1929; margin: 8px 0 32px 0;"><strong>Total: $${(taxSplit.total / 100).toFixed(2)}</strong></p>
+                <p style="font-size: 14px; color: #dc2626; font-weight: 500; margin: 0 0 40px 0; line-height: 1.6;"><strong>Action required:</strong> Call the customer now to confirm the booking and remind them to complete the secure card details link in their email.</p>
+                <a href="${process.env.NEXT_PUBLIC_APP_URL}/jobs/${job.id}" style="display: inline-block; background: ${business.brand_color || '#1E9BFF'}; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 600;">View booking →</a>
+              </div>
             </div>
           `,
         })
