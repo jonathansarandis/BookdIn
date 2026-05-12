@@ -45,7 +45,7 @@ export default function RoomCountsField({ value, onChange, context, disabled }: 
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-gray-900">Property size</h3>
+      <h3 className="text-sm font-semibold text-gray-900">Property size<span className="text-red-500 ml-1">*</span></h3>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={LABEL_CLASS}>Bedrooms</label>
