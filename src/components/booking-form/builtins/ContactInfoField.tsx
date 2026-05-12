@@ -13,7 +13,7 @@ export default function ContactInfoField({ value, onChange, disabled }: Props) {
     <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
       <h3 className="text-sm font-semibold text-gray-900">Your details</h3>
       <div>
-        <label className={LABEL_CLASS}>Full name *</label>
+        <label className={LABEL_CLASS}>Full name<span className="text-red-500 ml-1">*</span></label>
         <input
           required
           value={value.full_name}
@@ -25,7 +25,7 @@ export default function ContactInfoField({ value, onChange, disabled }: Props) {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={LABEL_CLASS}>Email *</label>
+          <label className={LABEL_CLASS}>Email<span className="text-red-500 ml-1">*</span></label>
           <input
             required
             type="email"
@@ -37,7 +37,7 @@ export default function ContactInfoField({ value, onChange, disabled }: Props) {
           />
         </div>
         <div>
-          <label className={LABEL_CLASS}>Phone *</label>
+          <label className={LABEL_CLASS}>Phone<span className="text-red-500 ml-1">*</span></label>
           <input
             required
             value={value.phone}

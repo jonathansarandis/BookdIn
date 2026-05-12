@@ -18,7 +18,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
       <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
       <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         <div className="min-w-0 relative">
-          <label className={LABEL_CLASS}>Date *</label>
+          <label className={LABEL_CLASS}>Date<span className="text-red-500 ml-1">*</span></label>
           <input
             type="date"
             required
@@ -36,7 +36,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
           )}
         </div>
         <div className="min-w-0 relative">
-          <label className={LABEL_CLASS}>Time *</label>
+          <label className={LABEL_CLASS}>Time<span className="text-red-500 ml-1">*</span></label>
           <select
             value={value.scheduled_time}
             onChange={e => onChange({ ...value, scheduled_time: e.target.value })}

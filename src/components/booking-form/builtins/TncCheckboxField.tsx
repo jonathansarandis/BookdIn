@@ -29,6 +29,7 @@ export default function TncCheckboxField({ value, onChange, context, disabled }:
           >
             Terms & Conditions
           </a>
+          <span className="text-red-500 ml-1">*</span>
         </span>
       </label>
     </div>
