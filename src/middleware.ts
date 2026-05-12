@@ -40,6 +40,7 @@ export async function middleware(request: NextRequest) {
     '/api/demo',
     '/api/demo/logout',
     '/api/bookings/public',
+    '/api/bookings/dispatch',
     '/api/secure-card',
     '/api/stripe/webhook',
     '/provider/login',
