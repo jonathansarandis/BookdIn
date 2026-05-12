@@ -276,7 +276,7 @@ export default function BookingFormRenderer({
 
         const { data: cfData } = await supabase
           .from('custom_fields')
-          .select('id, label, field_type, options, required, sort_order')
+          .select('id, label, field_type, options, required, sort_order, default_value')
           .eq('business_id', businessId)
           .eq('is_active', true)
           .order('sort_order')
@@ -294,6 +294,18 @@ export default function BookingFormRenderer({
         frequencyDiscounts,
         locationId,
       })
+
+      // Seed custom field defaults (existing user input takes precedence)
+      const customDefaults: Record<string, any> = {}
+      for (const cf of customFields) {
+        if (cf.default_value !== null && cf.default_value !== undefined) {
+          customDefaults[cf.id] = cf.default_value
+        }
+      }
+      setValues(prev => ({
+        ...prev,
+        custom: { ...customDefaults, ...prev.custom },
+      }))
     } catch (e: any) {
       setLoadError(e.message)
     } finally {
