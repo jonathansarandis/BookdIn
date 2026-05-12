@@ -12,6 +12,7 @@ import AddressField from './builtins/AddressField'
 import ContactInfoField from './builtins/ContactInfoField'
 import TncCheckboxField from './builtins/TncCheckboxField'
 import CustomFieldInput from './CustomFieldInput'
+import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 
 export interface BookingFormRendererProps {
   businessId: string
@@ -49,6 +50,7 @@ export default function BookingFormRenderer({
   locationId,
   mode,
   previewData,
+  onSubmitSuccess,
 }: BookingFormRendererProps) {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -78,6 +80,10 @@ export default function BookingFormRenderer({
     custom: {},
   })
 
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submittedJobId, setSubmittedJobId] = useState<string | null>(null)
+
   useEffect(() => {
     load()
   }, [businessId, locationId, mode])
@@ -90,6 +96,77 @@ export default function BookingFormRenderer({
       .eq('service_id', values.service_id)
       .then(({ data }) => setRoomPricing(data || []))
   }, [values.service_id])
+
+  async function handleSubmit() {
+    if (submitting || !formData) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const svc = formData.services.find((s: any) => s.id === values.service_id)
+      if (!svc) throw new Error('No service selected')
+
+      const selectedExtraObjects = (svc.service_extras || []).filter((ex: any) => values.extras.includes(ex.id))
+
+      const breakdown = calcJobPrice({
+        service: { id: svc.id, base_price: svc.base_price, pricing_type: svc.pricing_type, duration_minutes: svc.duration_minutes },
+        bedrooms: svc.pricing_type === 'room_based' ? values.room_counts.bedrooms : null,
+        bathrooms: svc.pricing_type === 'room_based' ? values.room_counts.bathrooms : null,
+        selectedExtras: selectedExtraObjects.map((ex: any) => ({ price: ex.price, is_quote_only: ex.is_quote_only })),
+        roomPricing: roomPricing,
+      })
+
+      const discountPct = formData.frequencyDiscounts.find(
+        (d: any) => d.frequency === values.frequency && d.is_enabled
+      )?.discount_percent ?? 0
+      const discounted = applyFrequencyDiscount(breakdown.total, discountPct)
+      const effectiveTaxRate = formData.business.show_tax && formData.business.tax_rate > 0 ? formData.business.tax_rate : 0
+      const taxSplit = calcTaxSplit(discounted, formData.business.tax_mode ?? 'exclusive', effectiveTaxRate)
+
+      const payload = {
+        business_id: businessId,
+        location_id: locationId,
+        service_id: values.service_id,
+        frequency: values.frequency,
+        scheduled_date: values.date_time.scheduled_date,
+        scheduled_time: values.date_time.is_flexible ? 'flexible' : values.date_time.scheduled_time,
+        total_price: taxSplit.total,
+        tax_amount: taxSplit.tax,
+        extras: values.extras,
+        customer: {
+          full_name: values.contact_info.full_name,
+          email: values.contact_info.email,
+          phone: values.contact_info.phone,
+        },
+        address: {
+          line1: values.address.line1,
+          city: values.address.city,
+          state: values.address.state,
+          postcode: values.address.postcode,
+        },
+        customer_notes: values.contact_info.customer_notes || null,
+        bedrooms: svc.pricing_type === 'room_based' ? values.room_counts.bedrooms : null,
+        bathrooms: svc.pricing_type === 'room_based' ? values.room_counts.bathrooms : null,
+        custom_field_values: values.custom,
+        tnc_accepted_at: values.tnc_accepted ? new Date().toISOString() : null,
+        tnc_url_at_acceptance: values.tnc_accepted ? formData.business.tnc_url : null,
+      }
+
+      const res = await fetch('/api/bookings/public', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Booking could not be submitted')
+
+      setSubmittedJobId(data.job_id)
+      onSubmitSuccess?.(data.job_id)
+    } catch (e: any) {
+      setSubmitError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -236,6 +313,14 @@ export default function BookingFormRenderer({
   if (!formData || formData.steps.length === 0) return (
     <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-lg p-4 text-sm">
       No steps configured for this form yet.
+    </div>
+  )
+
+  if (submittedJobId) return (
+    <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center space-y-2">
+      <p className="text-lg font-semibold text-green-800">Booking received!</p>
+      <p className="text-sm text-green-700">Job ID: {submittedJobId}</p>
+      <p className="text-sm text-green-600">You'll receive a confirmation email shortly.</p>
     </div>
   )
 
@@ -446,22 +531,23 @@ export default function BookingFormRenderer({
         <div className="flex flex-col items-end">
           <button
             onClick={() => {
-              if (!canProceed) return
+              if (!canProceed || submitting) return
               if (currentStep.is_submit_step) {
-                // Submit handler comes in C5
+                handleSubmit()
               } else {
                 setCurrentStepIndex(i => Math.min(formData.steps.length - 1, i + 1))
               }
             }}
-            disabled={!canProceed}
-            className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30"
+            disabled={!canProceed || submitting}
+            className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30 flex items-center gap-2"
           >
-            {currentStep.is_submit_step
-              ? (currentStep.submit_button_label || 'Submit')
-              : (currentStep.next_button_label || 'Next')}
+            {submitting && currentStep.is_submit_step ? 'Submitting…' : currentStep.is_submit_step ? (currentStep.submit_button_label || 'Submit') : (currentStep.next_button_label || 'Next')}
           </button>
-          {stepValidation && (
+          {stepValidation && !submitError && (
             <p className="mt-2 text-xs text-gray-500 text-right">{stepValidation}</p>
+          )}
+          {submitError && (
+            <p className="mt-3 text-sm text-red-600 text-right">{submitError}</p>
           )}
         </div>
       </div>
