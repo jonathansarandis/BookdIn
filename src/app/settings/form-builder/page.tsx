@@ -66,6 +66,7 @@ interface CustomField {
   required: boolean
   sort_order: number
   is_active: boolean
+  default_value?: any
 }
 
 interface FormStep {
@@ -163,6 +164,7 @@ function FieldModal({ initial, onClose, onSave }: FieldModalProps) {
     initial?.options?.length ? initial.options : [{ label: '', value: '' }]
   )
   const [required, setRequired] = useState(initial?.required ?? false)
+  const [defaultValue, setDefaultValue] = useState<any>(initial?.default_value ?? null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -184,6 +186,7 @@ function FieldModal({ initial, onClose, onSave }: FieldModalProps) {
           label: o.label.trim(),
           value: o.value.trim() || o.label.trim().toLowerCase().replace(/\s+/g, '_'),
         })) : [],
+        default_value: defaultValue !== '' ? defaultValue : null,
       })
     } catch (e: any) { setError(e.message); setSaving(false) }
   }
@@ -237,6 +240,28 @@ function FieldModal({ initial, onClose, onSave }: FieldModalProps) {
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${required ? 'bg-brand-500' : 'bg-gray-200'}`}>
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${required ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
+            </div>
+            <div>
+              <label className={labelCls}>Default value <span className="text-gray-400 font-normal">(optional)</span></label>
+              {(fieldType === 'select' || fieldType === 'radio') && (
+                <select value={defaultValue ?? ''} onChange={e => setDefaultValue(e.target.value || null)} className={inputCls}>
+                  <option value="">No default</option>
+                  {realOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              )}
+              {fieldType === 'checkbox' && (
+                <select value={defaultValue === true ? 'true' : defaultValue === false ? 'false' : ''} onChange={e => setDefaultValue(e.target.value === '' ? null : e.target.value === 'true')} className={inputCls}>
+                  <option value="">No default</option>
+                  <option value="false">Unchecked</option>
+                  <option value="true">Checked</option>
+                </select>
+              )}
+              {(fieldType === 'text' || fieldType === 'textarea') && (
+                <input type="text" value={defaultValue ?? ''} onChange={e => setDefaultValue(e.target.value || null)} placeholder="Leave blank for no default" className={inputCls} />
+              )}
+              {fieldType === 'number' && (
+                <input type="number" value={defaultValue ?? ''} onChange={e => setDefaultValue(e.target.value === '' ? null : Number(e.target.value))} placeholder="Leave blank for no default" className={inputCls} />
+              )}
             </div>
             {error && <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{error}</div>}
             <div className="flex items-center gap-3 pt-1">
