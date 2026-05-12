@@ -245,6 +245,70 @@ export default function BookingFormRenderer({
     .filter(p => p.step_id === currentStep.id)
     .sort((a, b) => a.sort_order - b.sort_order)
 
+  function validatePlacement(p: any, values: any, customFields: any[], business: any): string | null {
+    if (p.builtin_field_key) {
+      switch (p.builtin_field_key) {
+        case 'service_picker':
+          return values.service_id ? null : 'Select a service to continue'
+        case 'room_counts': {
+          const svc = formData.services.find((s: any) => s.id === values.service_id) ?? null
+          if (svc?.pricing_type !== 'room_based') return null
+          if (values.room_counts.bedrooms == null) return 'Select number of bedrooms'
+          if (values.room_counts.bathrooms == null) return 'Select number of bathrooms'
+          return null
+        }
+        case 'extras_picker':
+          return null
+        case 'frequency_picker':
+          return values.frequency ? null : 'Choose a frequency'
+        case 'date_time_picker':
+          if (!values.date_time.scheduled_date) return 'Select a date'
+          if (!values.date_time.is_flexible && (!values.date_time.scheduled_time || values.date_time.scheduled_time === 'flexible')) return 'Select a time or check "flexible"'
+          return null
+        case 'address': {
+          const a = values.address
+          if (!a.line1?.trim()) return 'Enter street address'
+          if (!a.city?.trim()) return 'Enter suburb'
+          if (!a.state?.trim()) return 'Select state'
+          if (!a.postcode?.trim()) return 'Enter postcode'
+          return null
+        }
+        case 'contact_info': {
+          const c = values.contact_info
+          if (!c.full_name?.trim()) return 'Enter your name'
+          if (!c.email?.trim()) return 'Enter your email'
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) return 'Enter a valid email address'
+          if (!c.phone?.trim()) return 'Enter your phone number'
+          return null
+        }
+        case 'tnc_checkbox':
+          if (business?.tnc_url && !values.tnc_accepted) return 'Accept the Terms & Conditions to continue'
+          return null
+        default:
+          return null
+      }
+    }
+    if (p.custom_field_id) {
+      const cf = customFields.find((f: any) => f.id === p.custom_field_id)
+      if (!cf) return null
+      if (!cf.required) return null
+      const v = values.custom[cf.id]
+      if (cf.field_type === 'checkbox') return v === true ? null : `${cf.label} is required`
+      if (v === undefined || v === null || v === '') return `${cf.label} is required`
+      return null
+    }
+    return null
+  }
+
+  const stepValidation: string | null = (() => {
+    for (const p of currentPlacements) {
+      const err = validatePlacement(p, values, formData.customFields, formData.business)
+      if (err) return err
+    }
+    return null
+  })()
+  const canProceed = stepValidation === null
+
   function renderBuiltin(key: string, placementId: string) {
     switch (key) {
       case 'service_picker':
@@ -370,7 +434,7 @@ export default function BookingFormRenderer({
         </div>
       </div>
 
-      {/* Temporary navigation strip */}
+      {/* Navigation */}
       <div className="mt-6 flex items-center justify-between gap-4">
         <button
           onClick={() => setCurrentStepIndex(i => Math.max(0, i - 1))}
@@ -379,19 +443,28 @@ export default function BookingFormRenderer({
         >
           Back
         </button>
-        <button
-          onClick={() => setCurrentStepIndex(i => Math.min(formData.steps.length - 1, i + 1))}
-          disabled={currentStepIndex === formData.steps.length - 1}
-          className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30"
-        >
-          {currentStep.next_button_label || 'Next'}
-        </button>
+        <div className="flex flex-col items-end">
+          <button
+            onClick={() => {
+              if (!canProceed) return
+              if (currentStep.is_submit_step) {
+                // Submit handler comes in C5
+              } else {
+                setCurrentStepIndex(i => Math.min(formData.steps.length - 1, i + 1))
+              }
+            }}
+            disabled={!canProceed}
+            className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30"
+          >
+            {currentStep.is_submit_step
+              ? (currentStep.submit_button_label || 'Submit')
+              : (currentStep.next_button_label || 'Next')}
+          </button>
+          {stepValidation && (
+            <p className="mt-2 text-xs text-gray-500 text-right">{stepValidation}</p>
+          )}
+        </div>
       </div>
-
-      <details className="text-xs text-gray-400">
-        <summary className="cursor-pointer">Debug: current values</summary>
-        <pre className="mt-2 bg-gray-50 p-3 rounded text-gray-600">{JSON.stringify(values, null, 2)}</pre>
-      </details>
     </div>
   )
 }
