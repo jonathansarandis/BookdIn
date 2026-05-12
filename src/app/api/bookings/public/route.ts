@@ -1,6 +1,6 @@
 // @ts-nocheck
 // src/app/api/bookings/public/route.ts
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { sendBookingConfirmation } from '@/lib/email'
@@ -301,7 +301,7 @@ export async function POST(request: NextRequest) {
       : undefined
 
     // Background: CRM, notifications, emails, SMS, UTM attribution, audit mark
-    after(async () => {
+    ;(async () => {
       try {
         // 7-8. CRM: upsert contact and log activity (non-critical)
         const t_crm = Date.now()
@@ -526,7 +526,7 @@ export async function POST(request: NextRequest) {
         console.error('[bookings/public] background tasks failed', err)
         try { await markFailed(supabase, submissionId!, String(err)) } catch {}
       }
-    })
+    })()
 
     return NextResponse.json({
       success: true,
