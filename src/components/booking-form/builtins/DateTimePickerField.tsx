@@ -39,12 +39,12 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
           <label className={LABEL_CLASS}>Time<span className="text-red-500 ml-1">*</span></label>
           <select
             value={value.scheduled_time}
-            onChange={e => onChange({ ...value, scheduled_time: e.target.value })}
+            onChange={e => onChange({ ...value, scheduled_time: e.target.value, is_flexible: e.target.value === 'flexible' })}
             className={INPUT_CLASS}
             style={{ width: '100%', height: '42px' }}
-            disabled={disabled || value.is_flexible}
+            disabled={disabled}
           >
-            <option value="">Pick a time</option>
+            <option value="flexible">Flexible time</option>
             {TIME_SLOTS.map(t => (
               <option key={t} value={t}>
                 {new Date(`2000-01-01T${t}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}
@@ -53,16 +53,6 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
           </select>
         </div>
       </div>
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={value.is_flexible}
-          onChange={e => onChange({ ...value, is_flexible: e.target.checked, scheduled_time: e.target.checked ? '' : value.scheduled_time })}
-          className="h-4 w-4 rounded border-gray-300"
-          disabled={disabled}
-        />
-        <span className="text-sm text-gray-600">I'm flexible with timing</span>
-      </label>
     </div>
   )
 }

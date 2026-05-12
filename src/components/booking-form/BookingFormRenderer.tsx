@@ -73,7 +73,7 @@ export default function BookingFormRenderer({
     room_counts: { bedrooms: null, bathrooms: null },
     extras: [],
     frequency: 'one_time',
-    date_time: { scheduled_date: '', scheduled_time: 'flexible', is_flexible: false },
+    date_time: { scheduled_date: '', scheduled_time: 'flexible', is_flexible: true },
     address: { line1: '', city: '', state: '', postcode: '' },
     contact_info: { full_name: '', email: '', phone: '', customer_notes: '' },
     tnc_accepted: false,
@@ -360,7 +360,7 @@ export default function BookingFormRenderer({
           return values.frequency ? null : 'Choose a frequency'
         case 'date_time_picker':
           if (!values.date_time.scheduled_date) return 'Select a date'
-          if (!values.date_time.is_flexible && (!values.date_time.scheduled_time || values.date_time.scheduled_time === 'flexible')) return 'Select a time or check "flexible"'
+          if (!values.date_time.is_flexible && (!values.date_time.scheduled_time || values.date_time.scheduled_time === 'flexible')) return 'Select a time'
           return null
         case 'address': {
           const a = values.address
