@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { BuiltinFieldProps, RoomCountsValue, RoomPricing, Service, INPUT_CLASS, LABEL_CLASS } from './types'
 
 interface Context {
@@ -12,14 +13,6 @@ interface Props extends BuiltinFieldProps<RoomCountsValue, Context> {}
 export default function RoomCountsField({ value, onChange, context, disabled }: Props) {
   const { selectedService, roomPricing } = context
 
-  if (selectedService?.pricing_type !== 'room_based') {
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <p className="text-sm text-gray-500">Pricing is flat for this service.</p>
-      </div>
-    )
-  }
-
   function getBedroomCounts(): number[] {
     const beds = roomPricing.filter(r => r.type === 'bedroom').map(r => r.count).sort((a, b) => a - b)
     return beds.length > 0 ? beds : [1, 2, 3, 4, 5]
@@ -28,6 +21,26 @@ export default function RoomCountsField({ value, onChange, context, disabled }: 
   function getBathroomCounts(): number[] {
     const baths = roomPricing.filter(r => r.type === 'bathroom').map(r => r.count).sort((a, b) => a - b)
     return baths.length > 0 ? baths : [1, 2, 3]
+  }
+
+  useEffect(() => {
+    if (selectedService?.pricing_type !== 'room_based') return
+    if (value.bedrooms == null || value.bathrooms == null) {
+      const defaultBeds = getBedroomCounts()[0] ?? 1
+      const defaultBaths = getBathroomCounts()[0] ?? 1
+      onChange({
+        bedrooms: value.bedrooms ?? defaultBeds,
+        bathrooms: value.bathrooms ?? defaultBaths,
+      })
+    }
+  }, [selectedService?.id])
+
+  if (selectedService?.pricing_type !== 'room_based') {
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <p className="text-sm text-gray-500">Pricing is flat for this service.</p>
+      </div>
+    )
   }
 
   return (
