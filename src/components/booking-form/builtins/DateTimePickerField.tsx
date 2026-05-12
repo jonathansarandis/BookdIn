@@ -44,7 +44,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
             style={{ width: '100%', height: '42px' }}
             disabled={disabled || value.is_flexible}
           >
-            <option value="flexible">Flexible time</option>
+            <option value="">Pick a time</option>
             {TIME_SLOTS.map(t => (
               <option key={t} value={t}>
                 {new Date(`2000-01-01T${t}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}
@@ -57,7 +57,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
         <input
           type="checkbox"
           checked={value.is_flexible}
-          onChange={e => onChange({ ...value, is_flexible: e.target.checked, scheduled_time: e.target.checked ? 'flexible' : value.scheduled_time })}
+          onChange={e => onChange({ ...value, is_flexible: e.target.checked, scheduled_time: e.target.checked ? '' : value.scheduled_time })}
           className="h-4 w-4 rounded border-gray-300"
           disabled={disabled}
         />
