@@ -541,7 +541,15 @@ export default function BookingFormRenderer({
             disabled={!canProceed || submitting}
             className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30 flex items-center gap-2"
           >
-            {submitting && currentStep.is_submit_step ? 'Submitting…' : currentStep.is_submit_step ? (currentStep.submit_button_label || 'Submit') : (currentStep.next_button_label || 'Next')}
+            {submitting && currentStep.is_submit_step ? (
+              <span className="inline-flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
+                  <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                </svg>
+                Submitting your booking…
+              </span>
+            ) : currentStep.is_submit_step ? (currentStep.submit_button_label || 'Submit') : (currentStep.next_button_label || 'Next')}
           </button>
           {stepValidation && !submitError && (
             <p className="mt-2 text-xs text-gray-500 text-right">{stepValidation}</p>
