@@ -300,9 +300,9 @@ export async function POST(request: NextRequest) {
       ? `${process.env.NEXT_PUBLIC_APP_URL}/secure-card/${cardSetupToken}`
       : undefined
 
-    // Background: CRM, notifications, emails, SMS, UTM attribution, audit mark
-    ;(async () => {
-      try {
+    // Side effects: parallel, each isolated by its own try/catch + logStep
+    await Promise.allSettled([
+      (async () => {
         // 7-8. CRM: upsert contact and log activity (non-critical)
         const t_crm = Date.now()
         try {
@@ -330,7 +330,9 @@ export async function POST(request: NextRequest) {
         } catch (e: any) {
           await logStep(supabase, submissionId!, { step: 'crm_upsert', status: 'failed', error: e.message, duration_ms: Date.now() - t_crm })
         }
+      })(),
 
+      (async () => {
         // 9-10. Staff in-app notifications (non-critical)
         const t_notif = Date.now()
         try {
@@ -357,7 +359,9 @@ export async function POST(request: NextRequest) {
         } catch (e: any) {
           await logStep(supabase, submissionId!, { step: 'staff_notification', status: 'failed', error: e.message, duration_ms: Date.now() - t_notif })
         }
+      })(),
 
+      (async () => {
         // 12. Send confirmation email to customer (non-critical)
         const t_email = Date.now()
         try {
@@ -393,7 +397,9 @@ export async function POST(request: NextRequest) {
         } catch (e: any) {
           await logStep(supabase, submissionId!, { step: 'customer_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_email })
         }
+      })(),
 
+      (async () => {
         // 13. Send owner notification email (non-critical)
         const t_owner_email = Date.now()
         try {
@@ -436,7 +442,9 @@ export async function POST(request: NextRequest) {
         } catch (e: any) {
           await logStep(supabase, submissionId!, { step: 'owner_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_owner_email })
         }
+      })(),
 
+      (async () => {
         // 14. Send confirmation SMS to customer (non-critical)
         const t_sms = Date.now()
         try {
@@ -492,7 +500,9 @@ export async function POST(request: NextRequest) {
           } catch { /* best-effort audit */ }
           await logStep(supabase, submissionId!, { step: 'sms', status: 'failed', error: e.message, duration_ms: Date.now() - t_sms })
         }
+      })(),
 
+      (async () => {
         // Save lead source attribution
         if (utm_data) {
           try {
@@ -520,13 +530,10 @@ export async function POST(request: NextRequest) {
             console.error('Lead source insert threw:', err)
           }
         }
+      })(),
+    ])
 
-        await markProcessed(supabase, submissionId!, job.id)
-      } catch (err: any) {
-        console.error('[bookings/public] background tasks failed', err)
-        try { await markFailed(supabase, submissionId!, String(err)) } catch {}
-      }
-    })()
+    await markProcessed(supabase, submissionId!, job.id)
 
     return NextResponse.json({
       success: true,
