@@ -98,6 +98,7 @@ export default function BookingFormRenderer({
   }, [values.service_id])
 
   async function handleSubmit() {
+    if (mode === 'preview') return
     if (submitting || !formData) return
     setSubmitting(true)
     setSubmitError(null)

@@ -20,6 +20,7 @@ import {
   AlertCircle, CheckCircle2, ChevronDown, GripVertical,
   LayoutGrid, Loader2, Plus, Trash2, X,
 } from 'lucide-react'
+import BookingFormRenderer from '@/components/booking-form/BookingFormRenderer'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -594,6 +595,7 @@ export default function FormBuilderPage() {
 
   const [savedState, setSavedState] = useState<AppState | null>(null)
   const [localState, setLocalState] = useState<AppState | null>(null)
+  const [previewLocationId, setPreviewLocationId] = useState<string | null>(null)
   const localStateRef = useRef<AppState | null>(null)
 
   // keep ref in sync for use in DnD handlers
@@ -624,6 +626,9 @@ export default function FormBuilderPage() {
     setBusiness(biz)
 
     if (!biz?.id) { setLoadError('Business not found'); setLoading(false); return }
+
+    const locRes = await supabase.from('locations').select('id').eq('business_id', biz.id).limit(1).single()
+    if (locRes.data) setPreviewLocationId(locRes.data.id)
 
     const [formRes, customFieldsRes] = await Promise.all([
       supabase.from('booking_forms').select('id, title, subtitle').eq('business_id', biz.id).single(),
@@ -1035,18 +1040,33 @@ export default function FormBuilderPage() {
                 {/* RIGHT: Preview */}
                 <div className="lg:sticky lg:top-6 self-start space-y-4">
                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Preview</p>
-                  {steps.map((step, idx) => (
-                    <PreviewStepCard
-                      key={step.id}
-                      step={step}
-                      placements={placements.filter(p => p.step_id === step.id).sort((a, b) => a.sort_order - b.sort_order)}
-                      customFields={customFields}
-                      isLast={idx === steps.length - 1}
-                      formTitle={form.title}
-                      formSubtitle={form.subtitle}
-                      stepIndex={idx}
+                  {previewLocationId ? (
+                    <BookingFormRenderer
+                      businessId={business.id}
+                      locationId={previewLocationId}
+                      mode="preview"
+                      previewData={{
+                        form: { title: form.title, subtitle: form.subtitle },
+                        steps: steps.map((s, idx) => ({
+                          id: s.id,
+                          sort_order: s.sort_order,
+                          next_button_label: s.next_button_label,
+                          is_submit_step: idx === steps.length - 1,
+                          submit_button_label: null,
+                        })),
+                        placements: placements.map(p => ({
+                          id: p.id,
+                          step_id: p.step_id,
+                          builtin_field_key: p.field_type === 'builtin' ? p.field_key : null,
+                          custom_field_id: p.field_type === 'custom' ? p.field_key : null,
+                          sort_order: p.sort_order,
+                        })),
+                        customFields: customFields,
+                      }}
                     />
-                  ))}
+                  ) : (
+                    <p className="text-xs text-gray-400">Loading preview…</p>
+                  )}
                 </div>
               </div>
 
