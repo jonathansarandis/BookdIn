@@ -15,13 +15,15 @@ export default function PublicBookingPage() {
   const [business, setBusiness] = useState<any>(null)
   const [locationId, setLocationId] = useState<string | null>(null)
   const [thankYouUrl, setThankYouUrl] = useState<string | null>(null)
+  const [prefetchedBusiness, setPrefetchedBusiness] = useState<any>(null)
+  const [prefetchedLocation, setPrefetchedLocation] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       const { data: loc } = await supabase
         .from('locations_public')
-        .select('location_id, location_timezone, location_thank_you_url, location_slug, business_id, business_name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode')
+        .select('location_id, location_timezone, location_thank_you_url, location_slug, business_id, business_name, logo_url, brand_color, tax_rate, tax_name, show_tax, tax_mode, tnc_url, business_timezone')
         .eq('location_slug', slug)
         .single()
 
@@ -35,6 +37,22 @@ export default function PublicBookingPage() {
       })
       setLocationId(loc.location_id)
       setThankYouUrl(loc.location_thank_you_url || null)
+      setPrefetchedBusiness({
+        id: loc.business_id,
+        name: loc.business_name,
+        logo_url: loc.logo_url,
+        brand_color: loc.brand_color,
+        timezone: loc.business_timezone,
+        tax_rate: loc.tax_rate,
+        tax_name: loc.tax_name,
+        show_tax: loc.show_tax,
+        tax_mode: loc.tax_mode,
+        tnc_url: loc.tnc_url,
+      })
+      setPrefetchedLocation({
+        id: loc.location_id,
+        timezone: loc.location_timezone,
+      })
       setLoading(false)
     }
     load()
@@ -65,6 +83,8 @@ export default function PublicBookingPage() {
         locationId={locationId}
         mode="live"
         thankYouUrl={thankYouUrl}
+        prefetchedBusiness={prefetchedBusiness}
+        prefetchedLocation={prefetchedLocation}
       />
     </div>
   )

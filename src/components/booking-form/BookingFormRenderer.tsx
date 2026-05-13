@@ -44,6 +44,22 @@ export interface BookingFormRendererProps {
   }
   onSubmitSuccess?: (jobId: string) => void
   thankYouUrl?: string | null
+  prefetchedBusiness?: {
+    id: string
+    name: string
+    logo_url: string | null
+    brand_color: string | null
+    timezone: string | null
+    tax_rate: number | null
+    tax_name: string | null
+    show_tax: boolean | null
+    tax_mode: string | null
+    tnc_url: string | null
+  } | null
+  prefetchedLocation?: {
+    id: string
+    timezone: string | null
+  } | null
 }
 
 export default function BookingFormRenderer({
@@ -53,6 +69,8 @@ export default function BookingFormRenderer({
   previewData,
   onSubmitSuccess,
   thankYouUrl,
+  prefetchedBusiness,
+  prefetchedLocation,
 }: BookingFormRendererProps) {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -180,20 +198,30 @@ export default function BookingFormRenderer({
     setLoading(true)
     setLoadError(null)
     try {
-      // 1. Fetch business
-      const { data: business, error: bizErr } = await supabase
-        .from('businesses')
-        .select('id, name, logo_url, brand_color, timezone, tax_rate, tax_name, show_tax, tax_mode, tnc_url')
-        .eq('id', businessId)
-        .single()
-      if (bizErr || !business) throw new Error(bizErr?.message || 'Business not found')
+      // 1. Business + location — use prefetched data when available (public anon path),
+      //    otherwise fetch directly (form builder preview, authenticated contexts)
+      let business: any
+      let location: any
 
-      // 2. Fetch location row for timezone
-      const { data: location } = await supabase
-        .from('locations')
-        .select('id, timezone')
-        .eq('id', locationId)
-        .single()
+      if (prefetchedBusiness && prefetchedLocation) {
+        business = prefetchedBusiness
+        location = prefetchedLocation
+      } else {
+        const { data: biz, error: bizErr } = await supabase
+          .from('businesses')
+          .select('id, name, logo_url, brand_color, timezone, tax_rate, tax_name, show_tax, tax_mode, tnc_url')
+          .eq('id', businessId)
+          .single()
+        if (bizErr || !biz) throw new Error(bizErr?.message || 'Business not found')
+        business = biz
+
+        const { data: loc } = await supabase
+          .from('locations')
+          .select('id, timezone')
+          .eq('id', locationId)
+          .single()
+        location = loc
+      }
 
       const timezone = business.timezone || location?.timezone || null
 
