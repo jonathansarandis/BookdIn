@@ -509,72 +509,97 @@ export default function BookingFormRenderer({
 
   return (
     <div
-      className="space-y-6"
+      className="space-y-0"
       style={{ '--brand-color': formData.business?.brand_color || '#1A6B4A' } as React.CSSProperties}
     >
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm">
-        {currentStepIndex === 0 && formData.form.title && (
-          <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">{formData.form.title}</h1>
-        )}
-        {currentStepIndex === 0 && formData.form.subtitle && (
-          <p className="text-sm text-gray-600 mb-6 text-center">{formData.form.subtitle}</p>
-        )}
-
-        <p className="text-xs uppercase tracking-wider text-gray-400 mb-4">
-          Step {currentStepIndex + 1} of {formData.steps.length}
-        </p>
-
-        <div className="space-y-5">
-          {currentPlacements.map(p => renderPlacement(p))}
-          {currentPlacements.length === 0 && (
-            <p className="text-sm text-gray-400 italic">No fields on this step.</p>
+      <div
+        className="w-full px-6 py-8 sm:py-10"
+        style={{ backgroundColor: formData.business.brand_color || '#1A6B4A' }}
+      >
+        <div className="max-w-2xl mx-auto flex items-center gap-5">
+          {formData.business.logo_url ? (
+            <img
+              src={formData.business.logo_url}
+              alt={`${formData.business.name} logo`}
+              className="w-16 h-16 rounded-lg object-contain bg-white p-1 flex-shrink-0"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-2xl">{formData.business.name?.charAt(0) ?? ''}</span>
+            </div>
           )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white/80">{formData.business.name}</p>
+            {formData.form.title && (
+              <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight mt-1">
+                {formData.form.title}
+              </h1>
+            )}
+            {formData.form.subtitle && (
+              <p className="text-sm text-white/80 mt-1">{formData.form.subtitle}</p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="mt-6 flex items-center justify-between gap-4">
-        <button
-          onClick={() => setCurrentStepIndex(i => Math.max(0, i - 1))}
-          disabled={currentStepIndex === 0}
-          className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg disabled:opacity-30"
-        >
-          Back
-        </button>
-        <div className="flex flex-col items-end">
+      <div className="max-w-2xl mx-auto px-6 py-6">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+          <p className="text-xs uppercase tracking-wider text-gray-400 mb-4">
+            Step {currentStepIndex + 1} of {formData.steps.length}
+          </p>
+
+          <div className="space-y-5">
+            {currentPlacements.map(p => renderPlacement(p))}
+            {currentPlacements.length === 0 && (
+              <p className="text-sm text-gray-400 italic">No fields on this step.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className="mt-6 flex items-center justify-between gap-4">
           <button
-            onClick={() => {
-              if (!canProceed || submitting) return
-              if (currentStep.is_submit_step) {
-                handleSubmit()
-              } else {
-                setCurrentStepIndex(i => Math.min(formData.steps.length - 1, i + 1))
-              }
-            }}
-            disabled={!canProceed || submitting}
-            className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30 flex items-center gap-2"
+            onClick={() => setCurrentStepIndex(i => Math.max(0, i - 1))}
+            disabled={currentStepIndex === 0}
+            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg disabled:opacity-30"
           >
-            {submitting && currentStep.is_submit_step ? (
-              <span className="inline-flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
-                  <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                </svg>
-                Submitting your booking…
-              </span>
-            ) : currentStep.is_submit_step ? (currentStep.submit_button_label || 'Submit') : (currentStep.next_button_label || 'Next')}
+            Back
           </button>
-          {submitting && (
-            <p className="mt-2 text-xs text-gray-500 text-center">
-              Please wait, this may take a few seconds…
-            </p>
-          )}
-          {stepValidation && !submitError && (
-            <p className="mt-2 text-xs text-gray-500 text-right">{stepValidation}</p>
-          )}
-          {submitError && (
-            <p className="mt-3 text-sm text-red-600 text-right">{submitError}</p>
-          )}
+          <div className="flex flex-col items-end">
+            <button
+              onClick={() => {
+                if (!canProceed || submitting) return
+                if (currentStep.is_submit_step) {
+                  handleSubmit()
+                } else {
+                  setCurrentStepIndex(i => Math.min(formData.steps.length - 1, i + 1))
+                }
+              }}
+              disabled={!canProceed || submitting}
+              className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30 flex items-center gap-2"
+            >
+              {submitting && currentStep.is_submit_step ? (
+                <span className="inline-flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
+                    <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                  </svg>
+                  Submitting your booking…
+                </span>
+              ) : currentStep.is_submit_step ? (currentStep.submit_button_label || 'Submit') : (currentStep.next_button_label || 'Next')}
+            </button>
+            {submitting && (
+              <p className="mt-2 text-xs text-gray-500 text-center">
+                Please wait, this may take a few seconds…
+              </p>
+            )}
+            {stepValidation && !submitError && (
+              <p className="mt-2 text-xs text-gray-500 text-right">{stepValidation}</p>
+            )}
+            {submitError && (
+              <p className="mt-3 text-sm text-red-600 text-right">{submitError}</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

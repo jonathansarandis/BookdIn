@@ -58,32 +58,11 @@ export default function PublicBookingV2Page() {
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ '--brand-color': brand } as React.CSSProperties}>
-      <header className="bg-white shadow-sm border-b border-gray-100">
-        <div className="px-4 py-3 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-lg bg-[var(--brand-color)] flex items-center justify-center overflow-hidden flex-shrink-0">
-            {business.logo_url ? (
-              <img
-                src={business.logo_url}
-                alt={`${business.name} logo`}
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <span className="text-white font-semibold text-lg">
-                {business.name?.charAt(0) ?? ''}
-              </span>
-            )}
-          </div>
-          <h1 className="text-lg font-semibold text-gray-900">{business.name}</h1>
-        </div>
-      </header>
-
-      <div className="max-w-2xl mx-auto px-4 py-8 overflow-x-hidden">
-        <BookingFormRenderer
-          businessId={business.id}
-          locationId={locationId}
-          mode="live"
-        />
-      </div>
+      <BookingFormRenderer
+        businessId={business.id}
+        locationId={locationId}
+        mode="live"
+      />
     </div>
   )
 }
