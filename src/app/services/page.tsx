@@ -4,95 +4,272 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Clock, DollarSign, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Loader2, CheckCircle2, Copy, X, Trash2 } from 'lucide-react'
 
-const PRICING_LABELS: Record<string, string> = {
-  flat: 'Flat rate',
-  hourly: 'Hourly',
-  room_based: 'Room-based',
-  sqft_based: 'Per sq ft',
-  custom: 'Custom',
+const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500'
+const labelCls = 'block text-xs font-medium text-gray-600 mb-1'
+
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none flex-shrink-0 ${value ? 'bg-brand-500' : 'bg-gray-200'}`}
+    >
+      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-1'}`} />
+    </button>
+  )
 }
 
-function formatCurrency(cents: number) {
-  return `$${(cents / 100).toFixed(2)}`
+function PriceInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative w-28">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+      <input
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full text-sm border border-gray-200 rounded-lg pl-6 pr-3 py-1.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+      />
+    </div>
+  )
+}
+
+function buildSvcMap(
+  services: any[],
+  locSvcs: any[],
+): Record<string, { base_price: string; is_enabled: boolean }> {
+  const map: Record<string, { base_price: string; is_enabled: boolean }> = {}
+  for (const s of services) {
+    const row = locSvcs.find((r: any) => r.service_id === s.id)
+    map[s.id] = {
+      base_price: row ? String((row.base_price / 100).toFixed(2)) : '0.00',
+      is_enabled: row?.is_enabled ?? false,
+    }
+  }
+  return map
+}
+
+function buildExtMap(
+  extras: any[],
+  locExts: any[],
+): Record<string, { price: string; is_enabled: boolean }> {
+  const map: Record<string, { price: string; is_enabled: boolean }> = {}
+  for (const ex of extras) {
+    const row = locExts.find((r: any) => r.extra_id === ex.id)
+    map[ex.id] = {
+      price: row ? String((row.price / 100).toFixed(2)) : '0.00',
+      is_enabled: row?.is_enabled ?? false,
+    }
+  }
+  return map
 }
 
 export default function ServicesPage() {
-  const [services, setServices] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [reassignTarget, setReassignTarget] = useState<{ id: string; name: string; jobCount: number } | null>(null)
-  const [reassignToServiceId, setReassignToServiceId] = useState<string>('')
-  const [reassigning, setReassigning] = useState(false)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadServices()
-  }, [])
+  const [businessId, setBusinessId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  async function loadServices() {
+  // Locations
+  const [locations, setLocations] = useState<any[]>([])
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('')
+
+  // Sub-tabs
+  const [activeTab, setActiveTab] = useState<'services' | 'addons'>('services')
+
+  // Global catalogs
+  const [allServices, setAllServices] = useState<any[]>([])
+  const [allExtras, setAllExtras] = useState<any[]>([])
+
+  // Per-location state (keyed by id)
+  const [locServices, setLocServices] = useState<Record<string, { base_price: string; is_enabled: boolean }>>({})
+  const [locExtras, setLocExtras] = useState<Record<string, { price: string; is_enabled: boolean }>>({})
+  const [locLoading, setLocLoading] = useState(false)
+
+  // Save state
+  const [svcSaving, setSvcSaving] = useState(false)
+  const [svcSaved, setSvcSaved] = useState(false)
+  const [extraSaving, setExtraSaving] = useState(false)
+  const [extraSaved, setExtraSaved] = useState(false)
+
+  // Edit service modal
+  const [editSvc, setEditSvc] = useState<any | null>(null)
+  const [editSvcName, setEditSvcName] = useState('')
+  const [editSvcDesc, setEditSvcDesc] = useState('')
+  const [editSvcDuration, setEditSvcDuration] = useState('')
+  const [editSvcSaving, setEditSvcSaving] = useState(false)
+
+  // Edit extra modal
+  const [editExtra, setEditExtra] = useState<any | null>(null)
+  const [editExtraName, setEditExtraName] = useState('')
+  const [editExtraDesc, setEditExtraDesc] = useState('')
+  const [editExtraDuration, setEditExtraDuration] = useState('')
+  const [editExtraSaving, setEditExtraSaving] = useState(false)
+
+  // Delete-reassign modal (services)
+  const [reassignTarget, setReassignTarget] = useState<{ id: string; name: string; jobCount: number } | null>(null)
+  const [reassignToId, setReassignToId] = useState<string>('')
+  const [reassigning, setReassigning] = useState(false)
+
+  // Copy modal
+  const [showCopy, setShowCopy] = useState(false)
+  const [copyStep, setCopyStep] = useState<'config' | 'confirm'>('config')
+  const [copySourceId, setCopySourceId] = useState<string>('')
+  const [copyServices, setCopyServices] = useState(true)
+  const [copyAddons, setCopyAddons] = useState(true)
+  const [copyPrices, setCopyPrices] = useState(true)
+  const [copyOverwrite, setCopyOverwrite] = useState(false)
+  const [copySourceData, setCopySourceData] = useState<{ svcs: any[]; exts: any[] } | null>(null)
+  const [copyCount, setCopyCount] = useState<{ services: number; addons: number; overlaps: number } | null>(null)
+  const [copyApplying, setCopyApplying] = useState(false)
+
+  useEffect(() => { loadAll() }, [])
+
+  async function loadAll() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { window.location.href = '/auth/login'; return }
-    const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
-    const { data } = await supabase
-      .from('services')
-      .select('*, service_extras(*)')
-      .eq('business_id', profile?.business_id)
-      .order('sort_order')
-    setServices(data || [])
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .single()
+
+    const bizId = profile?.business_id
+    setBusinessId(bizId)
+
+    const [{ data: locs }, { data: svcs }, { data: exts }] = await Promise.all([
+      supabase.from('locations').select('id, name').eq('business_id', bizId).order('name'),
+      supabase.from('services').select('id, name, description, duration_minutes, pricing_type, base_price, is_active, sort_order').eq('business_id', bizId).order('sort_order'),
+      supabase.from('service_extras').select('id, name, description, duration_minutes, service_id, is_active, sort_order').eq('business_id', bizId).order('sort_order'),
+    ])
+
+    setLocations(locs || [])
+    setAllServices(svcs || [])
+    setAllExtras(exts || [])
+
+    if (locs?.length) {
+      const firstId = locs[0].id
+      setSelectedLocationId(firstId)
+      const [{ data: locSvcs }, { data: locExts }] = await Promise.all([
+        supabase.from('location_services').select('service_id, base_price, is_enabled').eq('location_id', firstId),
+        supabase.from('location_extras').select('extra_id, price, is_enabled').eq('location_id', firstId),
+      ])
+      setLocServices(buildSvcMap(svcs || [], locSvcs || []))
+      setLocExtras(buildExtMap(exts || [], locExts || []))
+    }
+
     setLoading(false)
   }
 
-  async function handleDelete(id: string, name: string) {
-    const { count, error: countErr } = await supabase
+  async function handleLocationChange(newLocId: string) {
+    setSelectedLocationId(newLocId)
+    setSvcSaved(false)
+    setExtraSaved(false)
+    setLocLoading(true)
+    const [{ data: locSvcs }, { data: locExts }] = await Promise.all([
+      supabase.from('location_services').select('service_id, base_price, is_enabled').eq('location_id', newLocId),
+      supabase.from('location_extras').select('extra_id, price, is_enabled').eq('location_id', newLocId),
+    ])
+    setLocServices(buildSvcMap(allServices, locSvcs || []))
+    setLocExtras(buildExtMap(allExtras, locExts || []))
+    setLocLoading(false)
+  }
+
+  async function reloadLocationData() {
+    if (!selectedLocationId) return
+    const [{ data: locSvcs }, { data: locExts }] = await Promise.all([
+      supabase.from('location_services').select('service_id, base_price, is_enabled').eq('location_id', selectedLocationId),
+      supabase.from('location_extras').select('extra_id, price, is_enabled').eq('location_id', selectedLocationId),
+    ])
+    setLocServices(buildSvcMap(allServices, locSvcs || []))
+    setLocExtras(buildExtMap(allExtras, locExts || []))
+  }
+
+  async function handleSaveServices() {
+    setSvcSaving(true)
+    const rows = allServices.map(s => ({
+      location_id: selectedLocationId,
+      service_id: s.id,
+      base_price: Math.round(parseFloat(locServices[s.id]?.base_price || '0') * 100),
+      is_enabled: locServices[s.id]?.is_enabled ?? false,
+    }))
+    await supabase.from('location_services').upsert(rows, { onConflict: 'location_id,service_id' })
+    setSvcSaving(false)
+    setSvcSaved(true)
+    setTimeout(() => setSvcSaved(false), 3000)
+  }
+
+  async function handleSaveExtras() {
+    setExtraSaving(true)
+    const rows = allExtras.map(ex => ({
+      location_id: selectedLocationId,
+      extra_id: ex.id,
+      price: Math.round(parseFloat(locExtras[ex.id]?.price || '0') * 100),
+      is_enabled: locExtras[ex.id]?.is_enabled ?? false,
+    }))
+    await supabase.from('location_extras').upsert(rows, { onConflict: 'location_id,extra_id' })
+    setExtraSaving(false)
+    setExtraSaved(true)
+    setTimeout(() => setExtraSaved(false), 3000)
+  }
+
+  // --- Edit service modal ---
+  function openEditSvc(svc: any) {
+    setEditSvc(svc)
+    setEditSvcName(svc.name)
+    setEditSvcDesc(svc.description || '')
+    setEditSvcDuration(String(svc.duration_minutes))
+  }
+
+  async function handleSaveEditSvc() {
+    if (!editSvc) return
+    setEditSvcSaving(true)
+    const duration = parseInt(editSvcDuration) || editSvc.duration_minutes
+    await supabase
+      .from('services')
+      .update({ name: editSvcName, description: editSvcDesc || null, duration_minutes: duration })
+      .eq('id', editSvc.id)
+    setAllServices(prev =>
+      prev.map(s => s.id === editSvc.id ? { ...s, name: editSvcName, description: editSvcDesc, duration_minutes: duration } : s)
+    )
+    setEditSvcSaving(false)
+    setEditSvc(null)
+  }
+
+  async function handleDeleteSvc(id: string, name: string) {
+    const { count } = await supabase
       .from('jobs')
       .select('id', { count: 'exact', head: true })
       .eq('service_id', id)
 
-    if (countErr) {
-      alert('Could not check job references. Try again.')
-      return
-    }
-
     if (!count || count === 0) {
       if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
-      const { error: delErr } = await supabase.from('services').delete().eq('id', id)
-      if (delErr) {
-        alert('Delete failed: ' + delErr.message)
-        return
-      }
-      loadServices()
+      await supabase.from('services').delete().eq('id', id)
+      setAllServices(prev => prev.filter(s => s.id !== id))
+      setEditSvc(null)
       return
     }
 
+    setEditSvc(null)
     setReassignTarget({ id, name, jobCount: count })
   }
 
   async function confirmReassignAndDelete() {
-    if (!reassignTarget || !reassignToServiceId) return
-    if (reassignToServiceId === reassignTarget.id) {
-      alert('Pick a different service to reassign to.')
-      return
-    }
+    if (!reassignTarget || !reassignToId) return
+    if (reassignToId === reassignTarget.id) { alert('Pick a different service.'); return }
     setReassigning(true)
     try {
-      const { error: updErr } = await supabase
-        .from('jobs')
-        .update({ service_id: reassignToServiceId })
-        .eq('service_id', reassignTarget.id)
-
+      const { error: updErr } = await supabase.from('jobs').update({ service_id: reassignToId }).eq('service_id', reassignTarget.id)
       if (updErr) throw new Error('Reassign failed: ' + updErr.message)
-
-      const { error: delErr } = await supabase
-        .from('services')
-        .delete()
-        .eq('id', reassignTarget.id)
-
-      if (delErr) throw new Error('Delete failed after reassign: ' + delErr.message)
-
+      const { error: delErr } = await supabase.from('services').delete().eq('id', reassignTarget.id)
+      if (delErr) throw new Error('Delete failed: ' + delErr.message)
+      setAllServices(prev => prev.filter(s => s.id !== reassignTarget.id))
       setReassignTarget(null)
-      setReassignToServiceId('')
-      loadServices()
+      setReassignToId('')
     } catch (e: any) {
       alert(e.message)
     } finally {
@@ -100,125 +277,385 @@ export default function ServicesPage() {
     }
   }
 
+  // --- Edit extra modal ---
+  function openEditExtra(ex: any) {
+    setEditExtra(ex)
+    setEditExtraName(ex.name)
+    setEditExtraDesc(ex.description || '')
+    setEditExtraDuration(String(ex.duration_minutes || 0))
+  }
+
+  async function handleSaveEditExtra() {
+    if (!editExtra) return
+    setEditExtraSaving(true)
+    const duration = parseInt(editExtraDuration) || 0
+    await supabase
+      .from('service_extras')
+      .update({ name: editExtraName, description: editExtraDesc || null, duration_minutes: duration })
+      .eq('id', editExtra.id)
+    setAllExtras(prev =>
+      prev.map(ex => ex.id === editExtra.id ? { ...ex, name: editExtraName, description: editExtraDesc, duration_minutes: duration } : ex)
+    )
+    setEditExtraSaving(false)
+    setEditExtra(null)
+  }
+
+  // --- Copy modal ---
+  function openCopyModal() {
+    setShowCopy(true)
+    setCopyStep('config')
+    setCopySourceId('')
+    setCopyServices(true)
+    setCopyAddons(true)
+    setCopyPrices(true)
+    setCopyOverwrite(false)
+    setCopySourceData(null)
+    setCopyCount(null)
+  }
+
+  async function handleCopyNext() {
+    if (!copySourceId || (!copyServices && !copyAddons)) return
+
+    const [sourceSvcsRes, sourceExtsRes, targetSvcsRes, targetExtsRes] = await Promise.all([
+      copyServices
+        ? supabase.from('location_services').select('service_id, base_price').eq('location_id', copySourceId).eq('is_enabled', true)
+        : Promise.resolve({ data: [] }),
+      copyAddons
+        ? supabase.from('location_extras').select('extra_id, price').eq('location_id', copySourceId).eq('is_enabled', true)
+        : Promise.resolve({ data: [] }),
+      supabase.from('location_services').select('service_id').eq('location_id', selectedLocationId),
+      supabase.from('location_extras').select('extra_id').eq('location_id', selectedLocationId),
+    ])
+
+    const sourceSvcs = sourceSvcsRes.data || []
+    const sourceExts = sourceExtsRes.data || []
+    const targetSvcIds = new Set((targetSvcsRes.data || []).map((r: any) => r.service_id))
+    const targetExtIds = new Set((targetExtsRes.data || []).map((r: any) => r.extra_id))
+
+    const overlapSvcs = sourceSvcs.filter((r: any) => targetSvcIds.has(r.service_id)).length
+    const overlapExts = sourceExts.filter((r: any) => targetExtIds.has(r.extra_id)).length
+
+    setCopySourceData({ svcs: sourceSvcs, exts: sourceExts })
+    setCopyCount({ services: sourceSvcs.length, addons: sourceExts.length, overlaps: overlapSvcs + overlapExts })
+    setCopyStep('confirm')
+  }
+
+  async function handleCopyApply() {
+    if (!copySourceData) return
+    setCopyApplying(true)
+
+    if (copyServices && copySourceData.svcs.length > 0) {
+      const rows = copySourceData.svcs.map((r: any) => ({
+        location_id: selectedLocationId,
+        service_id: r.service_id,
+        base_price: copyPrices ? r.base_price : 0,
+        is_enabled: true,
+      }))
+      await supabase
+        .from('location_services')
+        .upsert(rows, { onConflict: 'location_id,service_id', ignoreDuplicates: !copyOverwrite })
+    }
+
+    if (copyAddons && copySourceData.exts.length > 0) {
+      const rows = copySourceData.exts.map((r: any) => ({
+        location_id: selectedLocationId,
+        extra_id: r.extra_id,
+        price: copyPrices ? r.price : 0,
+        is_enabled: true,
+      }))
+      await supabase
+        .from('location_extras')
+        .upsert(rows, { onConflict: 'location_id,extra_id', ignoreDuplicates: !copyOverwrite })
+    }
+
+    await reloadLocationData()
+    setCopyApplying(false)
+    setShowCopy(false)
+  }
+
   if (loading) return <div className="text-sm text-gray-400 py-8 text-center">Loading...</div>
+
+  const selectedLocation = locations.find(l => l.id === selectedLocationId)
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+
+      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Services & Pricing</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Manage what you offer and how you charge</p>
+          <h2 className="text-lg font-semibold text-gray-900">Services & Add-ons</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Manage what you offer and set pricing per location</p>
         </div>
-        <Link href="/services/new"
-          className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
-          <Plus className="w-4 h-4" />
-          Add service
-        </Link>
+        {activeTab === 'services' && (
+          <Link
+            href="/services/new"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add service
+          </Link>
+        )}
       </div>
 
-      {services.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
-          <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <DollarSign className="w-6 h-6 text-brand-500" />
+      {/* Location selector */}
+      {locations.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500 whitespace-nowrap">Editing:</span>
+            <select
+              value={selectedLocationId}
+              onChange={e => handleLocationChange(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+            >
+              {locations.map(l => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
           </div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">No services yet</h3>
-          <p className="text-xs text-gray-500 mb-4">Add your first service to start taking bookings</p>
-          <Link href="/services/new"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 transition-colors">
-            <Plus className="w-4 h-4" />
-            Add your first service
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {services.map(service => (
-            <div key={service.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-gray-300 transition-colors">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-sm font-semibold text-gray-900">{service.name}</h3>
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${service.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {service.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                      {PRICING_LABELS[service.pricing_type]}
-                    </span>
-                  </div>
-                  {service.description && (
-                    <p className="text-xs text-gray-500 mb-3">{service.description}</p>
-                  )}
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                      <DollarSign className="w-3.5 h-3.5" />
-                      Starting from {formatCurrency(service.base_price)}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                      <Clock className="w-3.5 h-3.5" />
-                      ~{service.duration_minutes >= 60
-                        ? `${Math.floor(service.duration_minutes / 60)}h${service.duration_minutes % 60 > 0 ? ` ${service.duration_minutes % 60}m` : ''}`
-                        : `${service.duration_minutes}m`}
-                    </div>
-                    {service.service_extras?.length > 0 && (
-                      <div className="text-xs text-gray-500">
-                        {service.service_extras.length} add-on{service.service_extras.length !== 1 ? 's' : ''}
-                      </div>
-                    )}
-                  </div>
-                  {service.service_extras?.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {service.service_extras.map((extra: any) => (
-                        <span key={extra.id} className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-                          {extra.name} +{formatCurrency(extra.price)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Link href={`/services/${service.id}/edit`}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                    <Pencil className="w-3 h-3" />
-                    Edit
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(service.id, service.name)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
-                    <Trash2 className="w-3 h-3" />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+          <button
+            onClick={openCopyModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            Copy from another location
+          </button>
         </div>
       )}
 
+      {/* Sub-tabs */}
+      <div className="border-b border-gray-200">
+        <div className="flex gap-0">
+          {(['services', 'addons'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === tab
+                  ? 'border-brand-500 text-brand-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab === 'services' ? 'Services' : 'Add-ons'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab content */}
+      {locLoading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+        </div>
+      ) : activeTab === 'services' ? (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <p className="text-xs text-gray-500">
+            Name, description, and duration apply to all locations. Price and availability are set per location.
+          </p>
+
+          {allServices.length === 0 ? (
+            <p className="text-sm text-gray-400">No services yet. Add your first service to get started.</p>
+          ) : (
+            <div className="space-y-1">
+              {allServices.map(svc => (
+                <div key={svc.id} className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+                  <Toggle
+                    value={locServices[svc.id]?.is_enabled ?? false}
+                    onChange={v => setLocServices(m => ({ ...m, [svc.id]: { ...m[svc.id], is_enabled: v } }))}
+                  />
+                  <span className="flex-1 text-sm text-gray-900 min-w-0 truncate">{svc.name}</span>
+                  <PriceInput
+                    value={locServices[svc.id]?.base_price ?? '0.00'}
+                    onChange={v => setLocServices(m => ({ ...m, [svc.id]: { ...m[svc.id], base_price: v } }))}
+                  />
+                  <button
+                    onClick={() => openEditSvc(svc)}
+                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0"
+                    title="Edit service"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handleSaveServices}
+              disabled={svcSaving || !selectedLocationId}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              {svcSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {svcSaving ? 'Saving…' : `Save services for ${selectedLocation?.name ?? 'location'}`}
+            </button>
+            {svcSaved && (
+              <span className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Saved
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <p className="text-xs text-gray-500">
+            Name, description, and duration apply to all locations. Price and availability are set per location.
+          </p>
+
+          {allExtras.length === 0 ? (
+            <p className="text-sm text-gray-400">No add-ons yet. Add them from a service's edit page.</p>
+          ) : (
+            <div className="space-y-1">
+              {allExtras.map(ex => (
+                <div key={ex.id} className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+                  <Toggle
+                    value={locExtras[ex.id]?.is_enabled ?? false}
+                    onChange={v => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], is_enabled: v } }))}
+                  />
+                  <span className="flex-1 text-sm text-gray-900 min-w-0 truncate">{ex.name}</span>
+                  <PriceInput
+                    value={locExtras[ex.id]?.price ?? '0.00'}
+                    onChange={v => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], price: v } }))}
+                  />
+                  <button
+                    onClick={() => openEditExtra(ex)}
+                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0"
+                    title="Edit add-on"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handleSaveExtras}
+              disabled={extraSaving || !selectedLocationId}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              {extraSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {extraSaving ? 'Saving…' : `Save add-ons for ${selectedLocation?.name ?? 'location'}`}
+            </button>
+            {extraSaved && (
+              <span className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Saved
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit service modal */}
+      {editSvc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Edit service</h2>
+              <button onClick={() => setEditSvc(null)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-gray-500">Name, description, and duration apply to all locations. Price and availability are set per location.</p>
+            <div>
+              <label className={labelCls}>Name</label>
+              <input type="text" value={editSvcName} onChange={e => setEditSvcName(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Description</label>
+              <textarea rows={3} value={editSvcDesc} onChange={e => setEditSvcDesc(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Duration (minutes)</label>
+              <input type="number" min="1" value={editSvcDuration} onChange={e => setEditSvcDuration(e.target.value)} className={inputCls} />
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={() => handleDeleteSvc(editSvc.id, editSvc.name)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" /> Delete
+              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditSvc(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEditSvc}
+                  disabled={editSvcSaving || !editSvcName.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {editSvcSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {editSvcSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit extra modal */}
+      {editExtra && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Edit add-on</h2>
+              <button onClick={() => setEditExtra(null)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-gray-500">Name, description, and duration apply to all locations. Price and availability are set per location.</p>
+            <div>
+              <label className={labelCls}>Name</label>
+              <input type="text" value={editExtraName} onChange={e => setEditExtraName(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Description</label>
+              <textarea rows={3} value={editExtraDesc} onChange={e => setEditExtraDesc(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Duration (minutes)</label>
+              <input type="number" min="0" value={editExtraDuration} onChange={e => setEditExtraDuration(e.target.value)} className={inputCls} />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button onClick={() => setEditExtra(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEditExtra}
+                disabled={editExtraSaving || !editExtraName.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                {editExtraSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {editExtraSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reassign-then-delete modal */}
       {reassignTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Delete "{reassignTarget.name}"</h2>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h2 className="text-base font-semibold text-gray-900">Delete "{reassignTarget.name}"</h2>
+            <p className="text-sm text-gray-600">
               This service has {reassignTarget.jobCount} existing booking{reassignTarget.jobCount === 1 ? '' : 's'}.
               To delete it, choose another service to reassign those bookings to.
             </p>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reassign bookings to:</label>
-            <select
-              value={reassignToServiceId}
-              onChange={e => setReassignToServiceId(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm mb-4"
-              disabled={reassigning}
-            >
-              <option value="">Select a service…</option>
-              {services
-                .filter(s => s.id !== reassignTarget.id)
-                .map(s => (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Reassign bookings to:</label>
+              <select
+                value={reassignToId}
+                onChange={e => setReassignToId(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+                disabled={reassigning}
+              >
+                <option value="">Select a service…</option>
+                {allServices.filter(s => s.id !== reassignTarget.id).map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
-                ))
-              }
-            </select>
+                ))}
+              </select>
+            </div>
             <div className="flex items-center justify-end gap-3">
               <button
-                onClick={() => { setReassignTarget(null); setReassignToServiceId('') }}
+                onClick={() => { setReassignTarget(null); setReassignToId('') }}
                 disabled={reassigning}
                 className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg disabled:opacity-50"
               >
@@ -226,12 +663,122 @@ export default function ServicesPage() {
               </button>
               <button
                 onClick={confirmReassignAndDelete}
-                disabled={!reassignToServiceId || reassigning}
+                disabled={!reassignToId || reassigning}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
               >
                 {reassigning ? 'Reassigning…' : 'Reassign & Delete'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Copy from location modal */}
+      {showCopy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Copy from another location</h2>
+              <button onClick={() => setShowCopy(false)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+            </div>
+
+            {copyStep === 'config' ? (
+              <>
+                <div>
+                  <label className={labelCls}>Copy from</label>
+                  <select
+                    value={copySourceId}
+                    onChange={e => setCopySourceId(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">Select a location…</option>
+                    {locations.filter(l => l.id !== selectedLocationId).map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">What to copy</p>
+                  {[
+                    { key: 'services', label: 'Services', value: copyServices, set: setCopyServices },
+                    { key: 'addons', label: 'Add-ons', value: copyAddons, set: setCopyAddons },
+                    { key: 'prices', label: 'Prices', value: copyPrices, set: setCopyPrices },
+                  ].map(({ key, label, value, set }) => (
+                    <label key={key} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={e => set(e.target.checked)}
+                        className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="text-sm text-gray-700">{label}</span>
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={copyOverwrite}
+                      onChange={e => setCopyOverwrite(e.target.checked)}
+                      className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="text-sm text-gray-700">Overwrite existing</span>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button onClick={() => setShowCopy(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCopyNext}
+                    disabled={!copySourceId || (!copyServices && !copyAddons)}
+                    className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-gray-50 rounded-xl p-4 space-y-1 text-sm text-gray-700">
+                  <p>
+                    This will copy{' '}
+                    <strong>{copyCount?.services ?? 0} service{copyCount?.services !== 1 ? 's' : ''}</strong>
+                    {copyAddons && (
+                      <> and <strong>{copyCount?.addons ?? 0} add-on{copyCount?.addons !== 1 ? 's' : ''}</strong></>
+                    )}{' '}
+                    to <strong>{selectedLocation?.name}</strong>.
+                  </p>
+                  {(copyCount?.overlaps ?? 0) > 0 && (
+                    <p className="text-gray-500">
+                      {copyCount?.overlaps} existing row{copyCount?.overlaps !== 1 ? 's' : ''} will be{' '}
+                      {copyOverwrite ? 'overwritten' : 'skipped (Overwrite is off)'}.
+                    </p>
+                  )}
+                  {!copyPrices && (
+                    <p className="text-gray-500">Prices will be set to $0.00 (Prices not selected).</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    onClick={() => setCopyStep('config')}
+                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleCopyApply}
+                    disabled={copyApplying}
+                    className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {copyApplying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {copyApplying ? 'Applying…' : 'Apply'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

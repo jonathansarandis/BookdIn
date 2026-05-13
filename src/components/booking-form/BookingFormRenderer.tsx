@@ -373,7 +373,21 @@ export default function BookingFormRenderer({
   )
 
   const selectedService = formData.services.find(s => s.id === values.service_id) ?? null
-  const currentStep = formData.steps[currentStepIndex]
+
+  // A step is skipped when it contains only extras_picker fields AND the selected service
+  // has no applicable extras for this location. If no service is selected yet, don't skip.
+  const hasApplicableExtras =
+    selectedService === null ||
+    (selectedService.service_extras ?? []).some((e: any) => e.is_active)
+
+  const visibleSteps = formData.steps.filter(step => {
+    const pls = formData.placements.filter(p => p.step_id === step.id)
+    const isExtrasOnly = pls.length > 0 && pls.every(p => p.builtin_field_key === 'extras_picker')
+    return !isExtrasOnly || hasApplicableExtras
+  })
+
+  const safeStepIndex = Math.min(currentStepIndex, Math.max(0, visibleSteps.length - 1))
+  const currentStep = visibleSteps[safeStepIndex]
   const currentPlacements = formData.placements
     .filter(p => p.step_id === currentStep.id)
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -580,7 +594,7 @@ export default function BookingFormRenderer({
 
         <div className="p-6 sm:p-8">
           <p className="text-xs uppercase tracking-wider text-gray-400 mb-4">
-            Step {currentStepIndex + 1} of {formData.steps.length}
+            Step {safeStepIndex + 1} of {visibleSteps.length}
           </p>
 
           <div className="space-y-5">
@@ -605,7 +619,7 @@ export default function BookingFormRenderer({
                   if (currentStep.is_submit_step) {
                     handleSubmit()
                   } else {
-                    setCurrentStepIndex(i => Math.min(formData.steps.length - 1, i + 1))
+                    setCurrentStepIndex(i => Math.min(visibleSteps.length - 1, i + 1))
                   }
                 }}
                 disabled={!canProceed || submitting}

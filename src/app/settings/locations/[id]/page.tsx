@@ -57,18 +57,6 @@ export default function LocationEditPage() {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Service catalog
-  const [services, setServices] = useState<any[]>([])
-  const [locServices, setLocServices] = useState<Record<string, { base_price: string; is_enabled: boolean }>>({})
-  const [svcSaving, setSvcSaving] = useState(false)
-  const [svcSaved, setSvcSaved] = useState(false)
-
-  // Extras catalog
-  const [extras, setExtras] = useState<any[]>([])
-  const [locExtras, setLocExtras] = useState<Record<string, { price: string; is_enabled: boolean }>>({})
-  const [extraSaving, setExtraSaving] = useState(false)
-  const [extraSaved, setExtraSaved] = useState(false)
-
   // Delete
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -89,13 +77,9 @@ export default function LocationEditPage() {
     setProfile(prof)
     setBusiness(biz)
 
-    const [{ data: loc }, { data: locs }, { data: svcs }, { data: locSvcs }, { data: exts }, { data: locExts }] = await Promise.all([
+    const [{ data: loc }, { data: locs }] = await Promise.all([
       supabase.from('locations').select('*').eq('id', locationId).single(),
       supabase.from('locations').select('id').eq('business_id', biz.id),
-      supabase.from('services').select('id, name').eq('business_id', biz.id).eq('is_active', true).order('sort_order'),
-      supabase.from('location_services').select('service_id, base_price, is_enabled').eq('location_id', locationId),
-      supabase.from('service_extras').select('id, name, service_id').eq('business_id', biz.id).eq('is_active', true).order('sort_order'),
-      supabase.from('location_extras').select('extra_id, price, is_enabled').eq('location_id', locationId),
     ])
 
     if (!loc) { router.push('/settings/locations'); return }
@@ -106,22 +90,6 @@ export default function LocationEditPage() {
     setThankYouUrl(loc.thank_you_url || '')
     setIsActive(loc.is_active ?? true)
     setCanDelete((locs?.length || 0) > 1)
-
-    setServices(svcs || [])
-    const svcMap: Record<string, { base_price: string; is_enabled: boolean }> = {}
-    for (const s of (svcs || [])) {
-      const row = locSvcs?.find((r: any) => r.service_id === s.id)
-      svcMap[s.id] = { base_price: row ? String((row.base_price / 100).toFixed(2)) : '0.00', is_enabled: row?.is_enabled ?? false }
-    }
-    setLocServices(svcMap)
-
-    setExtras(exts || [])
-    const extMap: Record<string, { price: string; is_enabled: boolean }> = {}
-    for (const ex of (exts || [])) {
-      const row = locExts?.find((r: any) => r.extra_id === ex.id)
-      extMap[ex.id] = { price: row ? String((row.price / 100).toFixed(2)) : '0.00', is_enabled: row?.is_enabled ?? false }
-    }
-    setLocExtras(extMap)
 
     setLoading(false)
   }
@@ -140,34 +108,6 @@ export default function LocationEditPage() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     }
-  }
-
-  async function handleSaveServices() {
-    setSvcSaving(true)
-    const rows = services.map(s => ({
-      location_id: locationId,
-      service_id: s.id,
-      base_price: Math.round(parseFloat(locServices[s.id]?.base_price || '0') * 100),
-      is_enabled: locServices[s.id]?.is_enabled ?? false,
-    }))
-    await supabase.from('location_services').upsert(rows, { onConflict: 'location_id,service_id' })
-    setSvcSaving(false)
-    setSvcSaved(true)
-    setTimeout(() => setSvcSaved(false), 3000)
-  }
-
-  async function handleSaveExtras() {
-    setExtraSaving(true)
-    const rows = extras.map(ex => ({
-      location_id: locationId,
-      extra_id: ex.id,
-      price: Math.round(parseFloat(locExtras[ex.id]?.price || '0') * 100),
-      is_enabled: locExtras[ex.id]?.is_enabled ?? false,
-    }))
-    await supabase.from('location_extras').upsert(rows, { onConflict: 'location_id,extra_id' })
-    setExtraSaving(false)
-    setExtraSaved(true)
-    setTimeout(() => setExtraSaved(false), 3000)
   }
 
   async function handleDelete() {
@@ -269,98 +209,6 @@ export default function LocationEditPage() {
                 )}
               </div>
             </div>
-
-            {/* Service catalog */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">Service catalog</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Enable services and set prices for this location.</p>
-              </div>
-
-              {services.length === 0 ? (
-                <p className="text-sm text-gray-400">No services found.</p>
-              ) : (
-                <div className="space-y-2">
-                  {services.map(s => (
-                    <div key={s.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                      <Toggle
-                        value={locServices[s.id]?.is_enabled ?? false}
-                        onChange={v => setLocServices(m => ({ ...m, [s.id]: { ...m[s.id], is_enabled: v } }))}
-                      />
-                      <span className="flex-1 text-sm text-gray-900">{s.name}</span>
-                      <div className="relative w-28">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={locServices[s.id]?.base_price ?? '0.00'}
-                          onChange={e => setLocServices(m => ({ ...m, [s.id]: { ...m[s.id], base_price: e.target.value } }))}
-                          className="w-full text-sm border border-gray-200 rounded-lg pl-6 pr-3 py-1.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center gap-3 pt-1">
-                <button
-                  onClick={handleSaveServices}
-                  disabled={svcSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {svcSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {svcSaving ? 'Saving…' : 'Save services'}
-                </button>
-                {svcSaved && <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle2 className="w-3.5 h-3.5" /> Saved</span>}
-              </div>
-            </div>
-
-            {/* Extras catalog */}
-            {extras.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Service extras</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Enable add-ons and set prices for this location.</p>
-                </div>
-
-                <div className="space-y-2">
-                  {extras.map(ex => (
-                    <div key={ex.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                      <Toggle
-                        value={locExtras[ex.id]?.is_enabled ?? false}
-                        onChange={v => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], is_enabled: v } }))}
-                      />
-                      <span className="flex-1 text-sm text-gray-900">{ex.name}</span>
-                      <div className="relative w-28">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={locExtras[ex.id]?.price ?? '0.00'}
-                          onChange={e => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], price: e.target.value } }))}
-                          className="w-full text-sm border border-gray-200 rounded-lg pl-6 pr-3 py-1.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    onClick={handleSaveExtras}
-                    disabled={extraSaving}
-                    className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {extraSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    {extraSaving ? 'Saving…' : 'Save extras'}
-                  </button>
-                  {extraSaved && <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle2 className="w-3.5 h-3.5" /> Saved</span>}
-                </div>
-              </div>
-            )}
 
             {/* Delete */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">
