@@ -162,13 +162,13 @@ export default function BookingFormRenderer({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Booking could not be submitted')
 
+      if (thankYouUrl) {
+        // Redirect immediately — don't show the in-page success state
+        window.location.href = thankYouUrl
+        return
+      }
       setSubmittedJobId(data.job_id)
       onSubmitSuccess?.(data.job_id)
-      if (thankYouUrl) {
-        setTimeout(() => {
-          window.location.href = thankYouUrl
-        }, 300)
-      }
     } catch (e: any) {
       setSubmitError(e.message)
     } finally {
