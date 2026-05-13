@@ -14,6 +14,7 @@ export default function PublicBookingPage() {
 
   const [business, setBusiness] = useState<any>(null)
   const [locationId, setLocationId] = useState<string | null>(null)
+  const [thankYouUrl, setThankYouUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function PublicBookingPage() {
         brand_color: loc.brand_color,
       })
       setLocationId(loc.location_id)
+      setThankYouUrl(loc.location_thank_you_url || null)
       setLoading(false)
     }
     load()
@@ -62,6 +64,7 @@ export default function PublicBookingPage() {
         businessId={business.id}
         locationId={locationId}
         mode="live"
+        thankYouUrl={thankYouUrl}
       />
     </div>
   )

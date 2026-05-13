@@ -43,6 +43,7 @@ export interface BookingFormRendererProps {
     }>
   }
   onSubmitSuccess?: (jobId: string) => void
+  thankYouUrl?: string | null
 }
 
 export default function BookingFormRenderer({
@@ -51,6 +52,7 @@ export default function BookingFormRenderer({
   mode,
   previewData,
   onSubmitSuccess,
+  thankYouUrl,
 }: BookingFormRendererProps) {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -162,6 +164,11 @@ export default function BookingFormRenderer({
 
       setSubmittedJobId(data.job_id)
       onSubmitSuccess?.(data.job_id)
+      if (thankYouUrl) {
+        setTimeout(() => {
+          window.location.href = thankYouUrl
+        }, 300)
+      }
     } catch (e: any) {
       setSubmitError(e.message)
     } finally {
