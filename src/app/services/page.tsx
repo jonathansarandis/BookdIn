@@ -21,6 +21,9 @@ function formatCurrency(cents: number) {
 export default function ServicesPage() {
   const [services, setServices] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [reassignTarget, setReassignTarget] = useState<{ id: string; name: string; jobCount: number } | null>(null)
+  const [reassignToServiceId, setReassignToServiceId] = useState<string>('')
+  const [reassigning, setReassigning] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -41,9 +44,60 @@ export default function ServicesPage() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
-    await supabase.from('services').delete().eq('id', id)
-    setServices(prev => prev.filter(s => s.id !== id))
+    const { count, error: countErr } = await supabase
+      .from('jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('service_id', id)
+
+    if (countErr) {
+      alert('Could not check job references. Try again.')
+      return
+    }
+
+    if (!count || count === 0) {
+      if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+      const { error: delErr } = await supabase.from('services').delete().eq('id', id)
+      if (delErr) {
+        alert('Delete failed: ' + delErr.message)
+        return
+      }
+      loadServices()
+      return
+    }
+
+    setReassignTarget({ id, name, jobCount: count })
+  }
+
+  async function confirmReassignAndDelete() {
+    if (!reassignTarget || !reassignToServiceId) return
+    if (reassignToServiceId === reassignTarget.id) {
+      alert('Pick a different service to reassign to.')
+      return
+    }
+    setReassigning(true)
+    try {
+      const { error: updErr } = await supabase
+        .from('jobs')
+        .update({ service_id: reassignToServiceId })
+        .eq('service_id', reassignTarget.id)
+
+      if (updErr) throw new Error('Reassign failed: ' + updErr.message)
+
+      const { error: delErr } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', reassignTarget.id)
+
+      if (delErr) throw new Error('Delete failed after reassign: ' + delErr.message)
+
+      setReassignTarget(null)
+      setReassignToServiceId('')
+      loadServices()
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setReassigning(false)
+    }
   }
 
   if (loading) return <div className="text-sm text-gray-400 py-8 text-center">Loading...</div>
@@ -136,6 +190,49 @@ export default function ServicesPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {reassignTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Delete "{reassignTarget.name}"</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              This service has {reassignTarget.jobCount} existing booking{reassignTarget.jobCount === 1 ? '' : 's'}.
+              To delete it, choose another service to reassign those bookings to.
+            </p>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Reassign bookings to:</label>
+            <select
+              value={reassignToServiceId}
+              onChange={e => setReassignToServiceId(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm mb-4"
+              disabled={reassigning}
+            >
+              <option value="">Select a service…</option>
+              {services
+                .filter(s => s.id !== reassignTarget.id)
+                .map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))
+              }
+            </select>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => { setReassignTarget(null); setReassignToServiceId('') }}
+                disabled={reassigning}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReassignAndDelete}
+                disabled={!reassignToServiceId || reassigning}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+              >
+                {reassigning ? 'Reassigning…' : 'Reassign & Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
