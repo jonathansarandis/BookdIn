@@ -563,6 +563,11 @@ export default function BookingFormRenderer({
               </span>
             ) : currentStep.is_submit_step ? (currentStep.submit_button_label || 'Submit') : (currentStep.next_button_label || 'Next')}
           </button>
+          {submitting && (
+            <p className="mt-2 text-xs text-gray-500 text-center">
+              Please wait, this may take a few seconds…
+            </p>
+          )}
           {stepValidation && !submitError && (
             <p className="mt-2 text-xs text-gray-500 text-right">{stepValidation}</p>
           )}
