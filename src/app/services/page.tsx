@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Pencil, Loader2, CheckCircle2, Copy, X, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Loader2, CheckCircle2, Copy, X, Trash2, ChevronDown } from 'lucide-react'
 
 const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500'
 const labelCls = 'block text-xs font-medium text-gray-600 mb-1'
@@ -21,7 +21,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   )
 }
 
-function PriceInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function PriceInput({ value, onChange, placeholder = '0.00' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div className="relative w-28">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
@@ -30,6 +30,7 @@ function PriceInput({ value, onChange }: { value: string; onChange: (v: string) 
         min="0"
         step="0.01"
         value={value}
+        placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
         className="w-full text-sm border border-gray-200 rounded-lg pl-6 pr-3 py-1.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
       />
@@ -52,6 +53,7 @@ function buildSvcMap(
   return map
 }
 
+// Empty string = no location override (will resolve to service_override or global default)
 function buildExtMap(
   extras: any[],
   locExts: any[],
@@ -60,9 +62,18 @@ function buildExtMap(
   for (const ex of extras) {
     const row = locExts.find((r: any) => r.extra_id === ex.id)
     map[ex.id] = {
-      price: row ? String((row.price / 100).toFixed(2)) : '0.00',
+      price: row?.price != null ? String((row.price / 100).toFixed(2)) : '',
       is_enabled: row?.is_enabled ?? false,
     }
+  }
+  return map
+}
+
+function buildJuncMap(junctions: any[]): Record<string, any[]> {
+  const map: Record<string, any[]> = {}
+  for (const j of junctions) {
+    if (!map[j.extra_id]) map[j.extra_id] = []
+    map[j.extra_id].push(j)
   }
   return map
 }
@@ -83,8 +94,10 @@ export default function ServicesPage() {
   // Global catalogs
   const [allServices, setAllServices] = useState<any[]>([])
   const [allExtras, setAllExtras] = useState<any[]>([])
+  // service_extras junction: extra_id → [{service_id, price_override, sort_order}]
+  const [extraJunctions, setExtraJunctions] = useState<Record<string, any[]>>({})
 
-  // Per-location state (keyed by id)
+  // Per-location state
   const [locServices, setLocServices] = useState<Record<string, { base_price: string; is_enabled: boolean }>>({})
   const [locExtras, setLocExtras] = useState<Record<string, { price: string; is_enabled: boolean }>>({})
   const [locLoading, setLocLoading] = useState(false)
@@ -102,11 +115,15 @@ export default function ServicesPage() {
   const [editSvcDuration, setEditSvcDuration] = useState('')
   const [editSvcSaving, setEditSvcSaving] = useState(false)
 
-  // Edit extra modal
+  // Edit extra modal (id=null means new add-on)
   const [editExtra, setEditExtra] = useState<any | null>(null)
   const [editExtraName, setEditExtraName] = useState('')
   const [editExtraDesc, setEditExtraDesc] = useState('')
   const [editExtraDuration, setEditExtraDuration] = useState('')
+  const [editExtraDefaultPrice, setEditExtraDefaultPrice] = useState('')
+  const [editExtraMappedSvcIds, setEditExtraMappedSvcIds] = useState<Set<string>>(new Set())
+  const [editExtraSvcOverrides, setEditExtraSvcOverrides] = useState<Record<string, string>>({})
+  const [editExtraDisclosureOpen, setEditExtraDisclosureOpen] = useState(false)
   const [editExtraSaving, setEditExtraSaving] = useState(false)
 
   // Delete-reassign modal (services)
@@ -143,13 +160,26 @@ export default function ServicesPage() {
 
     const [{ data: locs }, { data: svcs }, { data: exts }] = await Promise.all([
       supabase.from('locations').select('id, name').eq('business_id', bizId).order('name'),
-      supabase.from('services').select('id, name, description, duration_minutes, pricing_type, base_price, is_active, sort_order').eq('business_id', bizId).order('sort_order'),
-      supabase.from('service_extras').select('id, name, description, duration_minutes, service_id, is_active, sort_order').eq('business_id', bizId).order('sort_order'),
+      supabase.from('services')
+        .select('id, name, description, duration_minutes, pricing_type, base_price, is_active, sort_order')
+        .eq('business_id', bizId).order('sort_order'),
+      supabase.from('extras')
+        .select('id, name, description, default_price, default_duration_minutes, is_active, sort_order')
+        .eq('business_id', bizId).order('sort_order'),
     ])
 
     setLocations(locs || [])
     setAllServices(svcs || [])
     setAllExtras(exts || [])
+
+    // Load junction map (service_extras: which extras map to which services)
+    const svcIds = (svcs || []).map(s => s.id)
+    const { data: junctions } = svcIds.length > 0
+      ? await supabase.from('service_extras')
+          .select('extra_id, service_id, price_override, sort_order')
+          .in('service_id', svcIds)
+      : { data: [] }
+    setExtraJunctions(buildJuncMap(junctions || []))
 
     if (locs?.length) {
       const firstId = locs[0].id
@@ -189,6 +219,25 @@ export default function ServicesPage() {
     setLocExtras(buildExtMap(allExtras, locExts || []))
   }
 
+  async function reloadExtrasData() {
+    if (!businessId) return
+    const svcIds = allServices.map(s => s.id)
+    const [{ data: exts }, { data: junctions }] = await Promise.all([
+      supabase.from('extras')
+        .select('id, name, description, default_price, default_duration_minutes, is_active, sort_order')
+        .eq('business_id', businessId).order('sort_order'),
+      svcIds.length > 0
+        ? supabase.from('service_extras')
+            .select('extra_id, service_id, price_override, sort_order')
+            .in('service_id', svcIds)
+        : Promise.resolve({ data: [] }),
+    ])
+    setAllExtras(exts || [])
+    setExtraJunctions(buildJuncMap(junctions || []))
+  }
+
+  // ── Services tab ────────────────────────────────────────────
+
   async function handleSaveServices() {
     setSvcSaving(true)
     const rows = allServices.map(s => ({
@@ -203,21 +252,6 @@ export default function ServicesPage() {
     setTimeout(() => setSvcSaved(false), 3000)
   }
 
-  async function handleSaveExtras() {
-    setExtraSaving(true)
-    const rows = allExtras.map(ex => ({
-      location_id: selectedLocationId,
-      extra_id: ex.id,
-      price: Math.round(parseFloat(locExtras[ex.id]?.price || '0') * 100),
-      is_enabled: locExtras[ex.id]?.is_enabled ?? false,
-    }))
-    await supabase.from('location_extras').upsert(rows, { onConflict: 'location_id,extra_id' })
-    setExtraSaving(false)
-    setExtraSaved(true)
-    setTimeout(() => setExtraSaved(false), 3000)
-  }
-
-  // --- Edit service modal ---
   function openEditSvc(svc: any) {
     setEditSvc(svc)
     setEditSvcName(svc.name)
@@ -277,30 +311,134 @@ export default function ServicesPage() {
     }
   }
 
-  // --- Edit extra modal ---
+  // ── Add-ons tab ─────────────────────────────────────────────
+
+  async function handleSaveExtras() {
+    setExtraSaving(true)
+    const rows = allExtras.map(ex => {
+      const priceStr = locExtras[ex.id]?.price
+      return {
+        location_id: selectedLocationId,
+        extra_id: ex.id,
+        price: priceStr && priceStr.trim() !== '' ? Math.round(parseFloat(priceStr) * 100) : null,
+        is_enabled: locExtras[ex.id]?.is_enabled ?? false,
+      }
+    })
+    await supabase.from('location_extras').upsert(rows, { onConflict: 'location_id,extra_id' })
+    setExtraSaving(false)
+    setExtraSaved(true)
+    setTimeout(() => setExtraSaved(false), 3000)
+  }
+
+  function openNewExtra() {
+    setEditExtra({ id: null })
+    setEditExtraName('')
+    setEditExtraDesc('')
+    setEditExtraDuration('0')
+    setEditExtraDefaultPrice('0.00')
+    setEditExtraMappedSvcIds(new Set())
+    setEditExtraSvcOverrides({})
+    setEditExtraDisclosureOpen(false)
+  }
+
   function openEditExtra(ex: any) {
+    const junctions = extraJunctions[ex.id] || []
     setEditExtra(ex)
     setEditExtraName(ex.name)
     setEditExtraDesc(ex.description || '')
-    setEditExtraDuration(String(ex.duration_minutes || 0))
+    setEditExtraDuration(String(ex.default_duration_minutes || 0))
+    setEditExtraDefaultPrice(String((ex.default_price / 100).toFixed(2)))
+    setEditExtraMappedSvcIds(new Set(junctions.map((j: any) => j.service_id)))
+    const overrides: Record<string, string> = {}
+    for (const j of junctions) {
+      if (j.price_override !== null && j.price_override !== undefined) {
+        overrides[j.service_id] = String((j.price_override / 100).toFixed(2))
+      }
+    }
+    setEditExtraSvcOverrides(overrides)
+    setEditExtraDisclosureOpen(false)
+  }
+
+  function getPriceOverrideValue(svcId: string): number | null {
+    const str = editExtraSvcOverrides[svcId]
+    if (!str || str.trim() === '') return null
+    const val = parseFloat(str)
+    return isNaN(val) ? null : Math.round(val * 100)
   }
 
   async function handleSaveEditExtra() {
     if (!editExtra) return
     setEditExtraSaving(true)
-    const duration = parseInt(editExtraDuration) || 0
-    await supabase
-      .from('service_extras')
-      .update({ name: editExtraName, description: editExtraDesc || null, duration_minutes: duration })
-      .eq('id', editExtra.id)
-    setAllExtras(prev =>
-      prev.map(ex => ex.id === editExtra.id ? { ...ex, name: editExtraName, description: editExtraDesc, duration_minutes: duration } : ex)
-    )
-    setEditExtraSaving(false)
+    try {
+      const defaultPrice = Math.round(parseFloat(editExtraDefaultPrice || '0') * 100)
+      const duration = parseInt(editExtraDuration) || 0
+
+      let extraId = editExtra.id
+
+      if (extraId) {
+        await supabase.from('extras').update({
+          name: editExtraName,
+          description: editExtraDesc || null,
+          default_duration_minutes: duration,
+          default_price: defaultPrice,
+        }).eq('id', extraId)
+      } else {
+        const { data: newEx, error } = await supabase.from('extras').insert({
+          business_id: businessId,
+          name: editExtraName,
+          description: editExtraDesc || null,
+          default_duration_minutes: duration,
+          default_price: defaultPrice,
+          is_active: true,
+          sort_order: allExtras.length,
+        }).select('id').single()
+        if (error || !newEx) throw new Error(error?.message || 'Failed to create add-on')
+        extraId = newEx.id
+      }
+
+      // Junction diff: remove unmapped services
+      const currentJunctions = extraJunctions[extraId] || []
+      const currentSvcIds = new Set(currentJunctions.map((j: any) => j.service_id))
+      const toRemove = [...currentSvcIds].filter(id => !editExtraMappedSvcIds.has(id))
+
+      if (toRemove.length > 0) {
+        await supabase.from('service_extras').delete()
+          .eq('extra_id', extraId).in('service_id', toRemove)
+      }
+
+      // Upsert all mapped services with their price_override
+      if (editExtraMappedSvcIds.size > 0) {
+        const rows = [...editExtraMappedSvcIds].map(svcId => ({
+          extra_id: extraId,
+          service_id: svcId,
+          price_override: getPriceOverrideValue(svcId),
+          sort_order: 0,
+        }))
+        await supabase.from('service_extras').upsert(rows, { onConflict: 'service_id,extra_id' })
+      }
+
+      await reloadExtrasData()
+      // Reload location-specific data too (new extra may need a location_extras row)
+      await reloadLocationData()
+      setEditExtra(null)
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setEditExtraSaving(false)
+    }
+  }
+
+  async function handleDeleteExtra(exId: string, exName: string) {
+    if (!confirm(`Delete "${exName}"? This removes it from all services and locations and cannot be undone.`)) return
+    // Cascades to service_extras junction and location_extras
+    await supabase.from('extras').delete().eq('id', exId)
+    setAllExtras(prev => prev.filter(ex => ex.id !== exId))
+    setExtraJunctions(prev => { const next = { ...prev }; delete next[exId]; return next })
     setEditExtra(null)
   }
 
-  // --- Copy modal ---
+  // ── Copy modal ──────────────────────────────────────────────
+
   function openCopyModal() {
     setShowCopy(true)
     setCopyStep('config')
@@ -360,7 +498,7 @@ export default function ServicesPage() {
       const rows = copySourceData.exts.map((r: any) => ({
         location_id: selectedLocationId,
         extra_id: r.extra_id,
-        price: copyPrices ? r.price : 0,
+        price: copyPrices ? r.price : null,
         is_enabled: true,
       }))
       await supabase
@@ -372,6 +510,8 @@ export default function ServicesPage() {
     setCopyApplying(false)
     setShowCopy(false)
   }
+
+  // ── Render ──────────────────────────────────────────────────
 
   if (loading) return <div className="text-sm text-gray-400 py-8 text-center">Loading...</div>
 
@@ -386,7 +526,7 @@ export default function ServicesPage() {
           <h2 className="text-lg font-semibold text-gray-900">Services & Add-ons</h2>
           <p className="text-sm text-gray-500 mt-0.5">Manage what you offer and set pricing per location</p>
         </div>
-        {activeTab === 'services' && (
+        {activeTab === 'services' ? (
           <Link
             href="/services/new"
             className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors"
@@ -394,6 +534,14 @@ export default function ServicesPage() {
             <Plus className="w-4 h-4" />
             Add service
           </Link>
+        ) : (
+          <button
+            onClick={openNewExtra}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New add-on
+          </button>
         )}
       </div>
 
@@ -447,6 +595,8 @@ export default function ServicesPage() {
           <Loader2 className="w-4 h-4 animate-spin" /> Loading…
         </div>
       ) : activeTab === 'services' ? (
+
+        /* ── Services sub-tab ── */
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <p className="text-xs text-gray-500">
             Name, description, and duration apply to all locations. Price and availability are set per location.
@@ -495,36 +645,60 @@ export default function ServicesPage() {
             )}
           </div>
         </div>
+
       ) : (
+
+        /* ── Add-ons sub-tab ── */
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <p className="text-xs text-gray-500">
-            Name, description, and duration apply to all locations. Price and availability are set per location.
+            One row per add-on globally. Toggle on/off per location and set a location price override (leave blank to use the service or global default).
           </p>
 
           {allExtras.length === 0 ? (
-            <p className="text-sm text-gray-400">No add-ons yet. Add them from a service's edit page.</p>
+            <p className="text-sm text-gray-400">No add-ons yet. Click "New add-on" to create one.</p>
           ) : (
             <div className="space-y-1">
-              {allExtras.map(ex => (
-                <div key={ex.id} className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
-                  <Toggle
-                    value={locExtras[ex.id]?.is_enabled ?? false}
-                    onChange={v => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], is_enabled: v } }))}
-                  />
-                  <span className="flex-1 text-sm text-gray-900 min-w-0 truncate">{ex.name}</span>
-                  <PriceInput
-                    value={locExtras[ex.id]?.price ?? '0.00'}
-                    onChange={v => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], price: v } }))}
-                  />
-                  <button
-                    onClick={() => openEditExtra(ex)}
-                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0"
-                    title="Edit add-on"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+              {allExtras.map(ex => {
+                const junctions = extraJunctions[ex.id] || []
+                return (
+                  <div key={ex.id} className="flex items-start gap-3 py-2.5 border-b border-gray-100 last:border-0">
+                    <div className="mt-0.5">
+                      <Toggle
+                        value={locExtras[ex.id]?.is_enabled ?? false}
+                        onChange={v => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], is_enabled: v } }))}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-gray-900">{ex.name}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span className="text-xs text-gray-400">
+                          Default ${(ex.default_price / 100).toFixed(2)}
+                        </span>
+                        {junctions.map((j: any) => {
+                          const svc = allServices.find(s => s.id === j.service_id)
+                          return svc ? (
+                            <span key={j.service_id} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded-full">
+                              {svc.name}{j.price_override != null ? ` $${(j.price_override / 100).toFixed(2)}` : ''}
+                            </span>
+                          ) : null
+                        })}
+                      </div>
+                    </div>
+                    <PriceInput
+                      value={locExtras[ex.id]?.price ?? ''}
+                      placeholder="default"
+                      onChange={v => setLocExtras(m => ({ ...m, [ex.id]: { ...m[ex.id], price: v } }))}
+                    />
+                    <button
+                      onClick={() => openEditExtra(ex)}
+                      className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 mt-0.5"
+                      title="Edit add-on"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -592,39 +766,124 @@ export default function ServicesPage() {
         </div>
       )}
 
-      {/* Edit extra modal */}
+      {/* Edit / New add-on modal */}
       {editExtra && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 my-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">Edit add-on</h2>
+              <h2 className="text-base font-semibold text-gray-900">
+                {editExtra.id ? 'Edit add-on' : 'New add-on'}
+              </h2>
               <button onClick={() => setEditExtra(null)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
             </div>
-            <p className="text-xs text-gray-500">Name, description, and duration apply to all locations. Price and availability are set per location.</p>
-            <div>
-              <label className={labelCls}>Name</label>
-              <input type="text" value={editExtraName} onChange={e => setEditExtraName(e.target.value)} className={inputCls} />
+
+            <p className="text-xs text-gray-500">
+              Global fields apply to all locations. Enable/price per location is set from the Add-ons tab list.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className={labelCls}>Name</label>
+                <input type="text" value={editExtraName} onChange={e => setEditExtraName(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Default price (global)</label>
+                <PriceInput value={editExtraDefaultPrice} onChange={setEditExtraDefaultPrice} />
+              </div>
+              <div>
+                <label className={labelCls}>Default duration (min)</label>
+                <input type="number" min="0" value={editExtraDuration} onChange={e => setEditExtraDuration(e.target.value)} className={inputCls} />
+              </div>
+              <div className="col-span-2">
+                <label className={labelCls}>Description</label>
+                <textarea rows={2} value={editExtraDesc} onChange={e => setEditExtraDesc(e.target.value)} className={inputCls} />
+              </div>
             </div>
+
+            {/* Service mapping */}
             <div>
-              <label className={labelCls}>Description</label>
-              <textarea rows={3} value={editExtraDesc} onChange={e => setEditExtraDesc(e.target.value)} className={inputCls} />
+              <label className={labelCls}>Applies to services</label>
+              {allServices.length === 0 ? (
+                <p className="text-xs text-gray-400">No services found.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                  {allServices.map(svc => (
+                    <label key={svc.id} className="flex items-center gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editExtraMappedSvcIds.has(svc.id)}
+                        onChange={e => {
+                          setEditExtraMappedSvcIds(prev => {
+                            const next = new Set(prev)
+                            if (e.target.checked) next.add(svc.id)
+                            else next.delete(svc.id)
+                            return next
+                          })
+                        }}
+                        className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="text-sm text-gray-700">{svc.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
-              <label className={labelCls}>Duration (minutes)</label>
-              <input type="number" min="0" value={editExtraDuration} onChange={e => setEditExtraDuration(e.target.value)} className={inputCls} />
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button onClick={() => setEditExtra(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEditExtra}
-                disabled={editExtraSaving || !editExtraName.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-              >
-                {editExtraSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {editExtraSaving ? 'Saving…' : 'Save'}
-              </button>
+
+            {/* Per-service price override disclosure */}
+            {editExtraMappedSvcIds.size > 0 && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setEditExtraDisclosureOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <span>Set different price per service</span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${editExtraDisclosureOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {editExtraDisclosureOpen && (
+                  <div className="border-t border-gray-200 p-3 space-y-2 bg-gray-50">
+                    <p className="text-xs text-gray-500 mb-2">Leave blank to use the global default price. Set a value to override for that service only.</p>
+                    {[...editExtraMappedSvcIds].map(svcId => {
+                      const svc = allServices.find(s => s.id === svcId)
+                      if (!svc) return null
+                      return (
+                        <div key={svcId} className="flex items-center gap-3">
+                          <span className="flex-1 text-sm text-gray-700 min-w-0 truncate">{svc.name}</span>
+                          <PriceInput
+                            value={editExtraSvcOverrides[svcId] ?? ''}
+                            placeholder="default"
+                            onChange={v => setEditExtraSvcOverrides(prev => ({ ...prev, [svcId]: v }))}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              {editExtra.id ? (
+                <button
+                  onClick={() => handleDeleteExtra(editExtra.id, editExtra.name)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" /> Delete
+                </button>
+              ) : <div />}
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditExtra(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEditExtra}
+                  disabled={editExtraSaving || !editExtraName.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {editExtraSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {editExtraSaving ? 'Saving…' : editExtra.id ? 'Save' : 'Create'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -701,9 +960,9 @@ export default function ServicesPage() {
                 <div className="space-y-3">
                   <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">What to copy</p>
                   {[
-                    { key: 'services', label: 'Services', value: copyServices, set: setCopyServices },
-                    { key: 'addons', label: 'Add-ons', value: copyAddons, set: setCopyAddons },
-                    { key: 'prices', label: 'Prices', value: copyPrices, set: setCopyPrices },
+                    { key: 'services', label: 'Services (enabled + prices)', value: copyServices, set: setCopyServices },
+                    { key: 'addons', label: 'Add-on settings (enabled + location prices)', value: copyAddons, set: setCopyAddons },
+                    { key: 'prices', label: 'Include prices', value: copyPrices, set: setCopyPrices },
                   ].map(({ key, label, value, set }) => (
                     <label key={key} className="flex items-center gap-3 cursor-pointer">
                       <input
@@ -742,14 +1001,16 @@ export default function ServicesPage() {
             ) : (
               <>
                 <div className="bg-gray-50 rounded-xl p-4 space-y-1 text-sm text-gray-700">
-                  <p>
-                    This will copy{' '}
-                    <strong>{copyCount?.services ?? 0} service{copyCount?.services !== 1 ? 's' : ''}</strong>
-                    {copyAddons && (
-                      <> and <strong>{copyCount?.addons ?? 0} add-on{copyCount?.addons !== 1 ? 's' : ''}</strong></>
-                    )}{' '}
-                    to <strong>{selectedLocation?.name}</strong>.
-                  </p>
+                  {copyServices && (
+                    <p>
+                      Copy <strong>{copyCount?.services ?? 0} service{copyCount?.services !== 1 ? 's' : ''}</strong> to <strong>{selectedLocation?.name}</strong>.
+                    </p>
+                  )}
+                  {copyAddons && (
+                    <p>
+                      Copy add-on settings for <strong>{copyCount?.addons ?? 0} add-on{copyCount?.addons !== 1 ? 's' : ''}</strong> to <strong>{selectedLocation?.name}</strong>.
+                    </p>
+                  )}
                   {(copyCount?.overlaps ?? 0) > 0 && (
                     <p className="text-gray-500">
                       {copyCount?.overlaps} existing row{copyCount?.overlaps !== 1 ? 's' : ''} will be{' '}
@@ -757,7 +1018,7 @@ export default function ServicesPage() {
                     </p>
                   )}
                   {!copyPrices && (
-                    <p className="text-gray-500">Prices will be set to $0.00 (Prices not selected).</p>
+                    <p className="text-gray-500">Prices will not be copied.</p>
                   )}
                 </div>
 
