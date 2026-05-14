@@ -225,7 +225,14 @@ export default function BookingFormRenderer({
 
       const timezone = business.timezone || location?.timezone || null
 
-      // 3. Fetch services via location_services (location-scoped pricing)
+      // 3. Fetch services via location_services.
+      //    extras now live in the global `extras` catalog, mapped to services via
+      //    the `service_extras` junction. Price resolution (three layers):
+      //      1. location_extras.price       (per-location override)
+      //      2. service_extras.price_override (per-service override)
+      //      3. extras.default_price         (global default)
+      //    A location_extras row with is_enabled=true is required for the extra
+      //    to appear — same gate as before, now keyed on extras.id.
       const [{ data: locSvcsRaw }, { data: locExtrasRaw }] = await Promise.all([
         supabase
           .from('location_services')
@@ -235,8 +242,12 @@ export default function BookingFormRenderer({
               id, name, description, pricing_type, duration_minutes,
               is_active, sort_order,
               service_extras (
-                id, name, description, duration_minutes, is_active,
-                sort_order, is_popular, is_quote_only
+                price_override, sort_order,
+                extras!inner (
+                  id, name, description,
+                  default_price, default_duration_minutes,
+                  is_active, sort_order
+                )
               )
             )
           `)
@@ -251,15 +262,23 @@ export default function BookingFormRenderer({
           .eq('is_enabled', true),
       ])
 
-      const extraPriceMap: Record<string, number> = {}
-      for (const le of locExtrasRaw || []) extraPriceMap[le.extra_id] = le.price
+      // Map of extras.id → location price override (null = no location override)
+      const locExtraMap: Record<string, number | null> = {}
+      for (const le of locExtrasRaw || []) locExtraMap[le.extra_id] = le.price ?? null
 
       const services: any[] = (locSvcsRaw || []).map((row: any) => ({
         ...row.services,
         base_price: row.base_price,
         service_extras: (row.services.service_extras || [])
-          .filter((ex: any) => extraPriceMap[ex.id] !== undefined)
-          .map((ex: any) => ({ ...ex, price: extraPriceMap[ex.id] })),
+          .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(locExtraMap, junc.extras.id))
+          .map((junc: any) => ({
+            ...junc.extras,
+            duration_minutes: junc.extras.default_duration_minutes,
+            // Three-layer price resolution
+            price: locExtraMap[junc.extras.id] ?? junc.price_override ?? junc.extras.default_price,
+            sort_order: junc.sort_order,
+          }))
+          .sort((a: any, b: any) => a.sort_order - b.sort_order),
       }))
 
       // 4. Fetch frequency discounts
