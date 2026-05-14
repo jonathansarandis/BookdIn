@@ -226,60 +226,71 @@ export default function BookingFormRenderer({
       const timezone = business.timezone || location?.timezone || null
 
       // 3. Fetch services via location_services.
-      //    extras now live in the global `extras` catalog, mapped to services via
-      //    the `service_extras` junction. Price resolution (three layers):
-      //      1. location_extras.price       (per-location override)
-      //      2. service_extras.price_override (per-service override)
-      //      3. extras.default_price         (global default)
-      //    A location_extras row with is_enabled=true is required for the extra
-      //    to appear — same gate as before, now keyed on extras.id.
-      const [{ data: locSvcsRaw }, { data: locExtrasRaw }] = await Promise.all([
-        supabase
-          .from('location_services')
-          .select(`
-            base_price, is_enabled,
-            services!inner (
-              id, name, description, pricing_type, duration_minutes,
-              is_active, sort_order,
-              service_extras (
-                price_override, sort_order,
-                extras!inner (
-                  id, name, description,
-                  default_price, default_duration_minutes,
-                  is_active, sort_order
-                )
-              )
-            )
-          `)
-          .eq('location_id', locationId)
-          .eq('is_enabled', true)
-          .eq('services.is_active', true)
-          .order('sort_order', { foreignTable: 'services' }),
+      //    Price resolution (three layers):
+      //      1. location_extras.price        (per-location override, null = no override)
+      //      2. service_extras.price_override (per-service override, null = no override)
+      //      3. extras.default_price          (global default, always set)
+      //    service_extras is queried separately (not nested inside location_services) to
+      //    ensure price_override comes through — deep 3-level PostgREST embeds drop
+      //    junction-level fields before they reach the client.
+      const { data: locSvcsRaw } = await supabase
+        .from('location_services')
+        .select(`
+          base_price, is_enabled,
+          services!inner (
+            id, name, description, pricing_type, duration_minutes,
+            is_active, sort_order
+          )
+        `)
+        .eq('location_id', locationId)
+        .eq('is_enabled', true)
+        .eq('services.is_active', true)
+        .order('sort_order', { foreignTable: 'services' })
+
+      const svcIds = (locSvcsRaw || []).map((row: any) => row.services?.id).filter(Boolean)
+
+      const [{ data: locExtrasRaw }, { data: junctionsRaw }] = await Promise.all([
         supabase
           .from('location_extras')
           .select('extra_id, price, is_enabled')
           .eq('location_id', locationId)
           .eq('is_enabled', true),
+        svcIds.length > 0
+          ? supabase
+              .from('service_extras')
+              .select(`
+                service_id, price_override, sort_order,
+                extras!inner (
+                  id, name, description,
+                  default_price, default_duration_minutes,
+                  is_active, sort_order
+                )
+              `)
+              .in('service_id', svcIds)
+          : Promise.resolve({ data: [] }),
       ])
 
       // Map of extras.id → location price override (null = no location override)
       const locExtraMap: Record<string, number | null> = {}
       for (const le of locExtrasRaw || []) locExtraMap[le.extra_id] = le.price ?? null
 
-      const services: any[] = (locSvcsRaw || []).map((row: any) => ({
-        ...row.services,
-        base_price: row.base_price,
-        service_extras: (row.services.service_extras || [])
-          .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(locExtraMap, junc.extras.id))
-          .map((junc: any) => ({
-            ...junc.extras,
-            duration_minutes: junc.extras.default_duration_minutes,
-            // Three-layer price resolution
-            price: locExtraMap[junc.extras.id] ?? junc.price_override ?? junc.extras.default_price,
-            sort_order: junc.sort_order,
-          }))
-          .sort((a: any, b: any) => a.sort_order - b.sort_order),
-      }))
+      const services: any[] = (locSvcsRaw || []).map((row: any) => {
+        const svc = row.services
+        const junctions = (junctionsRaw || []).filter((j: any) => j.service_id === svc.id)
+        return {
+          ...svc,
+          base_price: row.base_price,
+          service_extras: junctions
+            .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(locExtraMap, junc.extras.id))
+            .map((junc: any) => ({
+              ...junc.extras,
+              duration_minutes: junc.extras.default_duration_minutes,
+              price: locExtraMap[junc.extras.id] ?? junc.price_override ?? junc.extras.default_price,
+              sort_order: junc.sort_order,
+            }))
+            .sort((a: any, b: any) => a.sort_order - b.sort_order),
+        }
+      })
 
       // 4. Fetch frequency discounts
       const { data: fdData } = await supabase
