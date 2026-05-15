@@ -15,6 +15,9 @@ export default function ExtrasPickerField({ value, onChange, context, disabled }
   const brand = business?.brand_color || '#1A6B4A'
 
   const extras = selectedService?.service_extras ?? []
+  // DIAGNOSTIC — remove before shipping
+  console.log('[EPF] selectedService id:', selectedService?.id, 'name:', selectedService?.name)
+  console.log('[EPF] extras received:', extras.map((e: any) => ({ id: e.id, name: e.name, price: e.price })))
   if (!extras.some(e => e.is_active)) return null
 
   function handleToggle(id: string) {

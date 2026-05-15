@@ -32,6 +32,8 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
   const hasToggle = popular.length > 0 && rest.length > 0
 
   function renderRow(extra: Extra) {
+    // DIAGNOSTIC — remove before shipping
+    console.log('[ADP] rendering extra:', extra.name, 'price:', extra.price, 'price/100:', extra.price / 100)
     return (
       <label key={extra.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-gray-50 cursor-pointer">
         <div className="flex items-center gap-2.5 min-w-0">
