@@ -84,6 +84,8 @@ export default function BookingFormRenderer({
     business: any
     frequencyDiscounts: any[]
     locationId: string
+    junctions: any[]
+    locExtraMap: Record<string, number | null>
   } | null>(null)
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
@@ -126,7 +128,14 @@ export default function BookingFormRenderer({
       const svc = formData.services.find((s: any) => s.id === values.service_id)
       if (!svc) throw new Error('No service selected')
 
-      const selectedExtraObjects = (svc.service_extras || []).filter((ex: any) => values.extras.includes(ex.id))
+      // Re-derive extras for this service from raw junctions so price uses the correct
+      // (service_id, extra_id) combination, not a cached merged value.
+      const selectedExtraObjects = (formData.junctions || [])
+        .filter((j: any) => j.service_id === svc.id && values.extras.includes(j.extras?.id))
+        .map((j: any) => ({
+          price: (formData.locExtraMap || {})[j.extras.id] ?? j.price_override ?? j.extras.default_price,
+          is_quote_only: j.extras?.is_quote_only ?? false,
+        }))
 
       const breakdown = calcJobPrice({
         service: { id: svc.id, base_price: svc.base_price, pricing_type: svc.pricing_type, duration_minutes: svc.duration_minutes },
@@ -274,23 +283,10 @@ export default function BookingFormRenderer({
       const locExtraMap: Record<string, number | null> = {}
       for (const le of locExtrasRaw || []) locExtraMap[le.extra_id] = le.price ?? null
 
-      const services: any[] = (locSvcsRaw || []).map((row: any) => {
-        const svc = row.services
-        const junctions = (junctionsRaw || []).filter((j: any) => j.service_id === svc.id)
-        return {
-          ...svc,
-          base_price: row.base_price,
-          service_extras: junctions
-            .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(locExtraMap, junc.extras.id))
-            .map((junc: any) => ({
-              ...junc.extras,
-              duration_minutes: junc.extras.default_duration_minutes,
-              price: locExtraMap[junc.extras.id] ?? junc.price_override ?? junc.extras.default_price,
-              sort_order: junc.sort_order,
-            }))
-            .sort((a: any, b: any) => a.sort_order - b.sort_order),
-        }
-      })
+      const services: any[] = (locSvcsRaw || []).map((row: any) => ({
+        ...row.services,
+        base_price: row.base_price,
+      }))
 
       // 4. Fetch frequency discounts
       const { data: fdData } = await supabase
@@ -359,6 +355,8 @@ export default function BookingFormRenderer({
         business: { ...business, timezone },
         frequencyDiscounts,
         locationId,
+        junctions: junctionsRaw || [],
+        locExtraMap,
       })
 
       // Seed custom field defaults (existing user input takes precedence)
@@ -404,11 +402,27 @@ export default function BookingFormRenderer({
 
   const selectedService = formData.services.find(s => s.id === values.service_id) ?? null
 
+  // Derive extras for the currently selected service directly from raw junctions at render
+  // time. This ensures the three-layer price resolution uses the correct service_id for the
+  // price_override lookup, rather than relying on a value baked during load.
+  const currentExtras: any[] = values.service_id
+    ? (formData.junctions || [])
+        .filter((j: any) => j.service_id === values.service_id)
+        .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(formData.locExtraMap, junc.extras.id))
+        .map((junc: any) => ({
+          ...junc.extras,
+          duration_minutes: junc.extras.default_duration_minutes,
+          price: (formData.locExtraMap || {})[junc.extras.id] ?? junc.price_override ?? junc.extras.default_price,
+          sort_order: junc.sort_order,
+        }))
+        .sort((a: any, b: any) => a.sort_order - b.sort_order)
+    : []
+
   // A step is skipped when it contains only extras_picker fields AND the selected service
   // has no applicable extras for this location. If no service is selected yet, don't skip.
   const hasApplicableExtras =
-    selectedService === null ||
-    (selectedService.service_extras ?? []).some((e: any) => e.is_active)
+    values.service_id === null ||
+    currentExtras.some((e: any) => e.is_active)
 
   const visibleSteps = formData.steps.filter(step => {
     const pls = formData.placements.filter(p => p.step_id === step.id)
@@ -512,7 +526,10 @@ export default function BookingFormRenderer({
             key={placementId}
             value={values.extras}
             onChange={v => setValues(prev => ({ ...prev, extras: v }))}
-            context={{ selectedService, business: formData.business }}
+            context={{
+              selectedService: selectedService ? { ...selectedService, service_extras: currentExtras } : null,
+              business: formData.business,
+            }}
           />
         )
       case 'frequency_picker':
