@@ -179,16 +179,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // 4. Fetch service + room_pricing (eq business_id prevents cross-tenant service use)
-    const { data: service } = await admin
-      .from('services')
-      .select('*, room_pricing(*)')
-      .eq('id', service_id)
-      .eq('business_id', businessId)
-      .single()
+    const [{ data: service }, { data: locService }] = await Promise.all([
+      admin.from('services').select('*, room_pricing(*)').eq('id', service_id).eq('business_id', businessId).single(),
+      admin.from('location_services').select('base_price').eq('location_id', location_id).eq('service_id', service_id).single(),
+    ])
     if (!service) {
       await markFailed(admin, submissionId!, 'Service not found')
       return NextResponse.json({ error: 'Service not found' }, { status: 404 })
     }
+    const effectiveBasePrice = locService?.base_price ?? service.base_price
 
     // 5. Frequency discount: DB first, hardcoded fallback
     const { data: freqRow } = await admin
@@ -220,11 +219,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }))
     }
 
-    // 7. Server-side price recalculation
+    // 7. Server-side price recalculation — uses location-specific base price when set
     const breakdown = calcJobPrice({
       service: {
         id: service.id,
-        base_price: service.base_price,
+        base_price: effectiveBasePrice,
         pricing_type: service.pricing_type,
         duration_minutes: service.duration_minutes,
       },

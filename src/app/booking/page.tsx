@@ -64,6 +64,7 @@ export default function BookingPage() {
 
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
   const [junctions, setJunctions] = useState<any[]>([])
+  const [locServiceMap, setLocServiceMap] = useState<Record<string, number>>({})
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
 
@@ -139,6 +140,21 @@ export default function BookingPage() {
     }
     load()
   }, [])
+
+  // Re-fetch location-specific base prices whenever the selected location changes
+  useEffect(() => {
+    if (!locationId) return
+    const supabase = createClient()
+    supabase
+      .from('location_services')
+      .select('service_id, base_price')
+      .eq('location_id', locationId)
+      .then(({ data }) => {
+        const map: Record<string, number> = {}
+        for (const row of data || []) map[row.service_id] = row.base_price
+        setLocServiceMap(map)
+      })
+  }, [locationId])
 
   // Prefill form from existing job when ?edit= is present
   useEffect(() => {
@@ -276,7 +292,7 @@ export default function BookingPage() {
     const breakdown = calcJobPrice({
       service: {
         id: selectedService.id,
-        base_price: selectedService.base_price,
+        base_price: locServiceMap[selectedService.id] ?? selectedService.base_price,
         pricing_type: selectedService.pricing_type,
         duration_minutes: selectedService.duration_minutes,
       },
@@ -511,7 +527,10 @@ export default function BookingPage() {
             {locations.length > 1 && (
               <div>
                 <label className={labelClass}>Location</label>
-                <select value={locationId} onChange={e => setLocationId(e.target.value)} className={inputClass}>
+                <select value={locationId} onChange={e => {
+                  setLocationId(e.target.value)
+                  if (!editJobId) { update('service_id', services[0]?.id || ''); setSelectedExtras([]) }
+                }} className={inputClass}>
                   {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
               </div>
