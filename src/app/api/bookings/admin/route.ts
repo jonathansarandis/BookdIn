@@ -272,7 +272,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         await admin.from('job_extras').delete().eq('job_id', editJobId)
         if (extraDetails.length > 0) {
-          await admin.from('job_extras').insert(
+          const { error: editExtrasErr } = await admin.from('job_extras').insert(
             extraDetails.map(ex => ({
               job_id: editJobId,
               extra_id: ex.id,
@@ -280,6 +280,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               price: ex.is_quote_only ? 0 : ex.price,
             }))
           )
+          if (editExtrasErr) {
+            console.error('[admin booking] job_extras insert (edit) failed:', editExtrasErr)
+            console.error('[admin booking] extraDetails being inserted:', JSON.stringify(extraDetails))
+          }
         }
 
         await admin.from('activity_logs').insert({
@@ -379,7 +383,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     if (extraDetails.length > 0) {
-      await admin.from('job_extras').insert(
+      const { error: jobExtrasErr } = await admin.from('job_extras').insert(
         extraDetails.map(ex => ({
           job_id: job.id,
           extra_id: ex.id,
@@ -387,6 +391,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           price: ex.is_quote_only ? 0 : ex.price,
         }))
       )
+      if (jobExtrasErr) {
+        console.error('[admin booking] job_extras insert failed:', jobExtrasErr)
+        console.error('[admin booking] extraDetails being inserted:', JSON.stringify(extraDetails))
+      }
     }
 
     await admin.from('activity_logs').insert({
