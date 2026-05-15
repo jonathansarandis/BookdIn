@@ -124,6 +124,7 @@ export default function ServicesPage() {
   const [editExtraMappedSvcIds, setEditExtraMappedSvcIds] = useState<Set<string>>(new Set())
   const [editExtraSvcOverrides, setEditExtraSvcOverrides] = useState<Record<string, string>>({})
   const [editExtraDisclosureOpen, setEditExtraDisclosureOpen] = useState(false)
+  const [editExtraIsQuoteOnly, setEditExtraIsQuoteOnly] = useState(false)
   const [editExtraSaving, setEditExtraSaving] = useState(false)
 
   // Delete-reassign modal (services)
@@ -164,7 +165,7 @@ export default function ServicesPage() {
         .select('id, name, description, duration_minutes, pricing_type, base_price, is_active, sort_order')
         .eq('business_id', bizId).order('sort_order'),
       supabase.from('extras')
-        .select('id, name, description, default_price, default_duration_minutes, is_active, sort_order')
+        .select('id, name, description, default_price, default_duration_minutes, is_active, is_quote_only, sort_order')
         .eq('business_id', bizId).order('sort_order'),
     ])
 
@@ -224,7 +225,7 @@ export default function ServicesPage() {
     const svcIds = allServices.map(s => s.id)
     const [{ data: exts }, { data: junctions }] = await Promise.all([
       supabase.from('extras')
-        .select('id, name, description, default_price, default_duration_minutes, is_active, sort_order')
+        .select('id, name, description, default_price, default_duration_minutes, is_active, is_quote_only, sort_order')
         .eq('business_id', businessId).order('sort_order'),
       svcIds.length > 0
         ? supabase.from('service_extras')
@@ -339,6 +340,7 @@ export default function ServicesPage() {
     setEditExtraMappedSvcIds(new Set())
     setEditExtraSvcOverrides({})
     setEditExtraDisclosureOpen(false)
+    setEditExtraIsQuoteOnly(false)
   }
 
   function openEditExtra(ex: any) {
@@ -357,6 +359,7 @@ export default function ServicesPage() {
     }
     setEditExtraSvcOverrides(overrides)
     setEditExtraDisclosureOpen(false)
+    setEditExtraIsQuoteOnly(ex.is_quote_only ?? false)
   }
 
   function getPriceOverrideValue(svcId: string): number | null {
@@ -381,6 +384,7 @@ export default function ServicesPage() {
           description: editExtraDesc || null,
           default_duration_minutes: duration,
           default_price: defaultPrice,
+          is_quote_only: editExtraIsQuoteOnly,
         }).eq('id', extraId)
       } else {
         const { data: newEx, error } = await supabase.from('extras').insert({
@@ -390,6 +394,7 @@ export default function ServicesPage() {
           default_duration_minutes: duration,
           default_price: defaultPrice,
           is_active: true,
+          is_quote_only: editExtraIsQuoteOnly,
           sort_order: allExtras.length,
         }).select('id').single()
         if (error || !newEx) throw new Error(error?.message || 'Failed to create add-on')
@@ -788,11 +793,25 @@ export default function ServicesPage() {
               </div>
               <div>
                 <label className={labelCls}>Default price (global)</label>
-                <PriceInput value={editExtraDefaultPrice} onChange={setEditExtraDefaultPrice} />
+                <div className={editExtraIsQuoteOnly ? 'opacity-50 pointer-events-none' : ''}>
+                  <PriceInput value={editExtraDefaultPrice} onChange={setEditExtraDefaultPrice} />
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Default duration (min)</label>
                 <input type="number" min="0" value={editExtraDuration} onChange={e => setEditExtraDuration(e.target.value)} className={inputCls} />
+              </div>
+              <div className="col-span-2 flex items-center justify-between py-1">
+                <div>
+                  <span className="text-xs font-medium text-gray-700">Quote on arrival</span>
+                  <p className="text-xs text-gray-400">Price is agreed on site — shows as "Quote on arrival" on the booking form</p>
+                </div>
+                <div
+                  onClick={() => setEditExtraIsQuoteOnly(v => !v)}
+                  className={`w-9 h-5 rounded-full transition-colors cursor-pointer relative flex-shrink-0 ml-4 ${editExtraIsQuoteOnly ? 'bg-brand-500' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editExtraIsQuoteOnly ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
               </div>
               <div className="col-span-2">
                 <label className={labelCls}>Description</label>

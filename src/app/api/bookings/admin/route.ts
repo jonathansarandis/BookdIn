@@ -199,16 +199,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .single()
     const discountPct = freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0
 
-    // 6. Fetch extras (tightened: service_id + business_id prevents cross-tenant/cross-service borrowing)
+    // 6. Fetch extras — join service_extras junction to extras catalog.
+    //    extras[] contains extras.id values. Filter by service_id to prevent cross-service borrowing;
+    //    business scoping comes from the extras catalog (extras.business_id verified via service ownership).
     let extraDetails: any[] = []
     if (extras?.length > 0) {
-      const { data } = await admin
+      const { data: junctionRows } = await admin
         .from('service_extras')
-        .select('*')
-        .in('id', extras)
+        .select(`
+          price_override,
+          extras!inner (id, name, default_price, is_quote_only)
+        `)
+        .in('extra_id', extras)
         .eq('service_id', service_id)
-        .eq('business_id', businessId)
-      extraDetails = data || []
+      extraDetails = (junctionRows || []).map((j: any) => ({
+        id: j.extras.id,
+        name: j.extras.name,
+        price: j.price_override ?? j.extras.default_price,
+        is_quote_only: j.extras.is_quote_only,
+      }))
     }
 
     // 7. Server-side price recalculation
@@ -269,7 +278,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               job_id: editJobId,
               extra_id: ex.id,
               name: ex.name,
-              price: ex.price,
+              price: ex.is_quote_only ? 0 : ex.price,
             }))
           )
         }
@@ -376,7 +385,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           job_id: job.id,
           extra_id: ex.id,
           name: ex.name,
-          price: ex.price,
+          price: ex.is_quote_only ? 0 : ex.price,
         }))
       )
     }

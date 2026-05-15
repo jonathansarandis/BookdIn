@@ -126,27 +126,47 @@ export async function POST(request: NextRequest) {
       .single()
     const discountPct = freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0
 
-    // 2b. Fetch extras early — location-specific prices, scoped to this location + service + business
+    // 2b. Fetch extras early — three-layer price resolution:
+    //   location_extras.price ?? service_extras.price_override ?? extras.default_price
+    //   Extras must be (a) enabled for this location and (b) mapped to this service.
     let extraDetails: any[] = []
     if (extras?.length > 0) {
-      const { data } = await supabase
-        .from('location_extras')
-        .select(`
-          price,
-          is_enabled,
-          service_extras!inner ( id, name, is_quote_only, service_id, business_id )
-        `)
-        .eq('location_id', location.id)
-        .in('extra_id', extras)
-        .eq('is_enabled', true)
-        .eq('service_extras.service_id', service_id)
-        .eq('service_extras.business_id', business_id)
-      extraDetails = (data || []).map((row: any) => ({
-        id: row.service_extras.id,
-        name: row.service_extras.name,
-        price: row.price,
-        is_quote_only: row.service_extras.is_quote_only,
-      }))
+      const [{ data: locExtRows }, { data: extRows }, { data: svcExtRows }] = await Promise.all([
+        supabase
+          .from('location_extras')
+          .select('extra_id, price')
+          .eq('location_id', location.id)
+          .in('extra_id', extras)
+          .eq('is_enabled', true),
+        supabase
+          .from('extras')
+          .select('id, name, default_price, is_quote_only')
+          .in('id', extras)
+          .eq('business_id', business_id),
+        supabase
+          .from('service_extras')
+          .select('extra_id, price_override')
+          .eq('service_id', service_id)
+          .in('extra_id', extras),
+      ])
+
+      const locPriceMap: Record<string, number | null> = {}
+      for (const r of locExtRows || []) locPriceMap[r.extra_id] = r.price ?? null
+
+      const svcOverrideMap: Record<string, number | null> = {}
+      for (const r of svcExtRows || []) svcOverrideMap[r.extra_id] = r.price_override ?? null
+
+      const enabledExtraIds = new Set((locExtRows || []).map((r: any) => r.extra_id))
+      const serviceExtraIds = new Set((svcExtRows || []).map((r: any) => r.extra_id))
+
+      extraDetails = (extRows || [])
+        .filter((ex: any) => enabledExtraIds.has(ex.id) && serviceExtraIds.has(ex.id))
+        .map((ex: any) => ({
+          id: ex.id,
+          name: ex.name,
+          price: locPriceMap[ex.id] ?? svcOverrideMap[ex.id] ?? ex.default_price,
+          is_quote_only: ex.is_quote_only,
+        }))
     }
 
     // 2c. Server-side price recalculation
@@ -290,7 +310,7 @@ export async function POST(request: NextRequest) {
           job_id: job.id,
           extra_id: ex.id,
           name: ex.name,
-          price: ex.price,
+          price: ex.is_quote_only ? 0 : ex.price,
         }))
       )
     }

@@ -63,6 +63,7 @@ export default function BookingPage() {
   })
 
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
+  const [junctions, setJunctions] = useState<any[]>([])
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
 
@@ -92,7 +93,7 @@ export default function BookingPage() {
       const bid = profile!.business_id!
 
       const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }, { data: biz }, { data: fdData }, { data: locs }] = await Promise.all([
-        supabase.from('services').select('*, service_extras(*), room_pricing(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
+        supabase.from('services').select('*, room_pricing(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
@@ -119,6 +120,22 @@ export default function BookingPage() {
       setFreqDiscounts(freqMap)
       // In edit mode, the prefill useEffect sets service_id from the job — don't override it here
       if (!editJobId && svcs?.[0]) update('service_id', svcs[0].id)
+
+      const svcIds = (svcs || []).map((s: any) => s.id).filter(Boolean)
+      if (svcIds.length > 0) {
+        const { data: junctionsRaw } = await supabase
+          .from('service_extras')
+          .select(`
+            service_id, price_override, sort_order,
+            extras!inner (
+              id, name, description,
+              default_price, default_duration_minutes,
+              is_active, is_popular, is_quote_only, sort_order
+            )
+          `)
+          .in('service_id', svcIds)
+        setJunctions(junctionsRaw || [])
+      }
     }
     load()
   }, [])
@@ -229,6 +246,20 @@ export default function BookingPage() {
   const selectedService = services.find(s => s.id === form.service_id)
   const selectedFreq = FREQUENCIES.find(f => f.value === form.frequency) ?? FREQUENCIES[0]
 
+  const selectedServiceExtras = junctions
+    .filter((j: any) => j.service_id === form.service_id)
+    .map((j: any) => ({
+      id: j.extras.id,
+      name: j.extras.name,
+      description: j.extras.description,
+      price: j.price_override ?? j.extras.default_price,
+      is_active: j.extras.is_active,
+      is_popular: j.extras.is_popular,
+      is_quote_only: j.extras.is_quote_only,
+      sort_order: j.sort_order,
+    }))
+    .sort((a: any, b: any) => a.sort_order - b.sort_order)
+
   // Derive room counts from room_pricing embedded in the service row
   const bedroomCounts = (() => {
     const counts = (selectedService?.room_pricing || []).filter((r: any) => r.type === 'bedroom').map((r: any) => r.count).sort((a: number, b: number) => a - b)
@@ -251,7 +282,7 @@ export default function BookingPage() {
       },
       bedrooms: form.bedrooms,
       bathrooms: form.bathrooms,
-      selectedExtras: (selectedService.service_extras || [])
+      selectedExtras: selectedServiceExtras
         .filter((ex: any) => selectedExtras.includes(ex.id) && !ex.is_quote_only)
         .map((ex: any) => ({ price: ex.price })),
       roomPricing: selectedService?.room_pricing || [],
@@ -526,11 +557,11 @@ export default function BookingPage() {
           </div>
 
           {/* Extras */}
-          {selectedService?.service_extras?.some((e: any) => e.is_active) && (
+          {selectedServiceExtras.some((e: any) => e.is_active) && (
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Popular add-ons</h3>
               <AddonsPicker
-                extras={selectedService.service_extras}
+                extras={selectedServiceExtras}
                 selected={selectedExtras}
                 onChange={toggleExtra}
               />
@@ -724,12 +755,12 @@ export default function BookingPage() {
             {[
               { label: 'Service', value: selectedService?.name },
               { label: 'Frequency', value: selectedFreq.label },
-              ...(selectedService?.service_extras
-                ?.filter((ex: any) => selectedExtras.includes(ex.id))
+              ...selectedServiceExtras
+                .filter((ex: any) => selectedExtras.includes(ex.id))
                 .map((ex: any) => ({
                   label: ex.name,
-                  value: ex.is_quote_only ? 'Custom price' : `+$${(ex.price / 100).toFixed(0)}`,
-                })) ?? []),
+                  value: ex.is_quote_only ? 'Quote on arrival' : `+$${(ex.price / 100).toFixed(0)}`,
+                })),
               { label: 'Date & time', value: form.scheduled_date
                   ? form.scheduled_time === 'flexible'
                     ? `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — Flexible time`

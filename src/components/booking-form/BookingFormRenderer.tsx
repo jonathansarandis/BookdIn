@@ -272,7 +272,7 @@ export default function BookingFormRenderer({
                 extras!inner (
                   id, name, description,
                   default_price, default_duration_minutes,
-                  is_active, sort_order
+                  is_active, is_quote_only, sort_order
                 )
               `)
               .in('service_id', svcIds)
@@ -417,17 +417,6 @@ export default function BookingFormRenderer({
         }))
         .sort((a: any, b: any) => a.sort_order - b.sort_order)
     : []
-
-  // DIAGNOSTIC — remove before shipping
-  console.log('[BFR] service_id:', values.service_id)
-  console.log('[BFR] junctions total:', (formData.junctions || []).length)
-  console.log('[BFR] currentExtras:', currentExtras.map((e: any) => ({ id: e.id, name: e.name, price: e.price })))
-  if (values.service_id) {
-    const _ovenJunc = (formData.junctions || []).find((j: any) => j.service_id === values.service_id && j.extras?.name === 'Oven Clean')
-    const _studyJunc = (formData.junctions || []).find((j: any) => j.service_id === values.service_id && j.extras?.name === 'Study Room')
-    console.log('[BFR] Oven Clean junction:', _ovenJunc ? { price_override: _ovenJunc.price_override, default_price: _ovenJunc.extras?.default_price, locMapVal: (formData.locExtraMap||{})[_ovenJunc.extras?.id] } : 'NOT FOUND')
-    console.log('[BFR] Study Room junction:', _studyJunc ? { price_override: _studyJunc.price_override, default_price: _studyJunc.extras?.default_price, locMapVal: (formData.locExtraMap||{})[_studyJunc.extras?.id] } : 'NOT FOUND')
-  }
 
   // A step is skipped when it contains only extras_picker fields AND the selected service
   // has no applicable extras for this location. If no service is selected yet, don't skip.
