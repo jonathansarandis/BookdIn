@@ -39,7 +39,7 @@ export async function POST(
       total_price,
       stripe_payment_method_id,
       stripe_customer_id,
-      business:businesses(stripe_account_id)
+      business:businesses(stripe_account_id, currency)
     `)
     .eq('id', params.id)
     .eq('business_id', profile.business_id)
@@ -62,17 +62,19 @@ export async function POST(
 
   const stripeAccountId = job.business?.stripe_account_id
   const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+  const currency = (job.business?.currency || 'aud').toLowerCase()
 
   let intent: Stripe.PaymentIntent
   try {
     intent = await stripe.paymentIntents.create({
       amount: job.total_price,
-      currency: 'aud',
+      currency,
       customer: job.stripe_customer_id,
       payment_method: job.stripe_payment_method_id,
       off_session: true,
       confirm: true,
       capture_method: 'manual',
+      metadata: { jobId: job.id },
     }, stripeOpts)
   } catch (err: any) {
     console.error(`[preauthorize] Stripe failed for job ${params.id}:`, err.message)

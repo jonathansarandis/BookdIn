@@ -48,7 +48,7 @@ export default function ChargeNowButton({ jobId, totalPrice }: Props) {
         onClick={() => setConfirming(true)}
         className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
       >
-        Charge full amount · ${(totalPrice / 100).toFixed(2)}
+        Charge directly · ${(totalPrice / 100).toFixed(2)}
       </button>
     )
   }

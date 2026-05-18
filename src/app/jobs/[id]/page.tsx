@@ -136,6 +136,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     paid:            'bg-green-100 text-green-700',
     auth_failed:     'bg-red-100 text-red-700',
     capture_failed:  'bg-red-100 text-red-700',
+    auth_released:   'bg-gray-100 text-gray-600',
   }
   const PAYMENT_STATUS_LABELS: Record<string, string> = {
     unpaid:          'Unpaid',
@@ -144,6 +145,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     paid:            'Paid',
     auth_failed:     'Auth failed',
     capture_failed:  'Capture failed',
+    auth_released:   'Authorization released',
   }
   const paymentStatus = job.payment_status ?? 'unpaid'
   const paymentPillStyle = PAYMENT_STATUS_STYLES[paymentStatus] ?? 'bg-gray-100 text-gray-700'
