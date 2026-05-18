@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendReceipt } from '@/lib/email'
 
@@ -73,7 +72,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
-  const supabase = createClient()
+  const supabase = createAdminClient()
 
   try {
     switch (event.type) {
@@ -112,10 +111,63 @@ export async function POST(request: Request) {
         const jobId = paymentIntent.metadata?.jobId
 
         if (jobId) {
+          const { data: prevJob } = await supabase
+            .from('jobs')
+            .select('payment_status')
+            .eq('id', jobId)
+            .single()
+
           await supabase
             .from('jobs')
-            .update({ payment_status: 'failed' })
+            .update({ payment_status: 'auth_failed' })
             .eq('id', jobId)
+
+          const alreadyFailed = prevJob?.payment_status === 'auth_failed' || prevJob?.payment_status === 'paid'
+          if (!alreadyFailed) {
+            try {
+              const { data: jobData } = await supabase
+                .from('jobs')
+                .select(`
+                  business_id, scheduled_at,
+                  customer:customers(full_name),
+                  service:services(name),
+                  business:businesses(timezone)
+                `)
+                .eq('id', jobId)
+                .single()
+
+              if (jobData?.business_id) {
+                const { data: staff } = await supabase
+                  .from('profiles')
+                  .select('id')
+                  .eq('business_id', jobData.business_id)
+
+                if (staff?.length) {
+                  const customerName = jobData.customer?.full_name ?? 'Unknown'
+                  const serviceName = jobData.service?.name ?? 'Unknown'
+                  const tz = jobData.business?.timezone || 'Australia/Melbourne'
+                  const date = new Date(jobData.scheduled_at).toLocaleDateString('en-AU', {
+                    day: 'numeric', month: 'short', year: 'numeric', timeZone: tz,
+                  })
+
+                  await supabase.from('notifications').insert(
+                    staff.map((s: { id: string }) => ({
+                      business_id: jobData.business_id,
+                      user_id: s.id,
+                      type: 'auth_failed',
+                      title: `Card authorization failed — ${customerName}`,
+                      body: `Pre-authorization for ${serviceName} on ${date} failed. Check and retry on the booking.`,
+                      entity_type: 'job',
+                      entity_id: jobId,
+                      action_url: `/jobs/${jobId}`,
+                    }))
+                  )
+                }
+              }
+            } catch (notifErr: any) {
+              console.error('[webhook] auth_failed notification error:', notifErr.message)
+            }
+          }
         }
         break
       }

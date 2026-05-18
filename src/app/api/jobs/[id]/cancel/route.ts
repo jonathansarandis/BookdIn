@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendCancellation } from '@/lib/email'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-06-20',
+})
 
 interface ProfileCheck {
   business_id: string | null
@@ -11,6 +16,9 @@ interface JobAuthCheck {
   business_id: string
   status: string
   cancellation_email_sent_at: string | null
+  payment_status: string | null
+  stripe_payment_intent_id: string | null
+  business: { stripe_account_id: string | null } | null
 }
 
 interface JobCancelRow {
@@ -55,7 +63,7 @@ export async function POST(
   // 3. Verify job belongs to caller's business (404 avoids leaking job existence)
   const { data: rawJobCheck } = await supabase
     .from('jobs')
-    .select('business_id, status, cancellation_email_sent_at')
+    .select('business_id, status, cancellation_email_sent_at, payment_status, stripe_payment_intent_id, business:businesses(stripe_account_id)')
     .eq('id', params.id)
     .single()
   const jobCheck = rawJobCheck as unknown as JobAuthCheck | null
@@ -69,9 +77,26 @@ export async function POST(
 
   // 4. Status action: only update + log if not already cancelled
   if (!alreadyCancelled) {
+    // Release Stripe hold if the job was pre-authorized
+    let piReleased = false
+    if (jobCheck.payment_status === 'authorized' && jobCheck.stripe_payment_intent_id) {
+      const stripeAccountId = jobCheck.business?.stripe_account_id
+      const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+      try {
+        await stripe.paymentIntents.cancel(jobCheck.stripe_payment_intent_id, {}, stripeOpts)
+        console.log(`[cancel] Released Stripe hold for job ${params.id}, intent ${jobCheck.stripe_payment_intent_id}`)
+        piReleased = true
+      } catch (err: any) {
+        console.error(`[cancel] Stripe PI cancel failed for job ${params.id}:`, err.message)
+      }
+    }
+
     await supabase
       .from('jobs')
-      .update({ status: 'cancelled' })
+      .update({
+        status: 'cancelled',
+        ...(piReleased ? { payment_status: 'auth_released' } : {}),
+      })
       .eq('id', params.id)
 
     await supabase.from('activity_logs').insert({

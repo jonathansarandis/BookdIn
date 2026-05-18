@@ -50,7 +50,7 @@ export async function POST(
       stripe_payment_intent_id,
       stripe_payment_method_id,
       stripe_customer_id,
-      business:businesses(stripe_account_id)
+      business:businesses(stripe_account_id, currency)
     `)
     .eq('id', params.id)
     .eq('business_id', profile.business_id)
@@ -62,6 +62,7 @@ export async function POST(
 
   const stripeAccountId = job.business?.stripe_account_id
   const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+  const currency = (job.business?.currency || 'aud').toLowerCase()
 
   // card_on_file → direct charge (no pre-auth)
   if (job.payment_status === 'card_on_file') {
@@ -73,7 +74,7 @@ export async function POST(
     try {
       intent = await stripe.paymentIntents.create({
         amount: job.total_price,
-        currency: 'aud',
+        currency,
         customer: job.stripe_customer_id,
         payment_method: job.stripe_payment_method_id,
         off_session: true,
