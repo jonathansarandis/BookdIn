@@ -56,25 +56,24 @@ async function sendJobReceipt(jobId: string, paymentAmount: number): Promise<voi
 }
 
 export async function POST(request: Request) {
-  const body = await request.text()
-  const signature = request.headers.get('stripe-signature')!
-
-  let event: Stripe.Event
-
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    )
-  } catch (err: any) {
-    console.error('Webhook signature verification failed:', err.message)
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
-  }
+    const body = await request.text()
+    const signature = request.headers.get('stripe-signature')!
 
-  const supabase = createAdminClient()
+    let event: Stripe.Event
+    try {
+      event = stripe.webhooks.constructEvent(
+        body,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET!
+      )
+    } catch (err: any) {
+      console.error('Webhook signature verification failed:', err.message)
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+    }
 
-  try {
+    const supabase = createAdminClient()
+
     switch (event.type) {
 
       case 'payment_intent.succeeded': {
