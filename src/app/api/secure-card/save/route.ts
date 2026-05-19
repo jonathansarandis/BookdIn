@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   // Re-validate token (expired check + not-yet-saved guard)
   const { data: job, error: jobError } = await supabase
     .from('jobs')
-    .select('id, card_setup_token_expires_at')
+    .select('id, business_id, scheduled_at, card_setup_token_expires_at, customer:customers(full_name), business:businesses(timezone)')
     .eq('card_setup_token', token)
     .is('stripe_payment_method_id', null)
     .single()
@@ -64,5 +64,45 @@ export async function POST(request: NextRequest) {
   }
 
   console.log(`[secure-card/save] Card saved for job ${job.id}`)
+
+  // Same-day auth notification — fires only when scheduled_at is today in business timezone
+  try {
+    const jobTz = job.business?.timezone || 'Australia/Melbourne'
+    const jobDateMelbourne = new Intl.DateTimeFormat('en-AU', {
+      timeZone: jobTz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(job.scheduled_at))
+    const todayMelbourne = new Intl.DateTimeFormat('en-AU', {
+      timeZone: jobTz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date())
+
+    if (jobDateMelbourne === todayMelbourne) {
+      const { data: staff } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('business_id', job.business_id)
+
+      if (staff?.length) {
+        const dateLabel = new Date(job.scheduled_at).toLocaleDateString('en-AU', {
+          day: 'numeric', month: 'short', year: 'numeric', timeZone: jobTz,
+        })
+        const customerName = job.customer?.full_name ?? 'Unknown'
+        await supabase.from('notifications').insert(
+          staff.map((s: { id: string }) => ({
+            business_id: job.business_id,
+            user_id: s.id,
+            type: 'same_day_auth_required',
+            title: `Same-day auth required — ${customerName}`,
+            body: `Card saved for today's booking (${dateLabel}). Authorize manually before service.`,
+            entity_type: 'job',
+            entity_id: job.id,
+            action_url: `/jobs/${job.id}`,
+          }))
+        )
+      }
+    }
+  } catch (notifErr: any) {
+    console.error(`[secure-card/save] same_day_auth_required notification failed (non-blocking):`, notifErr.message)
+  }
+
   return NextResponse.json({ success: true })
 }

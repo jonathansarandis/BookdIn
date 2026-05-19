@@ -1,10 +1,11 @@
 // @ts-nocheck
 // src/app/api/cron/capture-payments/route.ts
-// Runs daily at 12:00 UTC (vercel.json). Creates and confirms PaymentIntents for all
-// jobs scheduled tomorrow that have a card on file (payment_status='card_on_file').
+// Runs daily at 00:00 UTC (≈ 10am AEST / 11am AEDT). Creates and confirms PaymentIntents for all
+// jobs scheduled tomorrow (Australia/Melbourne local) with a card on file (payment_status='card_on_file').
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { toZonedTime, fromZonedTime } from 'date-fns-tz'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,14 +22,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Tomorrow's date range in UTC
+  // Tomorrow's date range in Australia/Melbourne local time, converted to UTC for SQL filter
   const now = new Date()
-  const tomorrowStart = new Date(now)
-  tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1)
-  tomorrowStart.setUTCHours(0, 0, 0, 0)
+  const TZ = 'Australia/Melbourne'
+  const nowMelbourne = toZonedTime(now, TZ)
 
-  const tomorrowEnd = new Date(tomorrowStart)
-  tomorrowEnd.setUTCHours(23, 59, 59, 999)
+  const tomorrowMelbourneStart = new Date(nowMelbourne)
+  tomorrowMelbourneStart.setDate(tomorrowMelbourneStart.getDate() + 1)
+  tomorrowMelbourneStart.setHours(0, 0, 0, 0)
+  const tomorrowStart = fromZonedTime(tomorrowMelbourneStart, TZ)
+
+  const tomorrowMelbourneEnd = new Date(tomorrowMelbourneStart)
+  tomorrowMelbourneEnd.setHours(23, 59, 59, 999)
+  const tomorrowEnd = fromZonedTime(tomorrowMelbourneEnd, TZ)
 
   console.log(`[capture-payments] Running for ${tomorrowStart.toISOString()} – ${tomorrowEnd.toISOString()}`)
 
@@ -37,12 +43,15 @@ export async function GET(request: NextRequest) {
     .from('jobs')
     .select(`
       id,
+      business_id,
+      scheduled_at,
       total_price,
       stripe_payment_method_id,
       status,
       payment_status,
-      customer:customers(stripe_customer_id),
-      business:businesses(stripe_account_id, currency)
+      customer:customers(full_name, stripe_customer_id),
+      service:services(name),
+      business:businesses(stripe_account_id, currency, timezone)
     `)
     .gte('scheduled_at', tomorrowStart.toISOString())
     .lte('scheduled_at', tomorrowEnd.toISOString())
@@ -110,6 +119,37 @@ export async function GET(request: NextRequest) {
           .eq('id', job.id)
       } catch (dbErr: any) {
         console.error(`[capture-payments] Could not mark auth_failed for job ${job.id}:`, dbErr?.message)
+      }
+
+      try {
+        const { data: staff } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('business_id', job.business_id)
+
+        if (staff?.length) {
+          const tz = job.business?.timezone || 'Australia/Melbourne'
+          const date = new Date(job.scheduled_at).toLocaleDateString('en-AU', {
+            day: 'numeric', month: 'short', year: 'numeric', timeZone: tz,
+          })
+          const customerName = job.customer?.full_name ?? 'Unknown'
+          const serviceName = job.service?.name ?? 'Unknown'
+
+          await supabase.from('notifications').insert(
+            staff.map((s: { id: string }) => ({
+              business_id: job.business_id,
+              user_id: s.id,
+              type: 'auth_failed',
+              title: `Card authorization failed — ${customerName}`,
+              body: `Pre-authorization for ${serviceName} on ${date} failed. Check and retry on the booking.`,
+              entity_type: 'job',
+              entity_id: job.id,
+              action_url: `/jobs/${job.id}`,
+            }))
+          )
+        }
+      } catch (notifErr: any) {
+        console.error(`[capture-payments] auth_failed notification error for job ${job.id}:`, notifErr.message)
       }
     }
   }

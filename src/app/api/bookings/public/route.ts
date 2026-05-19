@@ -551,6 +551,45 @@ export async function POST(request: NextRequest) {
           }
         }
       })(),
+
+      (async () => {
+        // Same-day booking notification — fires only when scheduled_at is today in Melbourne time
+        try {
+          const jobDateMelbourne = new Intl.DateTimeFormat('en-AU', {
+            timeZone: tz || 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(new Date(scheduledAtIso))
+          const todayMelbourne = new Intl.DateTimeFormat('en-AU', {
+            timeZone: tz || 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(new Date())
+
+          if (jobDateMelbourne === todayMelbourne) {
+            const { data: staffProfiles } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('business_id', business_id)
+
+            if (staffProfiles?.length) {
+              const dateLabel = new Date(scheduledAtIso).toLocaleDateString('en-AU', {
+                day: 'numeric', month: 'short', year: 'numeric', timeZone: tz,
+              })
+              await supabase.from('notifications').insert(
+                staffProfiles.map((staff: { id: string }) => ({
+                  business_id,
+                  user_id: staff.id,
+                  type: 'same_day_booking_created',
+                  title: `Same-day booking — ${customer.full_name}`,
+                  body: `New booking created for today (${dateLabel}). Card setup pending.`,
+                  entity_type: 'job',
+                  entity_id: job.id,
+                  action_url: `/jobs/${job.id}`,
+                }))
+              )
+            }
+          }
+        } catch (e: any) {
+          console.error('[public booking] same_day_booking_created notification failed (non-blocking):', e.message)
+        }
+      })(),
     ])
 
     await markProcessed(supabase, submissionId!, job.id)
