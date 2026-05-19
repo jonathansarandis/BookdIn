@@ -38,7 +38,7 @@ export async function POST(
       payment_status,
       total_price,
       stripe_payment_method_id,
-      stripe_customer_id,
+      customer:customers(stripe_customer_id),
       business:businesses(stripe_account_id, currency)
     `)
     .eq('id', params.id)
@@ -56,7 +56,7 @@ export async function POST(
     )
   }
 
-  if (!job.stripe_payment_method_id || !job.stripe_customer_id) {
+  if (!job.stripe_payment_method_id || !job.customer?.stripe_customer_id) {
     return NextResponse.json({ error: 'No card on file' }, { status: 409 })
   }
 
@@ -69,7 +69,7 @@ export async function POST(
     intent = await stripe.paymentIntents.create({
       amount: job.total_price,
       currency,
-      customer: job.stripe_customer_id,
+      customer: job.customer?.stripe_customer_id,
       payment_method: job.stripe_payment_method_id,
       off_session: true,
       confirm: true,

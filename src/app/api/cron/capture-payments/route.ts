@@ -39,9 +39,9 @@ export async function GET(request: NextRequest) {
       id,
       total_price,
       stripe_payment_method_id,
-      stripe_customer_id,
       status,
       payment_status,
+      customer:customers(stripe_customer_id),
       business:businesses(stripe_account_id, currency)
     `)
     .gte('scheduled_at', tomorrowStart.toISOString())
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
         {
           amount: job.total_price,
           currency,
-          customer: job.stripe_customer_id,
+          customer: job.customer?.stripe_customer_id,
           payment_method: job.stripe_payment_method_id,
           capture_method: 'manual',
           off_session: true,

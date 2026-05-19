@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     .select(`
       id,
       card_setup_token_expires_at,
-      customer:customers(full_name, email),
+      customer:customers(id, full_name, email, stripe_customer_id),
       business:businesses(stripe_account_id)
     `)
     .eq('card_setup_token', token)
@@ -62,24 +62,39 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Create customer on the connected account
+  // Reuse existing Stripe customer if already created for this customer/account
   let stripeCustomerId: string
-  try {
-    const customer = await stripe.customers.create(
-      {
-        email: job.customer?.email,
-        name: job.customer?.full_name,
-        metadata: { job_id: job.id },
-      },
-      stripeOpts
-    )
-    stripeCustomerId = customer.id
-  } catch (err: any) {
-    console.error('[secure-card/create-intent] Stripe customer create failed:', err.message)
-    return NextResponse.json({ error: 'Failed to initialise payment' }, { status: 500 })
+  const existingStripeCustomerId = job.customer?.stripe_customer_id as string | undefined
+
+  if (existingStripeCustomerId) {
+    stripeCustomerId = existingStripeCustomerId
+    console.log('[create-intent] Reusing Stripe customer', stripeCustomerId, 'for job', job.id)
+  } else {
+    let stripeCustomer: Stripe.Customer
+    try {
+      stripeCustomer = await stripe.customers.create(
+        {
+          email: job.customer?.email,
+          name: job.customer?.full_name,
+          metadata: { job_id: job.id },
+        },
+        stripeOpts
+      )
+    } catch (err: any) {
+      console.error('[secure-card/create-intent] Stripe customer create failed:', err.message)
+      return NextResponse.json({ error: 'Failed to initialise payment' }, { status: 500 })
+    }
+    stripeCustomerId = stripeCustomer.id
+
+    // Write to customers table (primary source of truth)
+    if (job.customer?.id) {
+      await supabase.from('customers').update({ stripe_customer_id: stripeCustomerId }).eq('id', job.customer.id)
+    } else {
+      console.warn(`[create-intent] No customer FK on job ${job.id} — Stripe customer ${stripeCustomer.id} created but not written to customers table`)
+    }
   }
 
-  // Persist customer ID to the job so the save endpoint can find it
+  // Always write to jobs (legacy — kept until column is dropped post-launch)
   await supabase.from('jobs').update({ stripe_customer_id: stripeCustomerId }).eq('id', job.id)
 
   // Create SetupIntent on the connected account
