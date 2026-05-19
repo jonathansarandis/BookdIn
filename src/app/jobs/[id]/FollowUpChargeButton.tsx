@@ -35,6 +35,10 @@ export default function FollowUpChargeButton({ jobId }: Props) {
       setError('Enter a valid amount greater than $0.00')
       return
     }
+    if (!notes.trim()) {
+      setError('Notes are required')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -95,6 +99,7 @@ export default function FollowUpChargeButton({ jobId }: Props) {
           placeholder="Reason for charge — late cancel fee, additional service, etc."
           value={notes}
           onChange={e => setNotes(e.target.value)}
+          required
           className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
         />
       </div>

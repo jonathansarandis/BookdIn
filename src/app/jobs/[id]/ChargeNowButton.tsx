@@ -5,9 +5,10 @@ import { Loader2, CheckCircle2 } from 'lucide-react'
 interface Props {
   jobId: string
   totalPrice: number
+  label?: string
 }
 
-export default function ChargeNowButton({ jobId, totalPrice }: Props) {
+export default function ChargeNowButton({ jobId, totalPrice, label = 'Charge directly' }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -48,7 +49,7 @@ export default function ChargeNowButton({ jobId, totalPrice }: Props) {
         onClick={() => setConfirming(true)}
         className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
       >
-        Charge directly · ${(totalPrice / 100).toFixed(2)}
+        {label} · ${(totalPrice / 100).toFixed(2)}
       </button>
     )
   }

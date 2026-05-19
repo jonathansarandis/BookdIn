@@ -438,7 +438,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                     {child.payment_status === 'authorized' && (
                       <div className="space-y-1.5 pt-2 border-t border-gray-100">
                         <div className="opacity-80">
-                          <ChargeNowButton jobId={child.id} totalPrice={child.total_price} />
+                          <ChargeNowButton jobId={child.id} totalPrice={child.total_price} label="Capture payment" />
                         </div>
                         <CancelCardButton jobId={child.id} label="Cancel pre-authorization" />
                       </div>
