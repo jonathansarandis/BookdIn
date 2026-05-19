@@ -95,6 +95,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   ])
 
   if (!job) redirect('/jobs')
+  if (job.parent_job_id) redirect(`/jobs/${job.parent_job_id}#charge-${job.id}`)
 
   let childJobs: any[] = []
   if (!job.parent_job_id) {
@@ -210,15 +211,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </span>
         </div>
       </div>
-
-      {job.parent_job_id && (
-        <Link
-          href={`/jobs/${job.parent_job_id}`}
-          className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 hover:bg-gray-100 transition-colors"
-        >
-          ← Additional charge for booking #{job.parent_job_id.slice(0, 8).toUpperCase()}
-        </Link>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
@@ -420,13 +412,13 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </div>
 
           {childJobs.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <h2 className="font-semibold text-gray-900">Additional charges</h2>
               {childJobs.map((child: any) => (
-                <Link
+                <div
                   key={child.id}
-                  href={`/jobs/${child.id}`}
-                  className="block hover:bg-gray-50 rounded-lg p-2 -mx-2 transition-colors"
+                  id={`charge-${child.id}`}
+                  className="border border-gray-100 rounded-lg p-3 space-y-2"
                 >
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-gray-900">
@@ -440,9 +432,27 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                     </span>
                   </div>
                   {child.customer_notes && (
-                    <p className="text-xs text-gray-500 mt-0.5">{child.customer_notes}</p>
+                    <p className="text-xs text-gray-500">{child.customer_notes}</p>
                   )}
-                </Link>
+                  {child.payment_status === 'authorized' && (
+                    <div className="space-y-1.5 pt-1">
+                      <ChargeNowButton jobId={child.id} totalPrice={child.total_price} />
+                      <CancelCardButton jobId={child.id} label="Cancel pre-authorization" />
+                    </div>
+                  )}
+                  {child.payment_status === 'paid' && (
+                    <p className="text-xs text-green-600">✓ Payment received</p>
+                  )}
+                  {child.payment_status === 'auth_failed' && (
+                    <p className="text-xs text-red-600">Authorization failed</p>
+                  )}
+                  {child.payment_status === 'capture_failed' && (
+                    <p className="text-xs text-red-600">Capture failed</p>
+                  )}
+                  {child.payment_status === 'auth_released' && (
+                    <p className="text-xs text-gray-500">Authorization released</p>
+                  )}
+                </div>
               ))}
             </div>
           )}
