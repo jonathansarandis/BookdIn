@@ -402,9 +402,10 @@ export async function POST(request: NextRequest) {
 
       (async () => {
         // 12. Send confirmation email to customer (non-critical)
+        let emailStatus: 'sent' | 'failed' | 'skipped' = 'skipped'
         const t_email = Date.now()
         try {
-          await sendBookingConfirmation({
+          const result = await sendBookingConfirmation({
             job: {
               id: job.id,
               scheduled_at: scheduledAtIso,
@@ -432,8 +433,16 @@ export async function POST(request: NextRequest) {
             cardSetupUrl,
             business_id: business_id,
           })
-          await logStep(supabase, submissionId!, { step: 'customer_email', status: 'ok', duration_ms: Date.now() - t_email })
+          emailStatus = result.success ? 'sent' : 'failed'
+          if (result.success) {
+            await supabase
+              .from('jobs')
+              .update({ confirmation_email_sent_at: new Date().toISOString() })
+              .eq('id', job.id)
+          }
+          await logStep(supabase, submissionId!, { step: 'customer_email', status: emailStatus === 'failed' ? 'failed' : 'ok', duration_ms: Date.now() - t_email })
         } catch (e: any) {
+          emailStatus = 'failed'
           await logStep(supabase, submissionId!, { step: 'customer_email', status: 'failed', error: e.message, duration_ms: Date.now() - t_email })
         }
       })(),
