@@ -297,7 +297,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 ))
               : <p className="text-sm text-gray-400">No add-ons</p>
             }
-            <AddCustomAddon jobId={job.id} />
+            <div className="border-t border-gray-100 pt-3">
+              <AddCustomAddon jobId={job.id} />
+            </div>
           </div>
 
           {/* Legacy customer notes — only shows for historical records */}

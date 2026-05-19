@@ -591,21 +591,16 @@ export default function BookingPage() {
             )}
           </div>
 
-          {/* Extras */}
-          {selectedServiceExtras.some((e: any) => e.is_active) && (
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Popular add-ons</h3>
+          {/* Add-ons + custom items */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-900">Add-ons</h3>
+            {selectedServiceExtras.some((e: any) => e.is_active) && (
               <AddonsPicker
                 extras={selectedServiceExtras}
                 selected={selectedExtras}
                 onChange={toggleExtra}
               />
-            </div>
-          )}
-
-          {/* Custom items */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-gray-900">Custom items</h3>
+            )}
             {customItems.length > 0 && (
               <div className="space-y-1.5">
                 {customItems.map((item, idx) => (
@@ -622,10 +617,10 @@ export default function BookingPage() {
                 ))}
               </div>
             )}
-            <div className="flex gap-2">
+            <div className="pt-1 border-t border-gray-100 flex gap-2">
               <input
                 type="text"
-                placeholder="Item name"
+                placeholder="Custom item name"
                 value={customItemName}
                 onChange={e => setCustomItemName(e.target.value)}
                 className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
