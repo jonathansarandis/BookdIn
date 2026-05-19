@@ -412,48 +412,52 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </div>
 
           {childJobs.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              <h2 className="font-semibold text-gray-900">Additional charges</h2>
-              {childJobs.map((child: any) => (
-                <div
-                  key={child.id}
-                  id={`charge-${child.id}`}
-                  className="border border-gray-100 rounded-lg p-3 space-y-2"
-                >
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-gray-900">
-                      ${(child.total_price / 100).toFixed(2)} AUD
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_STYLES[child.payment_status] ?? 'bg-gray-100 text-gray-700'}`}>
-                      {PAYMENT_STATUS_LABELS[child.payment_status] ?? child.payment_status}
-                    </span>
-                    <span className="text-gray-400 text-xs">
-                      {new Date(child.created_at).toLocaleDateString('en-AU')}
-                    </span>
-                  </div>
-                  {child.customer_notes && (
-                    <p className="text-xs text-gray-500">{child.customer_notes}</p>
-                  )}
-                  {child.payment_status === 'authorized' && (
-                    <div className="space-y-1.5 pt-1">
-                      <ChargeNowButton jobId={child.id} totalPrice={child.total_price} />
-                      <CancelCardButton jobId={child.id} label="Cancel pre-authorization" />
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-3">Additional charges</h2>
+              <div className="divide-y divide-gray-100">
+                {childJobs.map((child: any) => (
+                  <div
+                    key={child.id}
+                    id={`charge-${child.id}`}
+                    className="py-3 space-y-2 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-semibold text-gray-900 whitespace-nowrap">
+                        ${(child.total_price / 100).toFixed(2)} AUD
+                      </span>
+                      <span className={`ml-auto shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_STYLES[child.payment_status] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {PAYMENT_STATUS_LABELS[child.payment_status] ?? child.payment_status}
+                      </span>
+                      <span className="shrink-0 text-gray-500 text-xs whitespace-nowrap">
+                        {new Date(child.created_at).toLocaleDateString('en-AU')}
+                      </span>
                     </div>
-                  )}
-                  {child.payment_status === 'paid' && (
-                    <p className="text-xs text-green-600">✓ Payment received</p>
-                  )}
-                  {child.payment_status === 'auth_failed' && (
-                    <p className="text-xs text-red-600">Authorization failed</p>
-                  )}
-                  {child.payment_status === 'capture_failed' && (
-                    <p className="text-xs text-red-600">Capture failed</p>
-                  )}
-                  {child.payment_status === 'auth_released' && (
-                    <p className="text-xs text-gray-500">Authorization released</p>
-                  )}
-                </div>
-              ))}
+                    {child.customer_notes && (
+                      <p className="text-xs text-gray-500">{child.customer_notes}</p>
+                    )}
+                    {child.payment_status === 'authorized' && (
+                      <div className="space-y-1.5 pt-2 border-t border-gray-100">
+                        <div className="opacity-80">
+                          <ChargeNowButton jobId={child.id} totalPrice={child.total_price} />
+                        </div>
+                        <CancelCardButton jobId={child.id} label="Cancel pre-authorization" />
+                      </div>
+                    )}
+                    {child.payment_status === 'paid' && (
+                      <p className="text-xs text-green-600">✓ Payment received</p>
+                    )}
+                    {child.payment_status === 'auth_failed' && (
+                      <p className="text-xs text-red-600">Authorization failed</p>
+                    )}
+                    {child.payment_status === 'capture_failed' && (
+                      <p className="text-xs text-red-600">Capture failed</p>
+                    )}
+                    {child.payment_status === 'auth_released' && (
+                      <p className="text-xs text-gray-500">Authorization released</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
