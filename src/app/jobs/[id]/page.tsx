@@ -16,6 +16,7 @@ import CancelCardButton from '@/app/jobs/[id]/CancelCardButton'
 import NotesEditor from '@/app/jobs/[id]/NotesEditor'
 import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 import FollowUpChargeButton from '@/app/jobs/[id]/FollowUpChargeButton'
+import AddCustomAddon from '@/app/jobs/[id]/AddCustomAddon'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -76,7 +77,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         service:services(id, name, base_price),
         provider:providers(id, display_name, color),
         address:addresses(line1, city, state, postcode),
-        job_extras(id, name, price)
+        job_extras(id, name, price, extra:extras(is_quote_only))
       `)
       .eq('id', params.id)
       .eq('business_id', profile?.business_id)
@@ -282,17 +283,22 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           <NotesEditor jobId={job.id} initialNotes={job.notes ?? null} />
 
           {/* Add-ons — structured extras saved via job_extras join table */}
-          {job.job_extras?.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <h2 className="font-semibold text-gray-900">Add-ons</h2>
-              {job.job_extras.map((extra: any) => (
-                <div key={extra.id} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">{extra.name}</span>
-                  <span className="text-gray-900 font-medium">+${(extra.price / 100).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Add-ons</h2>
+            {job.job_extras?.length > 0
+              ? job.job_extras.map((extra: any) => (
+                  <div key={extra.id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">{extra.name}</span>
+                    {extra.extra?.is_quote_only
+                      ? <span className="text-gray-500 italic text-xs">Quote on arrival</span>
+                      : <span className="text-gray-900 font-medium">+${(extra.price / 100).toFixed(2)}</span>
+                    }
+                  </div>
+                ))
+              : <p className="text-sm text-gray-400">No add-ons</p>
+            }
+            <AddCustomAddon jobId={job.id} />
+          </div>
 
           {/* Legacy customer notes — only shows for historical records */}
           {job.customer_notes && (

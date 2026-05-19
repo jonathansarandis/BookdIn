@@ -34,6 +34,11 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
               Select date
             </span>
           )}
+          {value.scheduled_date && (
+            <p className="mt-1 text-xs text-gray-500">
+              {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          )}
         </div>
         <div className="min-w-0 relative">
           <label className={LABEL_CLASS}>Time<span className="text-red-500 ml-1">*</span></label>

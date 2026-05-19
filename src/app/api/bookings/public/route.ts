@@ -50,6 +50,19 @@ export async function POST(request: NextRequest) {
   const effectiveTime = isFlexible ? '09:00' : scheduled_time
   const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
+  let gclid: string | null = null
+  let gbraid: string | null = null
+  let wbraid: string | null = null
+  try {
+    const raw = request.cookies.get('bookdin_attribution')?.value
+    if (raw) {
+      const parsed = JSON.parse(decodeURIComponent(raw))
+      gclid  = parsed.gclid  || null
+      gbraid = parsed.gbraid || null
+      wbraid = parsed.wbraid || null
+    }
+  } catch { /* malformed cookie — ignore */ }
+
   let submissionId: string | null = null
 
   try {
@@ -204,13 +217,16 @@ export async function POST(request: NextRequest) {
     try {
       const { data: existingCustomer } = await supabase
         .from('customers')
-        .select('id')
+        .select('id, gclid, gbraid, wbraid')
         .eq('business_id', business_id)
         .eq('email', customer.email)
         .single()
 
       if (existingCustomer) {
         customerId = existingCustomer.id
+        if ((gclid || gbraid || wbraid) && !existingCustomer.gclid && !existingCustomer.gbraid && !existingCustomer.wbraid) {
+          await supabase.from('customers').update({ gclid, gbraid, wbraid }).eq('id', customerId)
+        }
       } else {
         const { data: newCustomer, error: customerError } = await supabase
           .from('customers')
@@ -219,6 +235,9 @@ export async function POST(request: NextRequest) {
             full_name: customer.full_name,
             email: customer.email,
             phone: customer.phone || null,
+            gclid,
+            gbraid,
+            wbraid,
           })
           .select('id')
           .single()

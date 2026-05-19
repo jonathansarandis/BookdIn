@@ -49,6 +49,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     payment_method,
     rebook_source_job_id,
     is_flexible_time,
+    custom_items,
   } = body
 
   const admin = createAdminClient()
@@ -233,8 +234,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       roomPricing: service.room_pricing || [],
     })
     const discountedPrice = applyFrequencyDiscount(breakdown.total, discountPct)
+    const customItemsTotal = Array.isArray(custom_items)
+      ? custom_items.reduce((sum: number, ci: any) => sum + (Number(ci.price_cents) || 0), 0)
+      : 0
     const effectiveTaxRate = business.show_tax && business.tax_rate > 0 ? business.tax_rate : 0
-    const taxSplit = calcTaxSplit(discountedPrice, business.tax_mode ?? 'exclusive', effectiveTaxRate)
+    const taxSplit = calcTaxSplit(discountedPrice + customItemsTotal, business.tax_mode ?? 'exclusive', effectiveTaxRate)
 
     // 8. Mismatch check: ±1 cent tolerance
     const t_validation = Date.now()
@@ -284,6 +288,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             console.error('[admin booking] job_extras insert (edit) failed:', editExtrasErr)
             console.error('[admin booking] extraDetails being inserted:', JSON.stringify(extraDetails))
           }
+        }
+
+        if (Array.isArray(custom_items) && custom_items.length > 0) {
+          await admin.from('job_extras').insert(
+            custom_items.map((ci: any) => ({
+              job_id: editJobId,
+              extra_id: null,
+              name: ci.name,
+              price: ci.price_cents,
+            }))
+          )
         }
 
         await admin.from('activity_logs').insert({
@@ -395,6 +410,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         console.error('[admin booking] job_extras insert failed:', jobExtrasErr)
         console.error('[admin booking] extraDetails being inserted:', JSON.stringify(extraDetails))
       }
+    }
+
+    if (Array.isArray(custom_items) && custom_items.length > 0) {
+      await admin.from('job_extras').insert(
+        custom_items.map((ci: any) => ({
+          job_id: job.id,
+          extra_id: null,
+          name: ci.name,
+          price: ci.price_cents,
+        }))
+      )
     }
 
     await admin.from('activity_logs').insert({

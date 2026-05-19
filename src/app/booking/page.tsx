@@ -63,6 +63,9 @@ export default function BookingPage() {
   })
 
   const [selectedExtras, setSelectedExtras] = useState<string[]>([])
+  const [customItems, setCustomItems] = useState<{name: string; price_cents: number}[]>([])
+  const [customItemName, setCustomItemName] = useState('')
+  const [customItemPrice, setCustomItemPrice] = useState('')
   const [junctions, setJunctions] = useState<any[]>([])
   const [locServiceMap, setLocServiceMap] = useState<Record<string, number>>({})
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
@@ -202,6 +205,11 @@ export default function BookingPage() {
       setSelectedExtras(
         (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
       )
+      setCustomItems(
+        (job.job_extras || [])
+          .filter((e: any) => !e.extra_id)
+          .map((e: any) => ({ name: e.name, price_cents: e.price }))
+      )
       setEditAddressId(job.address_id)
     }
     prefill()
@@ -245,6 +253,11 @@ export default function BookingPage() {
       }))
       setSelectedExtras(
         (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
+      )
+      setCustomItems(
+        (job.job_extras || [])
+          .filter((e: any) => !e.extra_id)
+          .map((e: any) => ({ name: e.name, price_cents: e.price }))
       )
       setEditAddressId(job.address_id)
       setRebookCustomerName(job.customer?.full_name || '')
@@ -305,7 +318,8 @@ export default function BookingPage() {
     })
     const freqDisc = getFreqDiscount(form.frequency)
     const discount = freqDisc > 0 ? Math.round(breakdown.total * freqDisc / 100) : 0
-    return breakdown.total - discount
+    const customTotal = customItems.reduce((sum, ci) => sum + ci.price_cents, 0)
+    return breakdown.total - discount + customTotal
   }
 
   const rawPrice = calcPrice()
@@ -364,6 +378,7 @@ export default function BookingPage() {
             scheduled_at: scheduledAtIso,
             is_flexible_time: isFlexible,
             extras: selectedExtras,
+            custom_items: customItems,
             total_price: totalToCharge,
             tax_amount: taxCents,
             notes: form.notes || null,
@@ -413,6 +428,7 @@ export default function BookingPage() {
           scheduled_at: scheduledAtIso,
           is_flexible_time: isFlexible,
           extras: selectedExtras,
+          custom_items: customItems,
           total_price: totalToCharge,
           tax_amount: taxCents,
           ...customerPayload,
@@ -586,6 +602,61 @@ export default function BookingPage() {
               />
             </div>
           )}
+
+          {/* Custom items */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-900">Custom items</h3>
+            {customItems.length > 0 && (
+              <div className="space-y-1.5">
+                {customItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="text-gray-700">{item.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-900 font-medium">${(item.price_cents / 100).toFixed(2)}</span>
+                      <button
+                        onClick={() => setCustomItems(items => items.filter((_, i) => i !== idx))}
+                        className="text-gray-400 hover:text-red-500 transition-colors text-xs"
+                      >✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Item name"
+                value={customItemName}
+                onChange={e => setCustomItemName(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <div className="relative w-28">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">$</span>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={customItemPrice}
+                  onChange={e => setCustomItemPrice(e.target.value)}
+                  className="w-full pl-6 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  const price = parseFloat(customItemPrice)
+                  if (!customItemName.trim() || isNaN(price) || price <= 0) return
+                  setCustomItems(items => [...items, { name: customItemName.trim(), price_cents: Math.round(price * 100) }])
+                  setCustomItemName('')
+                  setCustomItemPrice('')
+                }}
+                disabled={!customItemName.trim() || !customItemPrice}
+                className="px-3 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+          </div>
 
           {/* Date & time */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
@@ -780,6 +851,10 @@ export default function BookingPage() {
                   label: ex.name,
                   value: ex.is_quote_only ? 'Quote on arrival' : `+$${(ex.price / 100).toFixed(0)}`,
                 })),
+              ...customItems.map(ci => ({
+                label: ci.name,
+                value: `+$${(ci.price_cents / 100).toFixed(2)}`,
+              })),
               { label: 'Date & time', value: form.scheduled_date
                   ? form.scheduled_time === 'flexible'
                     ? `${new Date(form.scheduled_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — Flexible time`

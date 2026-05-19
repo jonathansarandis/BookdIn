@@ -58,6 +58,17 @@ export default function PublicBookingPage() {
     load()
   }, [slug])
 
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const gclid = p.get('gclid')
+    const gbraid = p.get('gbraid')
+    const wbraid = p.get('wbraid')
+    if (gclid || gbraid || wbraid) {
+      const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString()
+      document.cookie = `bookdin_attribution=${encodeURIComponent(JSON.stringify({ gclid, gbraid, wbraid }))}; expires=${expires}; path=/; SameSite=Lax`
+    }
+  }, [])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
