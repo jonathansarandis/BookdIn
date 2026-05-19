@@ -15,6 +15,7 @@ import ChargeNowButton from '@/app/jobs/[id]/ChargeNowButton'
 import CancelCardButton from '@/app/jobs/[id]/CancelCardButton'
 import NotesEditor from '@/app/jobs/[id]/NotesEditor'
 import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
+import FollowUpChargeButton from '@/app/jobs/[id]/FollowUpChargeButton'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -94,6 +95,16 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   ])
 
   if (!job) redirect('/jobs')
+
+  let childJobs: any[] = []
+  if (!job.parent_job_id) {
+    const { data: kids } = await adminClient
+      .from('jobs')
+      .select('id, total_price, payment_status, created_at, customer_notes')
+      .eq('parent_job_id', job.id)
+      .order('created_at', { ascending: true })
+    childJobs = kids ?? []
+  }
 
   const businessId = profile?.business_id ?? ''
 
@@ -199,6 +210,15 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </span>
         </div>
       </div>
+
+      {job.parent_job_id && (
+        <Link
+          href={`/jobs/${job.parent_job_id}`}
+          className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 hover:bg-gray-100 transition-colors"
+        >
+          ← Follow-up charge for booking #{job.parent_job_id.slice(0, 8).toUpperCase()}
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
@@ -390,7 +410,42 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 <ChargeButton jobId={job.id} totalPrice={job.total_price} />
               </div>
             )}
+
+            {job.payment_status === 'paid' && job.stripe_payment_method_id && (
+              <>
+                <div className="border-t border-gray-100" />
+                <FollowUpChargeButton jobId={job.id} />
+              </>
+            )}
           </div>
+
+          {childJobs.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+              <h2 className="font-semibold text-gray-900">Follow-up charges</h2>
+              {childJobs.map((child: any) => (
+                <Link
+                  key={child.id}
+                  href={`/jobs/${child.id}`}
+                  className="block hover:bg-gray-50 rounded-lg p-2 -mx-2 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-gray-900">
+                      ${(child.total_price / 100).toFixed(2)} AUD
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_STYLES[child.payment_status] ?? 'bg-gray-100 text-gray-700'}`}>
+                      {PAYMENT_STATUS_LABELS[child.payment_status] ?? child.payment_status}
+                    </span>
+                    <span className="text-gray-400 text-xs">
+                      {new Date(child.created_at).toLocaleDateString('en-AU')}
+                    </span>
+                  </div>
+                  {child.customer_notes && (
+                    <p className="text-xs text-gray-500 mt-0.5">{child.customer_notes}</p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
 
           {/* Status updater */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
