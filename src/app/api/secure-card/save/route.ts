@@ -26,6 +26,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  console.log(`[secure-card/save] received token=${token?.slice(0,8)}... pm=${paymentMethodId}`)
+
   // Re-validate token (expired check + not-yet-saved guard)
   const { data: job, error: jobError } = await supabase
     .from('jobs')
@@ -41,6 +43,8 @@ export async function POST(request: NextRequest) {
   if (job.card_setup_token_expires_at && new Date(job.card_setup_token_expires_at) < new Date()) {
     return NextResponse.json({ error: 'Link has expired' }, { status: 410 })
   }
+
+  console.log(`[secure-card/save] matched job ${job?.id ?? 'NONE'} for token=${token?.slice(0,8)}...`)
 
   // stripe_customer_id is already on the job (set by create-intent).
   // Just record the confirmed payment method and consume the token.
