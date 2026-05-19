@@ -66,7 +66,7 @@ export default function FollowUpChargeButton({ jobId }: Props) {
         onClick={() => setIsOpen(true)}
         className="w-full py-2 px-3 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
       >
-        Follow-up charge
+        Additional charge
       </button>
     )
   }

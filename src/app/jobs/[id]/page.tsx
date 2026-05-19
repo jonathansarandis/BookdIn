@@ -216,7 +216,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           href={`/jobs/${job.parent_job_id}`}
           className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 hover:bg-gray-100 transition-colors"
         >
-          ← Follow-up charge for booking #{job.parent_job_id.slice(0, 8).toUpperCase()}
+          ← Additional charge for booking #{job.parent_job_id.slice(0, 8).toUpperCase()}
         </Link>
       )}
 
@@ -411,7 +411,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               </div>
             )}
 
-            {job.payment_status === 'paid' && job.stripe_payment_method_id && (
+            {['authorized', 'paid'].includes(job.payment_status) && job.stripe_payment_method_id && (
               <>
                 <div className="border-t border-gray-100" />
                 <FollowUpChargeButton jobId={job.id} />
@@ -421,7 +421,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
           {childJobs.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <h2 className="font-semibold text-gray-900">Follow-up charges</h2>
+              <h2 className="font-semibold text-gray-900">Additional charges</h2>
               {childJobs.map((child: any) => (
                 <Link
                   key={child.id}
