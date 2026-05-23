@@ -32,6 +32,7 @@ interface JobEmailRow {
     contact_email: string | null
     timezone: string
     stripe_onboarded: boolean
+    stripe_charges_enabled: boolean
     plan: string
     currency: string
   } | null
@@ -82,7 +83,7 @@ export async function POST(
       customer:customers(full_name, email),
       service:services(name),
       address:addresses(line1, city, state, postcode),
-      business:businesses(name, brand_color, logo_url, contact_email, timezone, stripe_onboarded, plan, currency)
+      business:businesses(name, brand_color, logo_url, contact_email, timezone, stripe_onboarded, stripe_charges_enabled, plan, currency)
     `)
     .eq('id', params.id)
     .single()
@@ -95,7 +96,7 @@ export async function POST(
     return NextResponse.json({ error: 'Job data incomplete' }, { status: 500 })
   }
 
-  const cardSetupUrl = (job.payment_status !== 'paid' && job.business.stripe_onboarded)
+  const cardSetupUrl = (job.payment_status !== 'paid' && job.business.stripe_charges_enabled)
     ? `${process.env.NEXT_PUBLIC_APP_URL}/api/bookings/${params.id}/card-setup`
     : undefined
 

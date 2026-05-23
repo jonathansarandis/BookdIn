@@ -69,7 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // 3. Fetch business (pricing fields + email fields)
   const { data: business } = await admin
     .from('businesses')
-    .select('id, name, brand_color, logo_url, contact_email, timezone, stripe_onboarded, plan, currency, tax_rate, tax_mode, show_tax, sms_provider, sms_api_key_encrypted, sms_api_key_iv, sms_user_id, sms_template, sms_enabled, phone')
+    .select('id, name, brand_color, logo_url, contact_email, timezone, stripe_onboarded, stripe_charges_enabled, plan, currency, tax_rate, tax_mode, show_tax, sms_provider, sms_api_key_encrypted, sms_api_key_iv, sms_user_id, sms_template, sms_enabled, phone')
     .eq('id', businessId)
     .single()
   if (!business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
@@ -444,7 +444,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const t_email = Date.now()
     try {
       if (jobForEmail?.customer && jobForEmail?.address) {
-        const cardSetupUrl = business.stripe_onboarded
+        const cardSetupUrl = business.stripe_charges_enabled
           ? `${process.env.NEXT_PUBLIC_APP_URL}/api/bookings/${job.id}/card-setup`
           : undefined
 
