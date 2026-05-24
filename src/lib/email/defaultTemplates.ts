@@ -6,7 +6,7 @@ Please ensure all the details are correct. We'll make contact with you prior to 
 
 {{booking_details}}
 
-For a full breakdown of what's included in your service, visit your service inclusions page.
+For a full breakdown of what's included in your service, [visit your service inclusions page](https://cleanfreaks.au/service-inclusions).
 
 **A NOTE ON EXTRAS**
 
