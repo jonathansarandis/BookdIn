@@ -48,7 +48,7 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
           </div>
         </div>
         {extra.is_quote_only
-          ? <span className="text-sm font-medium text-gray-500 flex-shrink-0 ml-2">Quote on arrival</span>
+          ? <span className="text-xs font-medium text-gray-600 bg-gray-100 rounded-full px-2.5 py-1 flex-shrink-0 ml-2 whitespace-nowrap">Custom</span>
           : <span className="text-sm font-medium text-gray-900 flex-shrink-0 ml-2">+${(extra.price / 100).toFixed(0)}</span>
         }
       </label>
