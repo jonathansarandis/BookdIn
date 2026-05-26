@@ -26,7 +26,7 @@ export default function ServicePickerField({ value, onChange, context, disabled 
             } ${value === s.id ? '' : 'border-gray-200 hover:border-gray-300'}`}
             style={value === s.id ? { borderColor: brand, backgroundColor: brandTint } : undefined}
           >
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <input
                 type="radio"
                 name="service"

@@ -112,8 +112,8 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
         </button>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="col-span-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="col-span-2 sm:col-span-1">
           <label className={lbl}>Suburb *</label>
           <input
             required

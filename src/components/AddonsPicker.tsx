@@ -34,7 +34,7 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
   function renderRow(extra: Extra) {
     return (
       <label key={extra.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-gray-50 cursor-pointer">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <input
             type="checkbox"
             checked={selected.includes(extra.id)}

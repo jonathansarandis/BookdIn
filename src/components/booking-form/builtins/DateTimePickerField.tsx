@@ -35,9 +35,14 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
             </span>
           )}
           {value.scheduled_date && (
-            <p className="mt-1 text-xs text-gray-500">
-              {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
+            <>
+              <p className="mt-1 text-xs text-gray-500 hidden sm:block">
+                {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+              <p className="mt-1 text-xs text-gray-500 sm:hidden">
+                {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </p>
+            </>
           )}
         </div>
         <div className="min-w-0 relative">
@@ -49,7 +54,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
             style={{ width: '100%', height: '42px' }}
             disabled={disabled}
           >
-            <option value="flexible">Flexible time</option>
+            <option value="flexible">Flexible</option>
             {TIME_SLOTS.map(t => (
               <option key={t} value={t}>
                 {new Date(`2000-01-01T${t}`).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}
