@@ -56,7 +56,7 @@ export default function RoomCountsField({ value, onChange, context, disabled }: 
             disabled={disabled}
           >
             {getBedroomCounts().map(n => (
-              <option key={n} value={n}>{n} bedroom{n > 1 ? 's' : ''}</option>
+              <option key={n} value={n}>{n} bed{n > 1 ? 's' : ''}</option>
             ))}
           </select>
         </div>
@@ -69,7 +69,7 @@ export default function RoomCountsField({ value, onChange, context, disabled }: 
             disabled={disabled}
           >
             {getBathroomCounts().map(n => (
-              <option key={n} value={n}>{n} bathroom{n > 1 ? 's' : ''}</option>
+              <option key={n} value={n}>{n} bath{n > 1 ? 's' : ''}</option>
             ))}
           </select>
         </div>

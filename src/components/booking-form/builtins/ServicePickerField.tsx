@@ -49,9 +49,12 @@ export default function ServicePickerField({ value, onChange, context, disabled 
                 {s.description && <p className="text-xs text-gray-500">{s.description}</p>}
               </div>
             </div>
-            <span className="text-sm font-semibold text-gray-900 flex-shrink-0 whitespace-nowrap ml-2">
-              from ${(s.base_price / 100).toFixed(0)}
-            </span>
+            <div className="flex flex-col items-end flex-shrink-0 ml-2">
+              <span className="text-xs text-gray-500 leading-tight">from</span>
+              <span className="text-sm font-semibold text-gray-900 leading-tight whitespace-nowrap">
+                ${(s.base_price / 100).toFixed(0)}
+              </span>
+            </div>
           </label>
         ))}
       </div>
