@@ -63,6 +63,13 @@ export async function POST(request: NextRequest) {
     }
   } catch { /* malformed cookie — ignore */ }
 
+  const attributionCookie = request.cookies.get('bookdin_attribution')?.value
+  console.log('[OCT_DEBUG] cookie_received', {
+    has_cookie: !!attributionCookie,
+    cookie_raw_first50: attributionCookie ? String(attributionCookie).slice(0, 50) : null,
+    parsed: { gclid: gclid ?? null, gbraid: gbraid ?? null, wbraid: wbraid ?? null }
+  })
+
   let submissionId: string | null = null
 
   try {
@@ -224,10 +231,35 @@ export async function POST(request: NextRequest) {
 
       if (existingCustomer) {
         customerId = existingCustomer.id
-        if ((gclid || gbraid || wbraid) && !existingCustomer.gclid && !existingCustomer.gbraid && !existingCustomer.wbraid) {
-          await supabase.from('customers').update({ gclid, gbraid, wbraid }).eq('id', customerId)
+        const willUpdate = (gclid || gbraid || wbraid) && !existingCustomer.gclid && !existingCustomer.gbraid && !existingCustomer.wbraid
+        console.log('[OCT_DEBUG] customer_path', {
+          decision: willUpdate ? 'EXISTING_UPDATE' : 'EXISTING_SKIPPED_NO_CHANGE',
+          customer_email: customer.email,
+          existing_customer_id: existingCustomer.id,
+          existing_has_gclid: !!existingCustomer.gclid,
+          existing_has_gbraid: !!existingCustomer.gbraid,
+          existing_has_wbraid: !!existingCustomer.wbraid,
+          new_gclid_from_cookie: gclid ?? null,
+        })
+        if (willUpdate) {
+          const { error: gclidUpdateError } = await supabase.from('customers').update({ gclid, gbraid, wbraid }).eq('id', existingCustomer.id)
+          console.log('[OCT_DEBUG] gclid_update_result', {
+            customer_id: existingCustomer.id,
+            attempted: true,
+            error: gclidUpdateError?.message ?? null,
+            payload: { gclid, gbraid, wbraid }
+          })
         }
       } else {
+        console.log('[OCT_DEBUG] customer_path', {
+          decision: 'NEW_INSERT',
+          customer_email: customer.email,
+          existing_customer_id: null,
+          existing_has_gclid: false,
+          existing_has_gbraid: false,
+          existing_has_wbraid: false,
+          new_gclid_from_cookie: gclid ?? null,
+        })
         const { data: newCustomer, error: customerError } = await supabase
           .from('customers')
           .insert({
