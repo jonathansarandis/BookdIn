@@ -622,9 +622,9 @@ export default function BookingFormRenderer({
       className="max-w-2xl mx-auto px-6 py-6"
       style={{ '--brand-color': formData.business?.brand_color || '#1A6B4A' } as React.CSSProperties}
     >
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm">
         <div
-          className="px-6 py-8 sm:py-10"
+          className="px-6 py-8 sm:py-10 rounded-t-2xl"
           style={{ backgroundColor: formData.business.brand_color || '#1A6B4A' }}
         >
           <div className="flex items-center gap-5">
@@ -665,7 +665,7 @@ export default function BookingFormRenderer({
             )}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between gap-4">
+          <div className="sticky bottom-0 bg-white border-t border-gray-100 pt-4 pb-4 mt-8 -mx-6 sm:-mx-8 px-6 sm:px-8 flex items-center justify-between gap-4">
             <button
               onClick={() => setCurrentStepIndex(i => Math.max(0, i - 1))}
               disabled={currentStepIndex === 0}
