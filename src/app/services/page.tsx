@@ -125,6 +125,7 @@ export default function ServicesPage() {
   const [editExtraSvcOverrides, setEditExtraSvcOverrides] = useState<Record<string, string>>({})
   const [editExtraDisclosureOpen, setEditExtraDisclosureOpen] = useState(false)
   const [editExtraIsQuoteOnly, setEditExtraIsQuoteOnly] = useState(false)
+  const [editExtraIsPopular, setEditExtraIsPopular] = useState(false)
   const [editExtraSaving, setEditExtraSaving] = useState(false)
 
   // Delete-reassign modal (services)
@@ -360,6 +361,7 @@ export default function ServicesPage() {
     setEditExtraSvcOverrides(overrides)
     setEditExtraDisclosureOpen(false)
     setEditExtraIsQuoteOnly(ex.is_quote_only ?? false)
+    setEditExtraIsPopular(ex.is_popular ?? false)
   }
 
   function getPriceOverrideValue(svcId: string): number | null {
@@ -385,6 +387,7 @@ export default function ServicesPage() {
           default_duration_minutes: duration,
           default_price: defaultPrice,
           is_quote_only: editExtraIsQuoteOnly,
+          is_popular: editExtraIsPopular,
         }).eq('id', extraId)
       } else {
         const { data: newEx, error } = await supabase.from('extras').insert({
@@ -395,6 +398,7 @@ export default function ServicesPage() {
           default_price: defaultPrice,
           is_active: true,
           is_quote_only: editExtraIsQuoteOnly,
+          is_popular: editExtraIsPopular,
           sort_order: allExtras.length,
         }).select('id').single()
         if (error || !newEx) throw new Error(error?.message || 'Failed to create add-on')
@@ -800,6 +804,18 @@ export default function ServicesPage() {
               <div>
                 <label className={labelCls}>Default duration (min)</label>
                 <input type="number" min="0" value={editExtraDuration} onChange={e => setEditExtraDuration(e.target.value)} className={inputCls} />
+              </div>
+              <div className="col-span-2 flex items-center justify-between py-1">
+                <div>
+                  <span className="text-xs font-medium text-gray-700">Popular</span>
+                  <p className="text-xs text-gray-400">Show in Popular add-ons section on booking form</p>
+                </div>
+                <div
+                  onClick={() => setEditExtraIsPopular(v => !v)}
+                  className={`w-9 h-5 rounded-full transition-colors cursor-pointer relative flex-shrink-0 ml-4 ${editExtraIsPopular ? 'bg-brand-500' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editExtraIsPopular ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
               </div>
               <div className="col-span-2 flex items-center justify-between py-1">
                 <div>

@@ -286,7 +286,7 @@ export default function BookingFormRenderer({
                 extras!inner (
                   id, name, description,
                   default_price, default_duration_minutes,
-                  is_active, is_quote_only, sort_order
+                  is_active, is_popular, is_quote_only, sort_order
                 )
               `)
               .in('service_id', svcIds)
