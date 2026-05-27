@@ -70,14 +70,6 @@ export async function POST(request: NextRequest) {
   const gbraid = bodyAttribution?.gbraid ?? cookieGbraid ?? null
   const wbraid = bodyAttribution?.wbraid ?? cookieWbraid ?? null
 
-  console.log('[OCT_DEBUG] cookie_received', {
-    has_cookie: !!attributionCookie,
-    cookie_raw_first50: attributionCookie ? String(attributionCookie).slice(0, 50) : null,
-    cookie_parsed: { gclid: cookieGclid, gbraid: cookieGbraid, wbraid: cookieWbraid },
-    payload_attribution: { gclid: bodyAttribution?.gclid ?? null, gbraid: bodyAttribution?.gbraid ?? null, wbraid: bodyAttribution?.wbraid ?? null },
-    resolved: { gclid, gbraid, wbraid },
-  })
-
   let submissionId: string | null = null
 
   try {
@@ -245,40 +237,11 @@ export async function POST(request: NextRequest) {
         if (gbraid) updates.gbraid = gbraid
         if (wbraid) updates.wbraid = wbraid
         const willUpdate = Object.keys(updates).length > 0
-        console.log('[OCT_DEBUG] customer_path', {
-          decision: willUpdate ? 'EXISTING_UPDATE' : 'EXISTING_SKIPPED_NO_CHANGE',
-          customer_email: customer.email,
-          existing_customer_id: existingCustomer.id,
-          existing_has_gclid: !!existingCustomer.gclid,
-          existing_has_gbraid: !!existingCustomer.gbraid,
-          existing_has_wbraid: !!existingCustomer.wbraid,
-          payload_gclid: bodyAttribution?.gclid ?? null,
-          cookie_gclid: cookieGclid,
-          resolved_gclid: gclid,
-          fields_to_update: Object.keys(updates),
-        })
         if (willUpdate) {
           const { error: gclidUpdateError } = await supabase.from('customers').update(updates).eq('id', existingCustomer.id)
-          console.log('[OCT_DEBUG] gclid_update_result', {
-            customer_id: existingCustomer.id,
-            attempted: true,
-            error: gclidUpdateError?.message ?? null,
-            fields_written: Object.keys(updates),
-          })
+          if (gclidUpdateError) console.error('[public booking] gclid update failed:', gclidUpdateError.message)
         }
       } else {
-        console.log('[OCT_DEBUG] customer_path', {
-          decision: 'NEW_INSERT',
-          customer_email: customer.email,
-          existing_customer_id: null,
-          existing_has_gclid: false,
-          existing_has_gbraid: false,
-          existing_has_wbraid: false,
-          payload_gclid: bodyAttribution?.gclid ?? null,
-          cookie_gclid: cookieGclid,
-          resolved_gclid: gclid,
-          fields_to_update: [],
-        })
         const { data: newCustomer, error: customerError } = await supabase
           .from('customers')
           .insert({

@@ -63,17 +63,9 @@ export default function PublicBookingPage() {
     const gclid = p.get('gclid')
     const gbraid = p.get('gbraid')
     const wbraid = p.get('wbraid')
-    console.log('[OCT_CLIENT] location_search', window.location.search)
-    console.log('[OCT_CLIENT] params_parsed', {
-      gclid: p.get('gclid'),
-      gbraid: p.get('gbraid'),
-      wbraid: p.get('wbraid'),
-      href: window.location.href
-    })
     if (gclid || gbraid || wbraid) {
       const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString()
       document.cookie = `bookdin_attribution=${encodeURIComponent(JSON.stringify({ gclid, gbraid, wbraid }))}; expires=${expires}; path=/; SameSite=Lax`
-      console.log('[OCT_CLIENT] cookie_after_write', document.cookie)
     }
   }, [])
 
