@@ -195,6 +195,10 @@ export default function BookingFormRenderer({
         attribution,
       }
 
+      console.log('[OCT_CLIENT] booking_submit_attribution', {
+        raw_cookie: document.cookie,
+        attribution_in_payload: payload.attribution
+      })
       const res = await fetch('/api/bookings/public', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
