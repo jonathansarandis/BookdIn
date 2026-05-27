@@ -152,6 +152,19 @@ export default function BookingFormRenderer({
       const effectiveTaxRate = formData.business.show_tax && formData.business.tax_rate > 0 ? formData.business.tax_rate : 0
       const taxSplit = calcTaxSplit(discounted, formData.business.tax_mode ?? 'exclusive', effectiveTaxRate)
 
+      let attribution = { gclid: null as string | null, gbraid: null as string | null, wbraid: null as string | null }
+      try {
+        const match = document.cookie.match(/(^| )bookdin_attribution=([^;]+)/)
+        if (match) {
+          const parsed = JSON.parse(decodeURIComponent(match[2]))
+          attribution = {
+            gclid: parsed.gclid || null,
+            gbraid: parsed.gbraid || null,
+            wbraid: parsed.wbraid || null,
+          }
+        }
+      } catch { /* malformed / stale cookie — ignore, attribution is best-effort */ }
+
       const payload = {
         business_id: businessId,
         location_id: locationId,
@@ -179,6 +192,7 @@ export default function BookingFormRenderer({
         custom_field_values: values.custom,
         tnc_accepted_at: values.tnc_accepted ? new Date().toISOString() : null,
         tnc_url_at_acceptance: values.tnc_accepted ? formData.business.tnc_url : null,
+        attribution,
       }
 
       const res = await fetch('/api/bookings/public', {
