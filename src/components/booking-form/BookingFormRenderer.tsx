@@ -292,12 +292,10 @@ export default function BookingFormRenderer({
               .in('service_id', svcIds)
           : Promise.resolve({ data: [] }),
       ])
-      console.log('[XD] locExtrasRaw:', locExtrasRaw?.length, 'junctionsRaw:', junctionsRaw?.length)
 
       // Map of extras.id → location price override (null = no location override)
       const locExtraMap: Record<string, number | null> = {}
       for (const le of locExtrasRaw || []) locExtraMap[le.extra_id] = le.price ?? null
-      console.log('[XD] locExtraMap keys:', Object.keys(locExtraMap).length)
 
       const services: any[] = (locSvcsRaw || []).map((row: any) => ({
         ...row.services,
@@ -421,14 +419,10 @@ export default function BookingFormRenderer({
   // Derive extras for the currently selected service directly from raw junctions at render
   // time. This ensures the three-layer price resolution uses the correct service_id for the
   // price_override lookup, rather than relying on a value baked during load.
-  const afterServiceFilter = (formData.junctions || [])
-    .filter((j: any) => j.service_id === values.service_id)
-  console.log('[XD] after service filter:', afterServiceFilter.length)
-  const afterLocMapFilter = afterServiceFilter
-    .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(formData.locExtraMap, junc.extras.id))
-  console.log('[XD] after locMap filter:', afterLocMapFilter.length)
   const currentExtras: any[] = values.service_id
-    ? afterLocMapFilter
+    ? (formData.junctions || [])
+        .filter((j: any) => j.service_id === values.service_id)
+        .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(formData.locExtraMap, junc.extras.id))
         .map((junc: any) => ({
           ...junc.extras,
           duration_minutes: junc.extras.default_duration_minutes,
@@ -437,21 +431,18 @@ export default function BookingFormRenderer({
         }))
         .sort((a: any, b: any) => a.sort_order - b.sort_order)
     : []
-  console.log('[XD] currentExtras final:', currentExtras.length)
 
   // A step is skipped when it contains only extras_picker fields AND the selected service
   // has no applicable extras for this location. If no service is selected yet, don't skip.
   const hasApplicableExtras =
     values.service_id === null ||
     currentExtras.some((e: any) => e.is_active)
-  console.log('[XD3] hasApplicableExtras:', hasApplicableExtras, 'service_id:', values.service_id, 'currentExtras active count:', currentExtras.filter((e:any)=>e.is_active).length)
 
   const visibleSteps = formData.steps.filter(step => {
     const pls = formData.placements.filter(p => p.step_id === step.id)
     const isExtrasOnly = pls.length > 0 && pls.every(p => p.builtin_field_key === 'extras_picker')
     return !isExtrasOnly || hasApplicableExtras
   })
-  console.log('[XD3] visibleSteps:', visibleSteps.map((s:any)=>s.id), 'count:', visibleSteps.length)
 
   const safeStepIndex = Math.min(currentStepIndex, Math.max(0, visibleSteps.length - 1))
   const currentStep = visibleSteps[safeStepIndex]
@@ -524,7 +515,6 @@ export default function BookingFormRenderer({
   const canProceed = stepValidation === null
 
   function renderBuiltin(key: string, placementId: string) {
-    console.log('[XD3] renderBuiltin called with key:', key)
     switch (key) {
       case 'service_picker':
         return (
@@ -545,7 +535,6 @@ export default function BookingFormRenderer({
           />
         )
       case 'extras_picker':
-        console.log('[XD3] rendering ExtrasPickerField, currentExtras:', currentExtras.length)
         return (
           <ExtrasPickerField
             key={placementId}

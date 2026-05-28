@@ -11,13 +11,10 @@ interface Context {
 interface Props extends BuiltinFieldProps<ExtrasPickerValue, Context> {}
 
 export default function ExtrasPickerField({ value, onChange, context, disabled }: Props) {
-  console.log('[XD2] ExtrasPickerField mounted')
   const { selectedService, business } = context
   const brand = business?.brand_color || '#1A6B4A'
 
   const extras = selectedService?.service_extras ?? []
-  console.log('[XD2] ExtrasPickerField extras:', extras.length, 'active:', extras.filter((e:any)=>e.is_active).length)
-  console.log('[XD2] before is_active guard, some active:', extras.some((e:any)=>e.is_active))
   if (!extras.some(e => e.is_active)) return null
 
   function handleToggle(id: string) {

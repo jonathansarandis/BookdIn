@@ -19,7 +19,6 @@ type Props = {
 
 export default function AddonsPicker({ extras, selected, onChange, brandColor }: Props) {
   const active = extras.filter(e => e.is_active)
-  console.log('[XD2] AddonsPicker active:', active.length, 'popular:', active.filter(e=>e.is_popular).length, 'other:', active.filter(e=>!e.is_popular).length)
 
   if (active.length === 0) return null
 
