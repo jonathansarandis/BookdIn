@@ -624,30 +624,30 @@ export default function BookingFormRenderer({
     >
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
         <div
-          className="px-6 py-8 sm:py-10"
+          className="px-6 py-4 sm:py-10"
           style={{ backgroundColor: formData.business.brand_color || '#1A6B4A' }}
         >
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3 sm:gap-5">
             {formData.business.logo_url ? (
               <img
                 src={formData.business.logo_url}
                 alt={`${formData.business.name} logo`}
-                className="w-16 h-16 rounded-lg object-contain bg-white p-1 flex-shrink-0"
+                className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg object-contain bg-white p-1 flex-shrink-0"
               />
             ) : (
-              <div className="w-16 h-16 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-2xl">{formData.business.name?.charAt(0) ?? ''}</span>
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-sm font-medium text-white/80">{formData.business.name}</p>
+              <p className="hidden sm:block text-sm font-medium text-white/80">{formData.business.name}</p>
               {formData.form.title && (
-                <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight mt-1">
+                <h1 className="text-lg sm:text-3xl font-bold text-white leading-tight mt-1">
                   {formData.form.title}
                 </h1>
               )}
               {formData.form.subtitle && (
-                <p className="text-sm text-white/80 mt-1">{formData.form.subtitle}</p>
+                <p className="text-sm text-white/80 mt-0.5 sm:mt-1">{formData.form.subtitle}</p>
               )}
             </div>
           </div>
