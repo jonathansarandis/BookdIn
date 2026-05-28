@@ -619,7 +619,7 @@ export default function BookingFormRenderer({
 
   return (
     <div
-      className="max-w-2xl mx-auto px-6 pt-6 pb-24 sm:pb-6"
+      className="max-w-2xl mx-auto px-6 pt-6 pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pb-6"
       style={{ '--brand-color': formData.business?.brand_color || '#1A6B4A' } as React.CSSProperties}
     >
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">

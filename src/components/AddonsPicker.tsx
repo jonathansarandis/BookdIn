@@ -50,26 +50,32 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
   }
 
   return (
-    <div
-      className="max-h-[400px] overflow-y-auto pr-1"
-      style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-    >
-      {popularExtras.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-gray-900 mb-2">Popular add-ons</h4>
-          <div className="space-y-0.5">
-            {popularExtras.map(renderRow)}
+    <div className="relative">
+      <div
+        className="max-h-[400px] overflow-y-auto pr-1"
+        style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+      >
+        {popularExtras.length > 0 && (
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 mb-2">Popular add-ons</h4>
+            <div className="space-y-0.5">
+              {popularExtras.map(renderRow)}
+            </div>
           </div>
-        </div>
-      )}
-      {otherExtras.length > 0 && (
-        <div className={popularExtras.length > 0 ? 'mt-5' : ''}>
-          <h4 className="text-sm font-semibold text-gray-900 mb-2">All add-ons</h4>
-          <div className="space-y-0.5">
-            {otherExtras.map(renderRow)}
+        )}
+        {otherExtras.length > 0 && (
+          <div className={popularExtras.length > 0 ? 'mt-5' : ''}>
+            <h4 className="text-sm font-semibold text-gray-900 mb-2">All add-ons</h4>
+            <div className="space-y-0.5">
+              {otherExtras.map(renderRow)}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent"
+        aria-hidden="true"
+      />
     </div>
   )
 }
