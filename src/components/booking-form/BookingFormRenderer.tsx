@@ -292,10 +292,12 @@ export default function BookingFormRenderer({
               .in('service_id', svcIds)
           : Promise.resolve({ data: [] }),
       ])
+      console.log('[XD] locExtrasRaw:', locExtrasRaw?.length, 'junctionsRaw:', junctionsRaw?.length)
 
       // Map of extras.id → location price override (null = no location override)
       const locExtraMap: Record<string, number | null> = {}
       for (const le of locExtrasRaw || []) locExtraMap[le.extra_id] = le.price ?? null
+      console.log('[XD] locExtraMap keys:', Object.keys(locExtraMap).length)
 
       const services: any[] = (locSvcsRaw || []).map((row: any) => ({
         ...row.services,
@@ -419,10 +421,14 @@ export default function BookingFormRenderer({
   // Derive extras for the currently selected service directly from raw junctions at render
   // time. This ensures the three-layer price resolution uses the correct service_id for the
   // price_override lookup, rather than relying on a value baked during load.
+  const afterServiceFilter = (formData.junctions || [])
+    .filter((j: any) => j.service_id === values.service_id)
+  console.log('[XD] after service filter:', afterServiceFilter.length)
+  const afterLocMapFilter = afterServiceFilter
+    .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(formData.locExtraMap, junc.extras.id))
+  console.log('[XD] after locMap filter:', afterLocMapFilter.length)
   const currentExtras: any[] = values.service_id
-    ? (formData.junctions || [])
-        .filter((j: any) => j.service_id === values.service_id)
-        .filter((junc: any) => junc.extras && Object.prototype.hasOwnProperty.call(formData.locExtraMap, junc.extras.id))
+    ? afterLocMapFilter
         .map((junc: any) => ({
           ...junc.extras,
           duration_minutes: junc.extras.default_duration_minutes,
@@ -431,6 +437,7 @@ export default function BookingFormRenderer({
         }))
         .sort((a: any, b: any) => a.sort_order - b.sort_order)
     : []
+  console.log('[XD] currentExtras final:', currentExtras.length)
 
   // A step is skipped when it contains only extras_picker fields AND the selected service
   // has no applicable extras for this location. If no service is selected yet, don't skip.
