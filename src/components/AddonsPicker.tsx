@@ -1,5 +1,4 @@
 'use client'
-import { useState } from 'react'
 
 type Extra = {
   id: string
@@ -19,17 +18,12 @@ type Props = {
 }
 
 export default function AddonsPicker({ extras, selected, onChange, brandColor }: Props) {
-  const [showAll, setShowAll] = useState(false)
-
   const active = extras.filter(e => e.is_active)
-  const popular = active.filter(e => e.is_popular)
-  const rest = active.filter(e => !e.is_popular)
 
   if (active.length === 0) return null
 
-  // No popular items flagged → show all by default (graceful fallback for businesses without is_popular set)
-  const visible = showAll || popular.length === 0 ? active : popular
-  const hasToggle = popular.length > 0 && rest.length > 0
+  const popularExtras = active.filter(e => e.is_popular).sort((a, b) => a.name.localeCompare(b.name))
+  const otherExtras = active.filter(e => !e.is_popular).sort((a, b) => a.name.localeCompare(b.name))
 
   function renderRow(extra: Extra) {
     return (
@@ -56,17 +50,25 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
   }
 
   return (
-    <div>
-      <div className="space-y-0.5">{visible.map(renderRow)}</div>
-      {hasToggle && (
-        <button
-          type="button"
-          onClick={() => setShowAll(v => !v)}
-          className={`mt-3 block mx-auto px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-90${!brandColor ? ' bg-brand-500' : ''}`}
-          style={brandColor ? { backgroundColor: brandColor } : undefined}
-        >
-          {showAll ? 'Show fewer' : `Show all add-ons (${rest.length} more)`}
-        </button>
+    <div
+      className="max-h-[400px] overflow-y-auto pr-1"
+      style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+    >
+      {popularExtras.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">Popular add-ons</h4>
+          <div className="space-y-0.5">
+            {popularExtras.map(renderRow)}
+          </div>
+        </div>
+      )}
+      {otherExtras.length > 0 && (
+        <div className={popularExtras.length > 0 ? 'mt-5' : ''}>
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">All add-ons</h4>
+          <div className="space-y-0.5">
+            {otherExtras.map(renderRow)}
+          </div>
+        </div>
       )}
     </div>
   )

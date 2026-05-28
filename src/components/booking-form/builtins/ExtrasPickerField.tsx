@@ -24,7 +24,7 @@ export default function ExtrasPickerField({ value, onChange, context, disabled }
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">Popular add-ons</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-3">Add-ons</h3>
       <AddonsPicker
         extras={extras}
         selected={value}
