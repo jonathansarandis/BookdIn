@@ -444,12 +444,14 @@ export default function BookingFormRenderer({
   const hasApplicableExtras =
     values.service_id === null ||
     currentExtras.some((e: any) => e.is_active)
+  console.log('[XD3] hasApplicableExtras:', hasApplicableExtras, 'service_id:', values.service_id, 'currentExtras active count:', currentExtras.filter((e:any)=>e.is_active).length)
 
   const visibleSteps = formData.steps.filter(step => {
     const pls = formData.placements.filter(p => p.step_id === step.id)
     const isExtrasOnly = pls.length > 0 && pls.every(p => p.builtin_field_key === 'extras_picker')
     return !isExtrasOnly || hasApplicableExtras
   })
+  console.log('[XD3] visibleSteps:', visibleSteps.map((s:any)=>s.id), 'count:', visibleSteps.length)
 
   const safeStepIndex = Math.min(currentStepIndex, Math.max(0, visibleSteps.length - 1))
   const currentStep = visibleSteps[safeStepIndex]
@@ -522,6 +524,7 @@ export default function BookingFormRenderer({
   const canProceed = stepValidation === null
 
   function renderBuiltin(key: string, placementId: string) {
+    console.log('[XD3] renderBuiltin called with key:', key)
     switch (key) {
       case 'service_picker':
         return (
@@ -542,6 +545,7 @@ export default function BookingFormRenderer({
           />
         )
       case 'extras_picker':
+        console.log('[XD3] rendering ExtrasPickerField, currentExtras:', currentExtras.length)
         return (
           <ExtrasPickerField
             key={placementId}
