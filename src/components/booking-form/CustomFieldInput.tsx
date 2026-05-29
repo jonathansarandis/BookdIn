@@ -30,7 +30,7 @@ export default function CustomFieldInput({ field, value, onChange, disabled }: P
   )
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
+    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-5">
       <label className="block text-sm font-medium text-gray-700 mb-2">
         {field.label}
         {field.required && <span className="text-red-500 ml-1">*</span>}

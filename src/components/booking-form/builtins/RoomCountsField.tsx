@@ -37,14 +37,14 @@ export default function RoomCountsField({ value, onChange, context, disabled }: 
 
   if (selectedService?.pricing_type !== 'room_based') {
     return (
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-5">
         <p className="text-sm text-gray-500">Pricing is flat for this service.</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-5 space-y-4">
       <h3 className="text-sm font-semibold text-gray-900">Property size<span className="text-red-500 ml-1">*</span></h3>
       <div className="grid grid-cols-2 gap-4">
         <div>

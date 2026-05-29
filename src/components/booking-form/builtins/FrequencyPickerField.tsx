@@ -22,7 +22,7 @@ export default function FrequencyPickerField({ value, onChange, context, disable
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-5 space-y-4">
       <h3 className="text-sm font-semibold text-gray-900">Frequency</h3>
       <div className="grid grid-cols-2 gap-2">
         {FREQUENCIES.map(f => {

@@ -15,7 +15,7 @@ export default function ServicePickerField({ value, onChange, context, disabled 
   const brandTint = `${brand}14`
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-5 space-y-4">
       <h3 className="text-sm font-semibold text-gray-900">Select a service<span className="text-red-500 ml-1">*</span></h3>
       <div className="space-y-2">
         {services.map(s => (

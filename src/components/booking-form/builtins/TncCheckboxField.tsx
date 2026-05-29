@@ -10,7 +10,7 @@ interface Props extends BuiltinFieldProps<TncCheckboxValue, Context> {}
 
 export default function TncCheckboxField({ value, onChange, context, disabled }: Props) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
+    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-5">
       <label className="flex items-start gap-3 cursor-pointer">
         <input
           type="checkbox"

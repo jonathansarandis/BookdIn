@@ -14,7 +14,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
   const today = new Date().toISOString().split('T')[0]
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+    <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-5 space-y-4">
       <h3 className="text-sm font-semibold text-gray-900">Preferred date & time</h3>
       <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         <div className="min-w-0 relative">
@@ -35,19 +35,14 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
             </span>
           )}
           {value.scheduled_date && (
-            <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-900 sm:hidden">
+            <span className="pointer-events-none absolute left-0 right-0 top-[26px] h-[42px] flex items-center px-3 text-sm text-gray-900 sm:hidden">
               {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
             </span>
           )}
           {value.scheduled_date && (
-            <>
-              <p className="mt-1 text-xs text-gray-500 hidden sm:block">
-                {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
-              <p className="mt-1 text-xs text-gray-500 sm:hidden">
-                {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
-              </p>
-            </>
+            <p className="mt-1 text-xs text-gray-500 hidden sm:block">
+              {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           )}
         </div>
         <div className="min-w-0 relative">
