@@ -658,7 +658,7 @@ export default function BookingFormRenderer({
             Step {safeStepIndex + 1} of {visibleSteps.length}
           </p>
 
-          <div className="space-y-5">
+          <div className="space-y-3 sm:space-y-5">
             {currentPlacements.map(p => renderPlacement(p))}
             {currentPlacements.length === 0 && (
               <p className="text-sm text-gray-400 italic">No fields on this step.</p>

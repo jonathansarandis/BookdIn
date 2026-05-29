@@ -25,7 +25,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
             value={value.scheduled_date}
             min={today}
             onChange={e => onChange({ ...value, scheduled_date: e.target.value })}
-            className={`${INPUT_CLASS}${!value.scheduled_date ? ' blank-date' : ''} max-sm:text-transparent`}
+            className={`${INPUT_CLASS}${!value.scheduled_date ? ' blank-date' : ''}${value.scheduled_date ? ' filled-date-mobile' : ''}`}
             style={{ width: '100%', minWidth: 0, height: '42px', WebkitAppearance: 'none', appearance: 'none' } as React.CSSProperties}
             disabled={disabled}
           />

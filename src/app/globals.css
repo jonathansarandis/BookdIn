@@ -108,3 +108,17 @@ input::placeholder, textarea::placeholder {
 input[type="date"].blank-date {
   color: transparent !important;
 }
+
+@media (max-width: 639px) {
+  input[type="date"].filled-date-mobile {
+    color: transparent !important;
+  }
+  input[type="date"].filled-date-mobile::-webkit-datetime-edit,
+  input[type="date"].filled-date-mobile::-webkit-datetime-edit-fields-wrapper,
+  input[type="date"].filled-date-mobile::-webkit-datetime-edit-text,
+  input[type="date"].filled-date-mobile::-webkit-datetime-edit-month-field,
+  input[type="date"].filled-date-mobile::-webkit-datetime-edit-day-field,
+  input[type="date"].filled-date-mobile::-webkit-datetime-edit-year-field {
+    color: transparent !important;
+  }
+}
