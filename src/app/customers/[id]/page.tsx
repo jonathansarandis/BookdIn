@@ -2,9 +2,10 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Mail, Phone, MapPin, Calendar, DollarSign, Clock } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, MapPin, Calendar, DollarSign, Clock, CreditCard } from 'lucide-react'
 import { formatCurrency, formatDate, getInitials, JOB_STATUS_COLORS, JOB_STATUS_LABELS } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import RemoveCardButton from './RemoveCardButton'
 
 export default async function CustomerDetailPage({ params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -31,6 +32,13 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
     .from('addresses')
     .select('*')
     .eq('customer_id', customer.id)
+
+  const { data: paymentMethod } = await supabase
+    .from('customer_payment_methods')
+    .select('stripe_payment_method_id, card_brand, card_last4, card_exp_month, card_exp_year')
+    .eq('customer_id', customer.id)
+    .eq('business_id', profile!.business_id!)
+    .single()
 
   return (
     <div className="max-w-5xl mx-auto animate-fade-in">
@@ -121,6 +129,34 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
               </div>
             </div>
           )}
+
+          {/* Payment method */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment method</h4>
+              {paymentMethod && <RemoveCardButton customerId={customer.id} />}
+            </div>
+            {paymentMethod ? (
+              <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                <CreditCard className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                {paymentMethod.card_last4 ? (
+                  <span>
+                    <span className="capitalize">{paymentMethod.card_brand}</span>
+                    {' ····'}{paymentMethod.card_last4}
+                    {paymentMethod.card_exp_month && paymentMethod.card_exp_year && (
+                      <span className="text-gray-400 ml-1.5">
+                        expires {paymentMethod.card_exp_month}/{String(paymentMethod.card_exp_year).slice(-2)}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">Card on file (details unavailable)</span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No card on file</p>
+            )}
+          </div>
 
           {/* Notes */}
           {customer.notes && (

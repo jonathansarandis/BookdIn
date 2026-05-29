@@ -1,14 +1,19 @@
 // @ts-nocheck
 // POST /api/secure-card/save  { token, paymentMethodId }
 // create-intent already wrote stripe_customer_id to the job.
-// This endpoint just persists the confirmed payment method and consumes the token.
+// This endpoint persists the confirmed payment method, upserts customer_payment_methods, and consumes the token.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import Stripe from 'stripe'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-06-20',
+})
 
 export async function POST(request: NextRequest) {
   let token: string
@@ -31,7 +36,7 @@ export async function POST(request: NextRequest) {
   // Re-validate token (expired check + not-yet-saved guard)
   const { data: job, error: jobError } = await supabase
     .from('jobs')
-    .select('id, business_id, scheduled_at, card_setup_token_expires_at, customer:customers(full_name), business:businesses(timezone)')
+    .select('id, business_id, scheduled_at, card_setup_token_expires_at, customer:customers(id, full_name), business:businesses(timezone, stripe_account_id)')
     .eq('card_setup_token', token)
     .is('stripe_payment_method_id', null)
     .single()
@@ -61,6 +66,29 @@ export async function POST(request: NextRequest) {
   if (updateError) {
     console.error('[secure-card/save] DB update failed:', updateError.message)
     return NextResponse.json({ error: 'Failed to record card — please contact support' }, { status: 500 })
+  }
+
+  // Upsert customer_payment_methods: one record per (customer, business), keyed on the unique constraint.
+  if (job.customer?.id && job.business_id) {
+    try {
+      const stripeOpts = job.business?.stripe_account_id
+        ? { stripeAccount: job.business.stripe_account_id }
+        : {}
+      const pmDetails = await stripe.paymentMethods.retrieve(paymentMethodId, stripeOpts)
+      await supabase.from('customer_payment_methods').upsert({
+        customer_id:              job.customer.id,
+        business_id:              job.business_id,
+        stripe_payment_method_id: paymentMethodId,
+        card_brand:               pmDetails.card?.brand ?? null,
+        card_last4:               pmDetails.card?.last4 ?? null,
+        card_exp_month:           pmDetails.card?.exp_month ?? null,
+        card_exp_year:            pmDetails.card?.exp_year ?? null,
+        updated_at:               new Date().toISOString(),
+      }, { onConflict: 'customer_id,business_id' })
+    } catch (cpmErr: any) {
+      // Non-blocking — PM is already saved on the job; junction failure is recoverable
+      console.error('[secure-card/save] customer_payment_methods upsert failed (non-blocking):', cpmErr.message)
+    }
   }
 
   console.log(`[secure-card/save] Card saved for job ${job.id}`)

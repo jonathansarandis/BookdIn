@@ -35,7 +35,9 @@ export async function POST(
     .from('jobs')
     .select(`
       id,
+      customer_id,
       payment_status,
+      stripe_payment_method_id,
       stripe_payment_intent_id,
       business:businesses(stripe_account_id)
     `)
@@ -63,6 +65,25 @@ export async function POST(
     } catch (err: any) {
       console.error(`[cancel-card] Stripe intent cancel failed for job ${params.id}:`, err.message)
     }
+  }
+
+  // Detach PM from Stripe so the card cannot be reused on this customer
+  if (job.stripe_payment_method_id) {
+    try {
+      await stripe.paymentMethods.detach(job.stripe_payment_method_id, stripeOpts)
+    } catch (err: any) {
+      // Non-blocking: PM may already be detached or card closed by the bank
+      console.error(`[cancel-card] PM detach failed (continuing):`, err.message)
+    }
+  }
+
+  // Remove from junction table
+  if (job.customer_id && profile.business_id) {
+    await supabase
+      .from('customer_payment_methods')
+      .delete()
+      .eq('customer_id', job.customer_id)
+      .eq('business_id', profile.business_id)
   }
 
   const { error: updateError } = await supabase

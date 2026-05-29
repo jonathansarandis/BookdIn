@@ -89,6 +89,16 @@ export async function POST(
     return NextResponse.json({ error: 'No Stripe customer on parent' }, { status: 409 })
   }
 
+  // Prefer the customer's currently-saved PM (junction table), fall back to parent job's snapshot
+  const { data: cpm } = await supabase
+    .from('customer_payment_methods')
+    .select('stripe_payment_method_id')
+    .eq('customer_id', parent.customer_id)
+    .eq('business_id', parent.business_id)
+    .single()
+
+  const paymentMethodIdToUse = cpm?.stripe_payment_method_id ?? parent.stripe_payment_method_id
+
   // Look up the per-business Custom service
   const { data: customService, error: svcError } = await supabase
     .from('services')
@@ -122,7 +132,7 @@ export async function POST(
       booking_source:           'manual',
       customer_notes:           notes,
       stripe_customer_id:       parent.customer.stripe_customer_id,
-      stripe_payment_method_id: parent.stripe_payment_method_id,
+      stripe_payment_method_id: paymentMethodIdToUse,
     })
     .select('id')
     .single()
@@ -142,7 +152,7 @@ export async function POST(
       amount: amount_cents,
       currency,
       customer: parent.customer.stripe_customer_id,
-      payment_method: parent.stripe_payment_method_id,
+      payment_method: paymentMethodIdToUse,
       capture_method: 'manual',
       off_session: true,
       confirm: true,
