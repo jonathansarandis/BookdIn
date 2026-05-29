@@ -684,7 +684,7 @@ export default function BookingFormRenderer({
                   }
                 }}
                 disabled={!canProceed || submitting}
-                className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30 flex items-center gap-2"
+                className="px-6 py-2 border border-transparent bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg disabled:opacity-30 flex items-center gap-2"
               >
                 {submitting && currentStep.is_submit_step ? (
                   <span className="inline-flex items-center gap-2">

@@ -52,7 +52,7 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
   return (
     <div className="relative">
       <div
-        className="max-h-[400px] overflow-y-auto pr-1"
+        className="max-h-[400px] overflow-y-auto pr-1 addons-scroll"
         style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
         {popularExtras.length > 0 && (
