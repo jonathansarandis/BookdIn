@@ -35,7 +35,7 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
             </span>
           )}
           {value.scheduled_date && (
-            <span className="pointer-events-none absolute left-0 right-0 top-[26px] h-[42px] flex items-center px-3 text-sm text-gray-900 sm:hidden">
+            <span className="pointer-events-none absolute left-0 right-0 top-[22px] h-[42px] flex items-center justify-center text-sm text-gray-900 sm:hidden">
               {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
             </span>
           )}

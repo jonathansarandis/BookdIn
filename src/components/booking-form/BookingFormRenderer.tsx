@@ -665,7 +665,7 @@ export default function BookingFormRenderer({
             )}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between gap-4">
+          <div className="mt-4 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-100 flex items-center justify-between gap-4">
             <button
               onClick={() => setCurrentStepIndex(i => Math.max(0, i - 1))}
               disabled={currentStepIndex === 0}
