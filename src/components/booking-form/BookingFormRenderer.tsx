@@ -653,7 +653,7 @@ export default function BookingFormRenderer({
           </div>
         </div>
 
-        <div className="p-6 sm:p-8">
+        <div className="p-4 sm:p-8">
           <p className="text-xs uppercase tracking-wider text-gray-400 mb-4">
             Step {safeStepIndex + 1} of {visibleSteps.length}
           </p>

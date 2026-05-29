@@ -25,13 +25,18 @@ export default function DateTimePickerField({ value, onChange, disabled }: Props
             value={value.scheduled_date}
             min={today}
             onChange={e => onChange({ ...value, scheduled_date: e.target.value })}
-            className={`${INPUT_CLASS}${!value.scheduled_date ? ' blank-date' : ''}`}
+            className={`${INPUT_CLASS}${!value.scheduled_date ? ' blank-date' : ''} max-sm:text-transparent`}
             style={{ width: '100%', minWidth: 0, height: '42px', WebkitAppearance: 'none', appearance: 'none' } as React.CSSProperties}
             disabled={disabled}
           />
           {!value.scheduled_date && (
             <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-400">
               Select date
+            </span>
+          )}
+          {value.scheduled_date && (
+            <span className="pointer-events-none absolute inset-0 top-[26px] flex items-center px-3 text-sm text-gray-900 sm:hidden">
+              {new Date(`${value.scheduled_date}T12:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
             </span>
           )}
           {value.scheduled_date && (
