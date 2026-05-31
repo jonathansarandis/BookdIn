@@ -152,18 +152,32 @@ export default function BookingFormRenderer({
       const effectiveTaxRate = formData.business.show_tax && formData.business.tax_rate > 0 ? formData.business.tax_rate : 0
       const taxSplit = calcTaxSplit(discounted, formData.business.tax_mode ?? 'exclusive', effectiveTaxRate)
 
+      // Read attribution: fresh URL params first (most reliable in iframe contexts where
+      // the parent rewrites our src after mount), cookie as fallback.
       let attribution = { gclid: null as string | null, gbraid: null as string | null, wbraid: null as string | null }
       try {
+        const urlParams = new URLSearchParams(window.location.search)
+        const urlGclid  = urlParams.get('gclid')
+        const urlGbraid = urlParams.get('gbraid')
+        const urlWbraid = urlParams.get('wbraid')
+
+        let cookieAttribution: { gclid: string | null; gbraid: string | null; wbraid: string | null } = { gclid: null, gbraid: null, wbraid: null }
         const match = document.cookie.match(/(^| )bookdin_attribution=([^;]+)/)
         if (match) {
           const parsed = JSON.parse(decodeURIComponent(match[2]))
-          attribution = {
+          cookieAttribution = {
             gclid: parsed.gclid || null,
             gbraid: parsed.gbraid || null,
             wbraid: parsed.wbraid || null,
           }
         }
-      } catch { /* malformed / stale cookie — ignore, attribution is best-effort */ }
+
+        attribution = {
+          gclid:  urlGclid  || cookieAttribution.gclid  || null,
+          gbraid: urlGbraid || cookieAttribution.gbraid || null,
+          wbraid: urlWbraid || cookieAttribution.wbraid || null,
+        }
+      } catch { /* best-effort attribution capture */ }
 
       const payload = {
         business_id: businessId,
