@@ -218,8 +218,17 @@ export default function BookingFormRenderer({
       if (!res.ok) throw new Error(data.error || 'Booking could not be submitted')
 
       if (thankYouUrl) {
-        // Redirect immediately — don't show the in-page success state
-        window.location.href = thankYouUrl
+        // Break out of iframe if embedded (e.g. Elementor popup on cleanfreaks.au)
+        try {
+          if (window.top && window.top !== window.self) {
+            window.top.location.href = thankYouUrl
+          } else {
+            window.location.href = thankYouUrl
+          }
+        } catch {
+          // Cross-origin top access denied — fall back to navigating self
+          window.location.href = thankYouUrl
+        }
         return
       }
       setSubmittedJobId(data.job_id)
