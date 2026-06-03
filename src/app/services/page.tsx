@@ -4,7 +4,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Pencil, Loader2, CheckCircle2, Copy, X, Trash2, ChevronDown } from 'lucide-react'
+import { Plus, Pencil, Loader2, CheckCircle2, Copy, X, Trash2, ChevronDown, GripVertical } from 'lucide-react'
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 
 const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500'
 const labelCls = 'block text-xs font-medium text-gray-600 mb-1'
@@ -78,6 +80,69 @@ function buildJuncMap(junctions: any[]): Record<string, any[]> {
   return map
 }
 
+function buildLocSvcOrder(locSvcs: any[]): Record<string, number> {
+  const map: Record<string, number> = {}
+  for (const row of locSvcs) map[row.service_id] = row.sort_order
+  return map
+}
+
+function sortByLocOrder(svcs: any[], locSvcOrder: Record<string, number>): any[] {
+  return [...svcs].sort((a, b) => {
+    const aOrder = locSvcOrder[a.id] ?? a.sort_order
+    const bOrder = locSvcOrder[b.id] ?? b.sort_order
+    return aOrder - bOrder
+  })
+}
+
+function SortableServiceRow({ svc, locServices, setLocServices, openEditSvc }: {
+  svc: any
+  locServices: Record<string, { base_price: string; is_enabled: boolean }>
+  setLocServices: (fn: (m: any) => any) => void
+  openEditSvc: (svc: any) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: svc.id })
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: isDragging ? ('relative' as const) : undefined,
+    zIndex: isDragging ? 1 : undefined,
+  }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="p-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+        tabIndex={-1}
+        aria-label="Drag to reorder"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <Toggle
+        value={locServices[svc.id]?.is_enabled ?? false}
+        onChange={v => setLocServices(m => ({ ...m, [svc.id]: { ...m[svc.id], is_enabled: v } }))}
+      />
+      <span className="flex-1 text-sm text-gray-900 min-w-0 truncate">{svc.name}</span>
+      <PriceInput
+        value={locServices[svc.id]?.base_price ?? '0.00'}
+        onChange={v => setLocServices(m => ({ ...m, [svc.id]: { ...m[svc.id], base_price: v } }))}
+      />
+      <button
+        onClick={() => openEditSvc(svc)}
+        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0"
+        title="Edit service"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
+
 export default function ServicesPage() {
   const supabase = createClient()
 
@@ -107,6 +172,21 @@ export default function ServicesPage() {
   const [svcSaved, setSvcSaved] = useState(false)
   const [extraSaving, setExtraSaving] = useState(false)
   const [extraSaved, setExtraSaved] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  )
+
+  function handleDragEnd(event: any) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setAllServices(prev => {
+      const oldIdx = prev.findIndex(s => s.id === active.id)
+      const newIdx = prev.findIndex(s => s.id === over.id)
+      return arrayMove(prev, oldIdx, newIdx)
+    })
+  }
 
   // Edit service modal
   const [editSvc, setEditSvc] = useState<any | null>(null)
@@ -187,10 +267,13 @@ export default function ServicesPage() {
       const firstId = locs[0].id
       setSelectedLocationId(firstId)
       const [{ data: locSvcs }, { data: locExts }] = await Promise.all([
-        supabase.from('location_services').select('service_id, base_price, is_enabled').eq('location_id', firstId),
+        supabase.from('location_services').select('service_id, base_price, is_enabled, sort_order').eq('location_id', firstId),
         supabase.from('location_extras').select('extra_id, price, is_enabled').eq('location_id', firstId),
       ])
-      setLocServices(buildSvcMap(svcs || [], locSvcs || []))
+      const locSvcOrder = buildLocSvcOrder(locSvcs || [])
+      const sorted = sortByLocOrder(svcs || [], locSvcOrder)
+      setAllServices(sorted)
+      setLocServices(buildSvcMap(sorted, locSvcs || []))
       setLocExtras(buildExtMap(exts || [], locExts || []))
     }
 
@@ -203,10 +286,13 @@ export default function ServicesPage() {
     setExtraSaved(false)
     setLocLoading(true)
     const [{ data: locSvcs }, { data: locExts }] = await Promise.all([
-      supabase.from('location_services').select('service_id, base_price, is_enabled').eq('location_id', newLocId),
+      supabase.from('location_services').select('service_id, base_price, is_enabled, sort_order').eq('location_id', newLocId),
       supabase.from('location_extras').select('extra_id, price, is_enabled').eq('location_id', newLocId),
     ])
-    setLocServices(buildSvcMap(allServices, locSvcs || []))
+    const locSvcOrder = buildLocSvcOrder(locSvcs || [])
+    const sorted = sortByLocOrder(allServices, locSvcOrder)
+    setAllServices(sorted)
+    setLocServices(buildSvcMap(sorted, locSvcs || []))
     setLocExtras(buildExtMap(allExtras, locExts || []))
     setLocLoading(false)
   }
@@ -214,10 +300,13 @@ export default function ServicesPage() {
   async function reloadLocationData() {
     if (!selectedLocationId) return
     const [{ data: locSvcs }, { data: locExts }] = await Promise.all([
-      supabase.from('location_services').select('service_id, base_price, is_enabled').eq('location_id', selectedLocationId),
+      supabase.from('location_services').select('service_id, base_price, is_enabled, sort_order').eq('location_id', selectedLocationId),
       supabase.from('location_extras').select('extra_id, price, is_enabled').eq('location_id', selectedLocationId),
     ])
-    setLocServices(buildSvcMap(allServices, locSvcs || []))
+    const locSvcOrder = buildLocSvcOrder(locSvcs || [])
+    const sorted = sortByLocOrder(allServices, locSvcOrder)
+    setAllServices(sorted)
+    setLocServices(buildSvcMap(sorted, locSvcs || []))
     setLocExtras(buildExtMap(allExtras, locExts || []))
   }
 
@@ -242,11 +331,12 @@ export default function ServicesPage() {
 
   async function handleSaveServices() {
     setSvcSaving(true)
-    const rows = allServices.map(s => ({
+    const rows = allServices.map((s, idx) => ({
       location_id: selectedLocationId,
       service_id: s.id,
       base_price: Math.round(parseFloat(locServices[s.id]?.base_price || '0') * 100),
       is_enabled: locServices[s.id]?.is_enabled ?? false,
+      sort_order: idx,
     }))
     await supabase.from('location_services').upsert(rows, { onConflict: 'location_id,service_id' })
     setSvcSaving(false)
@@ -614,28 +704,21 @@ export default function ServicesPage() {
           {allServices.length === 0 ? (
             <p className="text-sm text-gray-400">No services yet. Add your first service to get started.</p>
           ) : (
-            <div className="space-y-1">
-              {allServices.map(svc => (
-                <div key={svc.id} className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
-                  <Toggle
-                    value={locServices[svc.id]?.is_enabled ?? false}
-                    onChange={v => setLocServices(m => ({ ...m, [svc.id]: { ...m[svc.id], is_enabled: v } }))}
-                  />
-                  <span className="flex-1 text-sm text-gray-900 min-w-0 truncate">{svc.name}</span>
-                  <PriceInput
-                    value={locServices[svc.id]?.base_price ?? '0.00'}
-                    onChange={v => setLocServices(m => ({ ...m, [svc.id]: { ...m[svc.id], base_price: v } }))}
-                  />
-                  <button
-                    onClick={() => openEditSvc(svc)}
-                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0"
-                    title="Edit service"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={allServices.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-1">
+                  {allServices.map(svc => (
+                    <SortableServiceRow
+                      key={svc.id}
+                      svc={svc}
+                      locServices={locServices}
+                      setLocServices={setLocServices}
+                      openEditSvc={openEditSvc}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
           )}
 
           <div className="flex items-center gap-3 pt-1">

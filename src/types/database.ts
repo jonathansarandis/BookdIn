@@ -104,6 +104,30 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['addresses']['Insert']>
       }
 
+      location_services: {
+        Row: {
+          location_id: string
+          service_id: string
+          base_price: number
+          is_enabled: boolean
+          sort_order: number
+        }
+        Insert: {
+          location_id: string
+          service_id: string
+          base_price: number
+          is_enabled?: boolean
+          sort_order?: number
+        }
+        Update: Partial<{
+          location_id: string
+          service_id: string
+          base_price: number
+          is_enabled: boolean
+          sort_order: number
+        }>
+      }
+
       services: {
         Row: {
           id: string

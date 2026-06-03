@@ -282,16 +282,16 @@ export default function BookingFormRenderer({
       const { data: locSvcsRaw } = await supabase
         .from('location_services')
         .select(`
-          base_price, is_enabled,
+          base_price, is_enabled, sort_order,
           services!inner (
             id, name, description, pricing_type, duration_minutes,
-            is_active, sort_order
+            is_active
           )
         `)
         .eq('location_id', locationId)
         .eq('is_enabled', true)
         .eq('services.is_active', true)
-        .order('sort_order', { foreignTable: 'services' })
+        .order('sort_order', { ascending: true })
 
       const svcIds = (locSvcsRaw || []).map((row: any) => row.services?.id).filter(Boolean)
 
