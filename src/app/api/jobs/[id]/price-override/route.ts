@@ -53,6 +53,7 @@ export async function POST(
     .from('jobs')
     .update({ price_override })
     .eq('id', params.id)
+    .eq('business_id', profile.business_id)
 
   if (updateError) {
     console.error(`[price-override] DB update failed for job ${params.id}:`, updateError.message)
