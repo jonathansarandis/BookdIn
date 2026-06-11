@@ -30,6 +30,7 @@ export default function ExtrasPickerField({ value, onChange, context, disabled }
         selected={value}
         onChange={handleToggle}
         brandColor={brand}
+        showPrice={false}
       />
     </div>
   )

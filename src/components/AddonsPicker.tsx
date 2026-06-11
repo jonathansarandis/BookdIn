@@ -15,9 +15,10 @@ type Props = {
   selected: string[]
   onChange: (id: string) => void
   brandColor?: string
+  showPrice?: boolean
 }
 
-export default function AddonsPicker({ extras, selected, onChange, brandColor }: Props) {
+export default function AddonsPicker({ extras, selected, onChange, brandColor, showPrice = true }: Props) {
   const active = extras.filter(e => e.is_active)
 
   if (active.length === 0) return null
@@ -41,10 +42,10 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor }:
             {extra.description && <p className="text-xs text-gray-500">{extra.description}</p>}
           </div>
         </div>
-        {extra.is_quote_only
+        {showPrice && (extra.is_quote_only
           ? <span className="text-xs font-medium text-gray-600 bg-gray-100 rounded-full px-2.5 py-1 flex-shrink-0 ml-2 whitespace-nowrap">Custom</span>
           : <span className="text-sm font-medium text-gray-900 flex-shrink-0 ml-2">+${(extra.price / 100).toFixed(0)}</span>
-        }
+        )}
       </label>
     )
   }
