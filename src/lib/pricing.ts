@@ -146,6 +146,20 @@ export function calcJobPrice(input: PriceInput): PriceBreakdown {
  * // → { base: 15000, rooms: 0, extras: 3500, total: 18500, durationMinutes: 120 }
  */
 
+// ─── Charge-amount resolution ─────────────────────────────────────────────────
+
+/**
+ * Returns the amount to charge in cents for a job.
+ * price_override (manually set by an operator) wins over the system-derived total_price.
+ */
+export function getChargeableAmount(job: {
+  price_override?: number | null
+  total_price?: number | null
+  price?: number | null
+}): number {
+  return job.price_override ?? job.total_price ?? job.price ?? 0
+}
+
 // ─── Post-calcJobPrice helpers ────────────────────────────────────────────────
 
 /**

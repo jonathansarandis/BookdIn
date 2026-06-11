@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+import { getChargeableAmount } from '@/lib/pricing'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,7 +46,9 @@ export async function GET(request: NextRequest) {
       id,
       business_id,
       scheduled_at,
+      price_override,
       total_price,
+      price,
       stripe_payment_method_id,
       status,
       payment_status,
@@ -80,7 +83,7 @@ export async function GET(request: NextRequest) {
       // Create and confirm a manual PaymentIntent (pre-auth only — no immediate capture)
       const intent = await stripe.paymentIntents.create(
         {
-          amount: job.total_price,
+          amount: getChargeableAmount(job),
           currency,
           customer: job.customer?.stripe_customer_id,
           payment_method: job.stripe_payment_method_id,

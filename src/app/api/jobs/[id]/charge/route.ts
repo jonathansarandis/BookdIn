@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { getChargeableAmount } from '@/lib/pricing'
 
 const supabase = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,7 +47,9 @@ export async function POST(
     .select(`
       id,
       payment_status,
+      price_override,
       total_price,
+      price,
       stripe_payment_intent_id,
       stripe_payment_method_id,
       customer:customers(stripe_customer_id),
@@ -73,7 +76,7 @@ export async function POST(
     let intent: Stripe.PaymentIntent
     try {
       intent = await stripe.paymentIntents.create({
-        amount: job.total_price,
+        amount: getChargeableAmount(job),
         currency,
         customer: job.customer?.stripe_customer_id,
         payment_method: job.stripe_payment_method_id,

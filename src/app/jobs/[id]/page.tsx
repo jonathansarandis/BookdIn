@@ -17,6 +17,8 @@ import NotesEditor from '@/app/jobs/[id]/NotesEditor'
 import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 import FollowUpChargeButton from '@/app/jobs/[id]/FollowUpChargeButton'
 import AddCustomAddon from '@/app/jobs/[id]/AddCustomAddon'
+import PriceOverrideEditor from '@/app/jobs/[id]/PriceOverrideEditor'
+import { getChargeableAmount } from '@/lib/pricing'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -165,9 +167,10 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   const paymentPillLabel = PAYMENT_STATUS_LABELS[paymentStatus] ?? paymentStatus
 
   const taxName = business?.tax_name?.trim() || 'Tax'
-  const totalCents = job.total_price ?? job.price ?? 0
+  const derivedTotalCents = job.total_price ?? job.price ?? 0
+  const chargeableCents = getChargeableAmount(job)
   const taxCents = job.tax_amount ?? 0
-  const subtotalCents = totalCents - taxCents
+  const subtotalCents = derivedTotalCents - taxCents
   const showTaxBreakdown = (business?.show_tax ?? false) && taxCents > 0
 
   return (
@@ -335,7 +338,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           {/* Payment */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <h2 className="font-semibold text-gray-900">Payment</h2>
-            {showTaxBreakdown ? (
+            {showTaxBreakdown && (
               <>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">Subtotal</span>
@@ -345,17 +348,14 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <span className="text-gray-500">{taxName}</span>
                   <span className="text-gray-900">${(taxCents / 100).toFixed(2)}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm border-t border-gray-100 pt-2">
-                  <span className="text-gray-500">Total</span>
-                  <span className="font-semibold text-gray-900">${(totalCents / 100).toFixed(2)} AUD</span>
-                </div>
               </>
-            ) : (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Total</span>
-                <span className="font-semibold text-gray-900">${((job.total_price || 0) / 100).toFixed(2)} AUD</span>
-              </div>
             )}
+            <PriceOverrideEditor
+              jobId={job.id}
+              initialOverride={job.price_override ?? null}
+              derivedTotal={derivedTotalCents}
+              showBorder={showTaxBreakdown}
+            />
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Status</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentPillStyle}`}>
@@ -367,8 +367,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             {paymentStatus === 'unpaid' && job.status !== 'cancelled' && (
               <>
                 {canPay && (
-                  <PayButton jobId={job.id} amount={job.total_price}
-                    label={`Collect payment · $${((job.total_price || 0) / 100).toFixed(2)}`} />
+                  <PayButton jobId={job.id} amount={chargeableCents}
+                    label={`Collect payment · $${(chargeableCents / 100).toFixed(2)}`} />
                 )}
                 <CardSetupButton jobId={job.id} hasCard={false} />
               </>
@@ -381,7 +381,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   Card saved. A pre-authorisation will run automatically the day before the service.
                 </p>
                 <PreauthorizeButton jobId={job.id} />
-                <ChargeNowButton jobId={job.id} totalPrice={job.total_price} />
+                <ChargeNowButton jobId={job.id} totalPrice={chargeableCents} />
                 <CardSetupButton jobId={job.id} hasCard={true} />
                 <CancelCardButton jobId={job.id} label="Cancel saved card" />
               </div>
@@ -390,7 +390,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             {/* authorized — capture or cancel pre-auth */}
             {paymentStatus === 'authorized' && (
               <div className="space-y-2">
-                <ChargeButton jobId={job.id} totalPrice={job.total_price} />
+                <ChargeButton jobId={job.id} totalPrice={chargeableCents} />
                 <CancelCardButton jobId={job.id} label="Cancel pre-authorization" />
               </div>
             )}
@@ -422,7 +422,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 leading-relaxed">
                   Capture failed. You can retry below.
                 </p>
-                <ChargeButton jobId={job.id} totalPrice={job.total_price} />
+                <ChargeButton jobId={job.id} totalPrice={chargeableCents} />
               </div>
             )}
 
