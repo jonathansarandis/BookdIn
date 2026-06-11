@@ -227,6 +227,21 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             initialIsFlexibleTime={job.is_flexible_time ?? false}
           />
 
+          {/* Service details — room counts shown only for room-based services */}
+          {(job.bedrooms != null || job.bathrooms != null) && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
+              <h2 className="font-semibold text-gray-900">Service details</h2>
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                {job.bedrooms != null && (
+                  <span>{job.bedrooms} bedroom{job.bedrooms !== 1 ? 's' : ''}</span>
+                )}
+                {job.bathrooms != null && (
+                  <span>{job.bathrooms} bathroom{job.bathrooms !== 1 ? 's' : ''}</span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Address */}
           {job.address && (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
