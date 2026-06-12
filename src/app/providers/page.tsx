@@ -20,6 +20,7 @@ export default function ProvidersPage() {
 
   const [form, setForm] = useState({
     display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true,
+    payout_percent: '0',
   })
 
   useEffect(() => {
@@ -36,13 +37,13 @@ export default function ProvidersPage() {
   }, [])
 
   function resetForm() {
-    setForm({ display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true })
+    setForm({ display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true, payout_percent: '0' })
     setEditingId(null)
     setShowForm(false)
   }
 
   function startEdit(provider: any) {
-    setForm({ display_name: provider.display_name, email: provider.email || '', phone: provider.phone || '', color: provider.color || COLORS[0], notes: provider.notes || '', accept_jobs: provider.accept_jobs, is_active: provider.is_active })
+    setForm({ display_name: provider.display_name, email: provider.email || '', phone: provider.phone || '', color: provider.color || COLORS[0], notes: provider.notes || '', accept_jobs: provider.accept_jobs, is_active: provider.is_active, payout_percent: String(provider.payout_percent ?? 0) })
     setEditingId(provider.id)
     setShowForm(true)
   }
@@ -51,7 +52,7 @@ export default function ProvidersPage() {
     e.preventDefault()
     if (!form.display_name.trim()) return
     setSaving(true)
-    const payload = { business_id: businessId, display_name: form.display_name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, color: form.color, notes: form.notes.trim() || null, accept_jobs: form.accept_jobs, is_active: form.is_active }
+    const payload = { business_id: businessId, display_name: form.display_name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, color: form.color, notes: form.notes.trim() || null, accept_jobs: form.accept_jobs, is_active: form.is_active, payout_percent: Number(form.payout_percent) || 0 }
     if (editingId) {
       const { data } = await supabase.from('providers').update(payload).eq('id', editingId).select().single()
       if (data) setProviders(prev => prev.map(p => p.id === editingId ? data : p))
@@ -146,6 +147,24 @@ export default function ProvidersPage() {
                 </div>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1.5">Payout %</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={form.payout_percent}
+                    onChange={e => setForm(f => ({ ...f, payout_percent: e.target.value }))}
+                    placeholder="0"
+                    className="w-24 text-sm text-gray-900 border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-400">% of pre-tax</span>
+                </div>
+              </div>
+            </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1.5">Notes</label>
               <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -207,6 +226,9 @@ export default function ProvidersPage() {
                   {provider.email && <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1"><Mail className="w-3 h-3" />{provider.email}</div>}
                   {provider.phone && <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5"><Phone className="w-3 h-3" />{provider.phone}</div>}
                   {provider.notes && <p className="text-xs text-gray-400 mt-1.5">{provider.notes}</p>}
+                  {Number(provider.payout_percent) > 0 && (
+                    <p className="text-xs text-gray-400 mt-1">{provider.payout_percent}% payout</p>
+                  )}
 
                   <div className="flex items-center justify-between mt-3">
                     <div className="flex items-center gap-2">

@@ -18,7 +18,8 @@ import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 import FollowUpChargeButton from '@/app/jobs/[id]/FollowUpChargeButton'
 import AddCustomAddon from '@/app/jobs/[id]/AddCustomAddon'
 import PriceOverrideEditor from '@/app/jobs/[id]/PriceOverrideEditor'
-import { getChargeableAmount } from '@/lib/pricing'
+import ProviderFeeEditor from '@/app/jobs/[id]/ProviderFeeEditor'
+import { getChargeableAmount, getProviderPayout } from '@/lib/pricing'
 
 const STATUS_STYLES = {
   pending:     'bg-yellow-100 text-yellow-800',
@@ -77,7 +78,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         *,
         customer:customers(id, full_name, email, phone),
         service:services(id, name, base_price),
-        provider:providers(id, display_name, color),
+        provider:providers(id, display_name, color, payout_percent),
         address:addresses(line1, city, state, postcode),
         job_extras(id, name, price, extra:extras(is_quote_only))
       `)
@@ -92,7 +93,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
       .order('display_name'),
     supabase
       .from('businesses')
-      .select('tax_rate, tax_name, show_tax, timezone')
+      .select('tax_rate, tax_mode, tax_name, show_tax, timezone')
       .eq('id', profile?.business_id)
       .single(),
   ])
@@ -172,6 +173,12 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   const taxCents = job.tax_amount ?? 0
   const subtotalCents = derivedTotalCents - taxCents
   const showTaxBreakdown = (business?.show_tax ?? false) && taxCents > 0
+
+  const taxRate = Number(business?.tax_rate ?? 0)
+  const taxMode = (business?.tax_mode ?? 'exclusive') as 'exclusive' | 'inclusive'
+  const payoutCents = job.provider_id
+    ? getProviderPayout(job, job.provider ?? {}, taxRate, taxMode)
+    : 0
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -362,6 +369,18 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 {paymentPillLabel}
               </span>
             </div>
+
+            {job.provider_id && (
+              <>
+                <div className="border-t border-gray-100" />
+                <ProviderFeeEditor
+                  jobId={job.id}
+                  providerName={job.provider?.display_name || null}
+                  initialFeeExtra={job.provider_fee_extra ?? null}
+                  payoutCents={payoutCents}
+                />
+              </>
+            )}
 
             {/* unpaid — manual payment or send card link */}
             {paymentStatus === 'unpaid' && job.status !== 'cancelled' && (

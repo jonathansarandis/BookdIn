@@ -160,6 +160,47 @@ export function getChargeableAmount(job: {
   return job.price_override ?? job.total_price ?? job.price ?? 0
 }
 
+// ─── Provider payout ─────────────────────────────────────────────────────────
+
+/**
+ * Compute the provider's payout in cents for a single job.
+ *
+ * payout = floor(preGstBase × payout_percent/100) + provider_fee_extra
+ *
+ * preGstBase uses the override-aware gross (getChargeableAmount), re-deriving the
+ * pre-tax amount from the override when one exists — because tax_amount was computed
+ * from the original total and is stale in that case.
+ *
+ * taxRate is a percentage integer (e.g. 10 for 10% GST).
+ * taxMode must match the business setting — 'exclusive' is the common AU case.
+ */
+export function getProviderPayout(
+  job: {
+    price_override?: number | null
+    total_price?: number | null
+    price?: number | null
+    tax_amount?: number | null
+    provider_fee_extra?: number | null
+  },
+  provider: { payout_percent?: number | null },
+  taxRate: number,
+  taxMode: 'exclusive' | 'inclusive',
+): number {
+  const chargeable = getChargeableAmount(job)
+
+  let preGstBase: number
+  if (job.price_override != null) {
+    preGstBase = taxRate > 0
+      ? Math.round(chargeable * 100 / (100 + taxRate))
+      : chargeable
+  } else {
+    preGstBase = (job.total_price ?? job.price ?? 0) - (job.tax_amount ?? 0)
+  }
+
+  const pct = provider.payout_percent ?? 0
+  return Math.round(preGstBase * pct / 100) + (job.provider_fee_extra ?? 0)
+}
+
 // ─── Post-calcJobPrice helpers ────────────────────────────────────────────────
 
 /**

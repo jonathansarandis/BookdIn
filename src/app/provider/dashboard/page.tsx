@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -46,30 +45,14 @@ export default function ProviderDashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/provider/login'); return }
 
-    // Find provider record linked to this user
-    const { data: providerData } = await supabase
-      .from('providers')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
+    const res = await fetch('/api/provider/jobs')
+    if (res.status === 401) { router.push('/provider/login'); return }
+    if (res.status === 403) { router.push('/dashboard'); return }
+    if (!res.ok) { setLoading(false); return }
 
-    if (!providerData) {
-      // Not a provider — redirect to main app
-      router.push('/dashboard')
-      return
-    }
-
-    setProvider(providerData)
-
-    // Get all upcoming jobs for this provider
-    const { data: jobsData } = await supabase
-      .from('jobs')
-      .select('*, customer:customers(full_name, phone, email), service:services(name), address:addresses(line1, city, state, postcode)')
-      .eq('provider_id', providerData.id)
-      .not('status', 'in', '("cancelled")')
-      .order('scheduled_at', { ascending: true })
-
-    setJobs(jobsData || [])
+    const data = await res.json()
+    setProvider(data.provider)
+    setJobs(data.jobs)
     setLoading(false)
   }
 
@@ -222,6 +205,12 @@ export default function ProviderDashboard() {
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         <span>{job.duration_minutes} minutes</span>
+                      </div>
+                    )}
+                    {job.payout_cents > 0 && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-400 text-xs">Payout</span>
+                        <span className="font-semibold text-green-700">${(job.payout_cents / 100).toFixed(2)}</span>
                       </div>
                     )}
                     {(job.notes || job.customer_notes) && (
