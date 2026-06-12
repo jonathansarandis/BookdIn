@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Users, Loader2, X, Phone, Mail, Pencil, Trash2, Send, CheckCircle2 } from 'lucide-react'
+import { Plus, Users, Loader2, X, Phone, Mail, Pencil, Trash2, Send, CheckCircle2, MapPin } from 'lucide-react'
 
 const COLORS = ['#2563FF', '#7c3aed', '#16a34a', '#d97706', '#dc2626', '#0e7490', '#4338ca', '#be123c']
 
@@ -16,12 +16,13 @@ export default function ProvidersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [businessId, setBusinessId] = useState('')
+  const [locations, setLocations] = useState<any[]>([])
   const [formError, setFormError] = useState<string | null>(null)
   const supabase = createClient()
 
   const [form, setForm] = useState({
     display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true,
-    payout_percent: '0',
+    payout_percent: '0', location_id: '',
   })
 
   useEffect(() => {
@@ -30,22 +31,26 @@ export default function ProvidersPage() {
       if (!user) { window.location.href = '/auth/login'; return }
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
       setBusinessId(profile?.business_id)
-      const { data } = await supabase.from('providers').select('*').eq('business_id', profile?.business_id).order('created_at')
-      setProviders(data || [])
+      const [{ data: provData }, { data: locData }] = await Promise.all([
+        supabase.from('providers').select('*').eq('business_id', profile?.business_id).order('created_at'),
+        supabase.from('locations').select('id, name').eq('business_id', profile?.business_id).eq('is_active', true).order('name'),
+      ])
+      setProviders(provData || [])
+      setLocations(locData || [])
       setLoading(false)
     }
     load()
   }, [])
 
   function resetForm() {
-    setForm({ display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true, payout_percent: '0' })
+    setForm({ display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true, payout_percent: '0', location_id: '' })
     setFormError(null)
     setEditingId(null)
     setShowForm(false)
   }
 
   function startEdit(provider: any) {
-    setForm({ display_name: provider.display_name, email: provider.email || '', phone: provider.phone || '', color: provider.color || COLORS[0], notes: provider.notes || '', accept_jobs: provider.accept_jobs, is_active: provider.is_active, payout_percent: String(provider.payout_percent ?? 0) })
+    setForm({ display_name: provider.display_name, email: provider.email || '', phone: provider.phone || '', color: provider.color || COLORS[0], notes: provider.notes || '', accept_jobs: provider.accept_jobs, is_active: provider.is_active, payout_percent: String(provider.payout_percent ?? 0), location_id: provider.location_id || '' })
     setEditingId(provider.id)
     setShowForm(true)
   }
@@ -55,7 +60,8 @@ export default function ProvidersPage() {
     if (!form.display_name.trim()) return
     setSaving(true)
     setFormError(null)
-    const payload = { business_id: businessId, display_name: form.display_name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, color: form.color, notes: form.notes.trim() || null, accept_jobs: form.accept_jobs, is_active: form.is_active, payout_percent: Number(form.payout_percent) || 0 }
+    if (!form.location_id) { setFormError('Please select a location'); setSaving(false); return }
+    const payload = { business_id: businessId, display_name: form.display_name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, color: form.color, notes: form.notes.trim() || null, accept_jobs: form.accept_jobs, is_active: form.is_active, payout_percent: Number(form.payout_percent) || 0, location_id: form.location_id }
     if (editingId) {
       const { data, error } = await supabase.from('providers').update(payload).eq('id', editingId).select().single()
       if (error) { console.error(error); setFormError(error.message); setSaving(false); return }
@@ -123,6 +129,19 @@ export default function ProvidersPage() {
             <button onClick={resetForm} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Location *</label>
+              <select
+                value={form.location_id}
+                onChange={e => setForm(f => ({ ...f, location_id: e.target.value }))}
+                className="w-full text-sm text-gray-900 border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select location…</option>
+                {locations.map(loc => (
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-500 mb-1.5">Full name *</label>
@@ -231,6 +250,12 @@ export default function ProvidersPage() {
                       </button>
                     </div>
                   </div>
+                  {provider.location_id && locations.find(l => l.id === provider.location_id) && (
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1">
+                      <MapPin className="w-3 h-3" />
+                      {locations.find(l => l.id === provider.location_id)?.name}
+                    </div>
+                  )}
                   {provider.email && <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-1"><Mail className="w-3 h-3" />{provider.email}</div>}
                   {provider.phone && <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5"><Phone className="w-3 h-3" />{provider.phone}</div>}
                   {provider.notes && <p className="text-xs text-gray-400 mt-1.5">{provider.notes}</p>}

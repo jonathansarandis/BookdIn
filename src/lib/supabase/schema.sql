@@ -136,7 +136,8 @@ create table if not exists providers (
   color         text default '#1A6B4A',
   is_active     boolean default true,
   accept_jobs   boolean default true,
-  notes         text
+  notes         text,
+  location_id   uuid not null references locations(id)
 );
 
 -- ─── JOBS ──────────────────────────────────────────────────
