@@ -16,6 +16,7 @@ export default function ProvidersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [businessId, setBusinessId] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
   const supabase = createClient()
 
   const [form, setForm] = useState({
@@ -38,6 +39,7 @@ export default function ProvidersPage() {
 
   function resetForm() {
     setForm({ display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true, payout_percent: '0' })
+    setFormError(null)
     setEditingId(null)
     setShowForm(false)
   }
@@ -52,12 +54,15 @@ export default function ProvidersPage() {
     e.preventDefault()
     if (!form.display_name.trim()) return
     setSaving(true)
+    setFormError(null)
     const payload = { business_id: businessId, display_name: form.display_name.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, color: form.color, notes: form.notes.trim() || null, accept_jobs: form.accept_jobs, is_active: form.is_active, payout_percent: Number(form.payout_percent) || 0 }
     if (editingId) {
-      const { data } = await supabase.from('providers').update(payload).eq('id', editingId).select().single()
+      const { data, error } = await supabase.from('providers').update(payload).eq('id', editingId).select().single()
+      if (error) { console.error(error); setFormError(error.message); setSaving(false); return }
       if (data) setProviders(prev => prev.map(p => p.id === editingId ? data : p))
     } else {
-      const { data } = await supabase.from('providers').insert(payload).select().single()
+      const { data, error } = await supabase.from('providers').insert(payload).select().single()
+      if (error) { console.error(error); setFormError(error.message); setSaving(false); return }
       if (data) setProviders(prev => [...prev, data])
     }
     setSaving(false)
@@ -181,6 +186,9 @@ export default function ProvidersPage() {
                 <span className="text-sm text-gray-700">Active</span>
               </label>
             </div>
+            {formError && (
+              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{formError}</p>
+            )}
             <div className="flex gap-3">
               <button type="submit" disabled={saving}
                 className="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-medium rounded-lg disabled:opacity-50"
