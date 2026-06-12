@@ -10,6 +10,8 @@ import { Calendar, Clock, MapPin, CheckCircle2, LogOut, User } from 'lucide-reac
 const STATUS_STYLES: Record<string, any> = {
   pending:     { bg: '#fffbeb', color: '#d97706', label: 'Pending' },
   confirmed:   { bg: '#eff6ff', color: '#2563FF', label: 'Confirmed' },
+  assigned:    { bg: '#eff6ff', color: '#2563FF', label: 'Assigned' },
+  on_the_way:  { bg: '#faf5ff', color: '#7c3aed', label: 'On the Way' },
   in_progress: { bg: '#f5f3ff', color: '#7c3aed', label: 'In Progress' },
   completed:   { bg: '#f0fdf4', color: '#16a34a', label: 'Completed' },
   cancelled:   { bg: '#f9fafb', color: '#6b7280', label: 'Cancelled' },
@@ -72,8 +74,14 @@ export default function ProviderDashboard() {
   }
 
   async function updateStatus(jobId: string, status: string) {
-    await supabase.from('jobs').update({ status }).eq('id', jobId)
-    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status } : j))
+    const res = await fetch(`/api/jobs/${jobId}/provider-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (res.ok) {
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status } : j))
+    }
   }
 
   async function handleSignOut() {
@@ -224,10 +232,10 @@ export default function ProviderDashboard() {
                     )}
                   </div>
 
-                  {/* Action buttons */}
-                  {job.status !== 'completed' && job.status !== 'cancelled' && (
+                  {/* Action buttons — providers own the physical lifecycle only */}
+                  {(job.status === 'assigned' || job.status === 'on_the_way' || job.status === 'in_progress') && (
                     <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex gap-2">
-                      {job.status === 'pending' || job.status === 'confirmed' ? (
+                      {(job.status === 'assigned' || job.status === 'on_the_way') && (
                         <button
                           onClick={() => updateStatus(job.id, 'in_progress')}
                           className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
@@ -235,23 +243,14 @@ export default function ProviderDashboard() {
                         >
                           Start job
                         </button>
-                      ) : null}
-                      {job.status === 'in_progress' ? (
+                      )}
+                      {job.status === 'in_progress' && (
                         <button
                           onClick={() => updateStatus(job.id, 'completed')}
                           className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
                           style={{ background: '#16a34a' }}
                         >
                           Mark complete
-                        </button>
-                      ) : null}
-                      {job.status === 'pending' && (
-                        <button
-                          onClick={() => updateStatus(job.id, 'confirmed')}
-                          className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                          style={{ background: '#eff6ff', color: '#2563FF' }}
-                        >
-                          Confirm
                         </button>
                       )}
                     </div>

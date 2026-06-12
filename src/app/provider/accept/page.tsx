@@ -29,15 +29,19 @@ export default function ProviderAcceptPage() {
       const providerId = user.user_metadata?.provider_id
 
       if (providerId) {
-        // Link this auth user to the provider record
-        const { error: updateError } = await supabase
-          .from('providers')
-          .update({ user_id: user.id, invite_accepted_at: new Date().toISOString() })
-          .eq('id', providerId)
-
-        if (updateError) {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/providers/accept', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ provider_id: providerId }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
           setStatus('error')
-          setMessage('Failed to link account. Please contact support.')
+          setMessage(data.error || 'Failed to link account. Please contact support.')
           return
         }
       }
