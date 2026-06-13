@@ -35,26 +35,26 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor, s
     if (showStepper) {
       return (
         <div key={extra.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-gray-50">
-          <div className="flex-1 min-w-0">
-            <span className="text-sm text-gray-700">{extra.name}</span>
-            {extra.description && <p className="text-xs text-gray-500">{extra.description}</p>}
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onChange(extra.id, isSelected ? 0 : 1)}
+              className={`w-4 h-4 cursor-pointer flex-shrink-0${!brandColor ? ' accent-brand-500' : ''}`}
+              style={brandColor ? { accentColor: brandColor } : undefined}
+            />
+            <div className="min-w-0">
+              <span className="text-sm text-gray-700">{extra.name}</span>
+              {extra.description && <p className="text-xs text-gray-500">{extra.description}</p>}
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-            {showPrice && isSelected && (
-              <span className="text-sm font-medium text-gray-900">
-                +${((extra.price * qty) / 100).toFixed(0)}
-              </span>
-            )}
-            {!isSelected ? (
-              <button
-                type="button"
-                onClick={() => onChange(extra.id, 1)}
-                className={`text-xs font-medium px-3 py-1 rounded-full border transition-colors${!brandColor ? ' border-brand-500 text-brand-600 hover:bg-brand-50' : ''}`}
-                style={brandColor ? { borderColor: brandColor, color: brandColor } : undefined}
-              >
-                Add
-              </button>
-            ) : (
+          {isSelected ? (
+            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+              {showPrice && (
+                <span className="text-sm font-medium text-gray-900">
+                  +${((extra.price * qty) / 100).toFixed(0)}
+                </span>
+              )}
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -68,8 +68,10 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor, s
                   className="w-6 h-6 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 flex items-center justify-center text-sm font-medium transition-colors"
                 >+</button>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            showPrice && <span className="text-sm font-medium text-gray-900 flex-shrink-0 ml-2">+${(extra.price / 100).toFixed(0)}</span>
+          )}
         </div>
       )
     }
