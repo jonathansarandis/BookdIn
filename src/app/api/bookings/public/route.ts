@@ -144,7 +144,9 @@ export async function POST(request: NextRequest) {
       .eq('service_id', service_id)
       .eq('frequency', frequency)
       .single()
-    const discountPct = freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0
+    const discountPct = service.frequency_discount_eligible
+      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0)
+      : 0
 
     // 2b. Fetch extras early — three-layer price resolution:
     //   location_extras.price ?? service_extras.price_override ?? extras.default_price

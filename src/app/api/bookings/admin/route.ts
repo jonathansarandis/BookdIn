@@ -197,7 +197,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .eq('service_id', service_id)
       .eq('frequency', frequency)
       .single()
-    const discountPct = freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0
+    const discountPct = service.frequency_discount_eligible
+      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0)
+      : 0
 
     // 6. Fetch extras — join service_extras junction to extras catalog.
     //    extras[] contains extras.id values. Filter by service_id to prevent cross-service borrowing;

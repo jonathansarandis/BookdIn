@@ -145,9 +145,11 @@ export default function BookingFormRenderer({
         roomPricing: roomPricing,
       })
 
-      const discountPct = formData.frequencyDiscounts.find(
-        (d: any) => d.frequency === values.frequency && d.is_enabled
-      )?.discount_percent ?? 0
+      const discountPct = svc.frequency_discount_eligible !== false
+        ? (formData.frequencyDiscounts.find(
+            (d: any) => d.frequency === values.frequency && d.is_enabled
+          )?.discount_percent ?? 0)
+        : 0
       const discounted = applyFrequencyDiscount(breakdown.total, discountPct)
       const effectiveTaxRate = formData.business.show_tax && formData.business.tax_rate > 0 ? formData.business.tax_rate : 0
       const taxSplit = calcTaxSplit(discounted, formData.business.tax_mode ?? 'exclusive', effectiveTaxRate)
@@ -285,7 +287,7 @@ export default function BookingFormRenderer({
           base_price, is_enabled, sort_order,
           services!inner (
             id, name, description, pricing_type, duration_minutes,
-            is_active
+            is_active, frequency_discount_eligible
           )
         `)
         .eq('location_id', locationId)

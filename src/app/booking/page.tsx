@@ -267,6 +267,8 @@ export default function BookingPage() {
 
   function getFreqDiscount(value: string): number {
     if (value === 'one_time') return 0
+    const svc = services.find((s: any) => s.id === form.service_id)
+    if (svc?.frequency_discount_eligible === false) return 0
     const row = freqDiscounts[value]
     if (!row?.is_enabled) return 0
     return row.discount_percent ?? 0
