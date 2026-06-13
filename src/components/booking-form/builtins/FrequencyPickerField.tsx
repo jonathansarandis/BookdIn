@@ -5,17 +5,19 @@ import { BuiltinFieldProps, FrequencyPickerValue, FrequencyDiscount, Business, F
 interface Context {
   frequencyDiscounts: FrequencyDiscount[]
   business: Business | null
+  selectedService: { frequency_discount_eligible?: boolean } | null
 }
 
 interface Props extends BuiltinFieldProps<FrequencyPickerValue, Context> {}
 
 export default function FrequencyPickerField({ value, onChange, context, disabled }: Props) {
-  const { frequencyDiscounts, business } = context
+  const { frequencyDiscounts, business, selectedService } = context
   const brand = business?.brand_color || '#1A6B4A'
   const brandTint = `${brand}14`
 
   function getDiscount(freq: string): number {
     if (freq === 'one_time') return 0
+    if (selectedService?.frequency_discount_eligible === false) return 0
     const row = frequencyDiscounts.find(d => d.frequency === freq)
     if (!row?.is_enabled) return 0
     return row.discount_percent ?? 0

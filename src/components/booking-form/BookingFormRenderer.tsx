@@ -578,7 +578,7 @@ export default function BookingFormRenderer({
             key={placementId}
             value={values.frequency}
             onChange={v => setValues(prev => ({ ...prev, frequency: v }))}
-            context={{ frequencyDiscounts: formData.frequencyDiscounts, business: formData.business }}
+            context={{ frequencyDiscounts: formData.frequencyDiscounts, business: formData.business, selectedService }}
           />
         )
       case 'date_time_picker':
