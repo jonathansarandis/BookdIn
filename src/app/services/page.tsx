@@ -193,6 +193,7 @@ export default function ServicesPage() {
   const [editSvcName, setEditSvcName] = useState('')
   const [editSvcDesc, setEditSvcDesc] = useState('')
   const [editSvcDuration, setEditSvcDuration] = useState('')
+  const [editSvcAllowsRecurring, setEditSvcAllowsRecurring] = useState(true)
   const [editSvcSaving, setEditSvcSaving] = useState(false)
 
   // Edit extra modal (id=null means new add-on)
@@ -350,6 +351,7 @@ export default function ServicesPage() {
     setEditSvcName(svc.name)
     setEditSvcDesc(svc.description || '')
     setEditSvcDuration(String(svc.duration_minutes))
+    setEditSvcAllowsRecurring(svc.allows_recurring !== false)
   }
 
   async function handleSaveEditSvc() {
@@ -358,10 +360,10 @@ export default function ServicesPage() {
     const duration = parseInt(editSvcDuration) || editSvc.duration_minutes
     await supabase
       .from('services')
-      .update({ name: editSvcName, description: editSvcDesc || null, duration_minutes: duration })
+      .update({ name: editSvcName, description: editSvcDesc || null, duration_minutes: duration, allows_recurring: editSvcAllowsRecurring })
       .eq('id', editSvc.id)
     setAllServices(prev =>
-      prev.map(s => s.id === editSvc.id ? { ...s, name: editSvcName, description: editSvcDesc, duration_minutes: duration } : s)
+      prev.map(s => s.id === editSvc.id ? { ...s, name: editSvcName, description: editSvcDesc, duration_minutes: duration, allows_recurring: editSvcAllowsRecurring } : s)
     )
     setEditSvcSaving(false)
     setEditSvc(null)
@@ -839,6 +841,19 @@ export default function ServicesPage() {
               <label className={labelCls}>Duration (minutes)</label>
               <input type="number" min="1" value={editSvcDuration} onChange={e => setEditSvcDuration(e.target.value)} className={inputCls} />
             </div>
+            <label className="flex items-center justify-between py-1 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Allows recurring bookings</p>
+                <p className="text-xs text-gray-500">When off, only one-time frequency is available</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditSvcAllowsRecurring(v => !v)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${editSvcAllowsRecurring ? 'bg-brand-600' : 'bg-gray-200'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${editSvcAllowsRecurring ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </label>
             <div className="flex items-center justify-between pt-2">
               <button
                 onClick={() => handleDeleteSvc(editSvc.id, editSvc.name)}

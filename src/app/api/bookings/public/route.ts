@@ -137,15 +137,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Service not available at this location' }, { status: 400 })
     }
 
-    // 2a. Frequency discount: DB first, hardcoded fallback
+    // 2a. Frequency discount: DB first, hardcoded fallback.
+    // Server enforces one_time for non-recurring services regardless of client payload.
+    const effectiveFrequency = service.allows_recurring === false ? 'one_time' : frequency
     const { data: freqRow } = await supabase
       .from('frequency_discounts')
       .select('discount_percent')
       .eq('service_id', service_id)
-      .eq('frequency', frequency)
+      .eq('frequency', effectiveFrequency)
       .single()
     const discountPct = service.frequency_discount_eligible
-      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0)
+      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[effectiveFrequency] ?? 0)
       : 0
 
     // 2b. Fetch extras early — three-layer price resolution:
@@ -316,7 +318,7 @@ export async function POST(request: NextRequest) {
         price: taxSplit.subtotal,
         total_price: taxSplit.total,
         tax_amount: taxSplit.tax,
-        frequency,
+        frequency: effectiveFrequency,
         customer_notes: customer_notes || null,
         payment_status: 'unpaid',
         payment_method: 'card',

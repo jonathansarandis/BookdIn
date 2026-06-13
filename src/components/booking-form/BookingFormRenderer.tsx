@@ -288,7 +288,7 @@ export default function BookingFormRenderer({
           base_price, is_enabled, sort_order,
           services!inner (
             id, name, description, pricing_type, duration_minutes,
-            is_active, frequency_discount_eligible
+            is_active, frequency_discount_eligible, allows_recurring
           )
         `)
         .eq('location_id', locationId)
@@ -547,7 +547,15 @@ export default function BookingFormRenderer({
           <ServicePickerField
             key={placementId}
             value={values.service_id}
-            onChange={v => setValues(prev => ({ ...prev, service_id: v, extras: {} }))}
+            onChange={v => {
+              const svc = formData.services.find((s: any) => s.id === v)
+              setValues(prev => ({
+                ...prev,
+                service_id: v,
+                extras: {},
+                ...(svc?.allows_recurring === false ? { frequency: 'one_time' } : {}),
+              }))
+            }}
             context={{ services: formData.services, business: formData.business }}
           />
         )
@@ -573,6 +581,7 @@ export default function BookingFormRenderer({
           />
         )
       case 'frequency_picker':
+        if (selectedService?.allows_recurring === false) return null
         return (
           <FrequencyPickerField
             key={placementId}

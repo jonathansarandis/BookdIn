@@ -563,25 +563,36 @@ export default function BookingPage() {
             )}
             <div>
               <label className={labelClass}>Service *</label>
-              <select value={form.service_id} onChange={e => { update('service_id', e.target.value); setExtraQuantities({}) }} className={inputClass}>
+              <select value={form.service_id} onChange={e => {
+                const newId = e.target.value
+                const newSvc = services.find((s: any) => s.id === newId)
+                setForm(f => ({
+                  ...f,
+                  service_id: newId,
+                  ...(newSvc?.allows_recurring === false ? { frequency: 'one_time' } : {}),
+                }))
+                setExtraQuantities({})
+              }} className={inputClass}>
                 {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-            <div>
-              <label className={labelClass}>Frequency</label>
-              <div className="grid grid-cols-2 gap-2">
-                {FREQUENCIES.map(f => {
-                  const disc = getFreqDiscount(f.value)
-                  return (
-                    <button key={f.value} type="button" onClick={() => update('frequency', f.value)}
-                      className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <div className={`text-xs font-medium ${form.frequency === f.value ? 'text-brand-700' : 'text-gray-900'}`}>{f.label}</div>
-                      {disc > 0 && <div className="text-[10px] text-green-600 mt-0.5">{disc}% discount</div>}
-                    </button>
-                  )
-                })}
+            {selectedService?.allows_recurring !== false && (
+              <div>
+                <label className={labelClass}>Frequency</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {FREQUENCIES.map(f => {
+                    const disc = getFreqDiscount(f.value)
+                    return (
+                      <button key={f.value} type="button" onClick={() => update('frequency', f.value)}
+                        className={`p-3 rounded-lg border text-left transition-colors ${form.frequency === f.value ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <div className={`text-xs font-medium ${form.frequency === f.value ? 'text-brand-700' : 'text-gray-900'}`}>{f.label}</div>
+                        {disc > 0 && <div className="text-[10px] text-green-600 mt-0.5">{disc}% discount</div>}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {selectedService?.pricing_type === 'room_based' && (
               <div className="grid grid-cols-2 gap-4">

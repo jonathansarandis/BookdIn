@@ -190,15 +190,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     const effectiveBasePrice = locService?.base_price ?? service.base_price
 
-    // 5. Frequency discount: DB first, hardcoded fallback
+    // 5. Frequency discount: DB first, hardcoded fallback.
+    // Server enforces one_time for non-recurring services regardless of client payload.
+    const effectiveFrequency = service.allows_recurring === false ? 'one_time' : frequency
     const { data: freqRow } = await admin
       .from('frequency_discounts')
       .select('discount_percent')
       .eq('service_id', service_id)
-      .eq('frequency', frequency)
+      .eq('frequency', effectiveFrequency)
       .single()
     const discountPct = service.frequency_discount_eligible
-      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[frequency] ?? 0)
+      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[effectiveFrequency] ?? 0)
       : 0
 
     // 6. Fetch extras — join service_extras junction to extras catalog.
@@ -345,7 +347,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           price: taxSplit.subtotal,
           total_price: taxSplit.total,
           tax_amount: taxSplit.tax,
-          frequency,
+          frequency: effectiveFrequency,
           notes: notes ?? null,
           booking_source: booking_source ?? 'admin',
           payment_method: payment_method ?? 'card',
