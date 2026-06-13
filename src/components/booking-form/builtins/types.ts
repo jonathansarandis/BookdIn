@@ -15,6 +15,7 @@ export interface ServiceExtra {
   is_active: boolean
   is_popular: boolean
   is_quote_only: boolean
+  is_quantifiable: boolean
 }
 
 export interface Business {
@@ -50,7 +51,7 @@ export interface RoomCountsValue {
   bathrooms: number | null
 }
 
-export type ExtrasPickerValue = string[]
+export type ExtrasPickerValue = Record<string, number>  // extra_id → quantity; absent = unselected
 
 export type FrequencyPickerValue = 'one_time' | 'weekly' | 'fortnightly' | 'monthly'
 

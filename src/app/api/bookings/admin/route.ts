@@ -206,19 +206,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     //    business scoping comes from the extras catalog (extras.business_id verified via service ownership).
     let extraDetails: any[] = []
     if (extras?.length > 0) {
+      const extraIds: string[] = extras.map((e: any) => e.id)
+      const extrasQtyMap: Record<string, number> = {}
+      for (const e of extras) extrasQtyMap[e.id] = e.quantity ?? 1
+
       const { data: junctionRows } = await admin
         .from('service_extras')
         .select(`
           price_override,
           extras!inner (id, name, default_price, is_quote_only)
         `)
-        .in('extra_id', extras)
+        .in('extra_id', extraIds)
         .eq('service_id', service_id)
       extraDetails = (junctionRows || []).map((j: any) => ({
         id: j.extras.id,
         name: j.extras.name,
         price: j.price_override ?? j.extras.default_price,
         is_quote_only: j.extras.is_quote_only,
+        quantity: extrasQtyMap[j.extras.id] ?? 1,
       }))
     }
 
@@ -232,7 +237,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       bedrooms: service.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
       bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
-      selectedExtras: extraDetails.map(ex => ({ price: ex.price, is_quote_only: ex.is_quote_only })),
+      selectedExtras: extraDetails.map(ex => ({ price: ex.price, is_quote_only: ex.is_quote_only, quantity: ex.quantity })),
       roomPricing: service.room_pricing || [],
     })
     const discountedPrice = applyFrequencyDiscount(breakdown.total, discountPct)
@@ -284,6 +289,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               extra_id: ex.id,
               name: ex.name,
               price: ex.is_quote_only ? 0 : ex.price,
+              quantity: ex.quantity ?? 1,
             }))
           )
           if (editExtrasErr) {
@@ -406,6 +412,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           extra_id: ex.id,
           name: ex.name,
           price: ex.is_quote_only ? 0 : ex.price,
+          quantity: ex.quantity ?? 1,
         }))
       )
       if (jobExtrasErr) {

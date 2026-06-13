@@ -17,9 +17,14 @@ export default function ExtrasPickerField({ value, onChange, context, disabled }
   const extras = selectedService?.service_extras ?? []
   if (!extras.some(e => e.is_active)) return null
 
-  function handleToggle(id: string) {
+  function handleChange(id: string, qty: number) {
     if (disabled) return
-    onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id])
+    if (qty <= 0) {
+      const { [id]: _, ...rest } = value
+      onChange(rest)
+    } else {
+      onChange({ ...value, [id]: qty })
+    }
   }
 
   return (
@@ -28,7 +33,7 @@ export default function ExtrasPickerField({ value, onChange, context, disabled }
       <AddonsPicker
         extras={extras}
         selected={value}
-        onChange={handleToggle}
+        onChange={handleChange}
         brandColor={brand}
         showPrice={false}
       />

@@ -93,7 +93,7 @@ export default function BookingFormRenderer({
   const [values, setValues] = useState<Record<string, any>>({
     service_id: null,
     room_counts: { bedrooms: null, bathrooms: null },
-    extras: [],
+    extras: {},
     frequency: 'one_time',
     date_time: { scheduled_date: '', scheduled_time: 'flexible', is_flexible: true },
     address: { line1: '', city: '', state: '', postcode: '' },
@@ -131,17 +131,18 @@ export default function BookingFormRenderer({
       // Re-derive extras for this service from raw junctions so price uses the correct
       // (service_id, extra_id) combination, not a cached merged value.
       const selectedExtraObjects = (formData.junctions || [])
-        .filter((j: any) => j.service_id === svc.id && values.extras.includes(j.extras?.id))
+        .filter((j: any) => j.service_id === svc.id && (values.extras[j.extras?.id] ?? 0) > 0)
         .map((j: any) => ({
           price: (formData.locExtraMap || {})[j.extras.id] ?? j.price_override ?? j.extras.default_price,
           is_quote_only: j.extras?.is_quote_only ?? false,
+          quantity: (values.extras[j.extras?.id] ?? 1) as number,
         }))
 
       const breakdown = calcJobPrice({
         service: { id: svc.id, base_price: svc.base_price, pricing_type: svc.pricing_type, duration_minutes: svc.duration_minutes },
         bedrooms: svc.pricing_type === 'room_based' ? values.room_counts.bedrooms : null,
         bathrooms: svc.pricing_type === 'room_based' ? values.room_counts.bathrooms : null,
-        selectedExtras: selectedExtraObjects.map((ex: any) => ({ price: ex.price, is_quote_only: ex.is_quote_only })),
+        selectedExtras: selectedExtraObjects.map((ex: any) => ({ price: ex.price, is_quote_only: ex.is_quote_only, quantity: ex.quantity })),
         roomPricing: roomPricing,
       })
 
@@ -190,7 +191,7 @@ export default function BookingFormRenderer({
         scheduled_time: values.date_time.is_flexible ? 'flexible' : values.date_time.scheduled_time,
         total_price: taxSplit.total,
         tax_amount: taxSplit.tax,
-        extras: values.extras,
+        extras: Object.entries(values.extras as Record<string, number>).map(([id, qty]) => ({ id, quantity: qty })),
         customer: {
           full_name: values.contact_info.full_name,
           email: values.contact_info.email,
@@ -311,7 +312,7 @@ export default function BookingFormRenderer({
                 extras!inner (
                   id, name, description,
                   default_price, default_duration_minutes,
-                  is_active, is_popular, is_quote_only, sort_order
+                  is_active, is_popular, is_quote_only, is_quantifiable, sort_order
                 )
               `)
               .in('service_id', svcIds)
@@ -546,7 +547,7 @@ export default function BookingFormRenderer({
           <ServicePickerField
             key={placementId}
             value={values.service_id}
-            onChange={v => setValues(prev => ({ ...prev, service_id: v, extras: [] }))}
+            onChange={v => setValues(prev => ({ ...prev, service_id: v, extras: {} }))}
             context={{ services: formData.services, business: formData.business }}
           />
         )

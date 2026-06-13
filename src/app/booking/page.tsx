@@ -62,7 +62,7 @@ export default function BookingPage() {
     notes: '',
   })
 
-  const [selectedExtras, setSelectedExtras] = useState<string[]>([])
+  const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({})
   const [customItems, setCustomItems] = useState<{name: string; price_cents: number}[]>([])
   const [customItemName, setCustomItemName] = useState('')
   const [customItemPrice, setCustomItemPrice] = useState('')
@@ -134,7 +134,7 @@ export default function BookingPage() {
             extras!inner (
               id, name, description,
               default_price, default_duration_minutes,
-              is_active, is_popular, is_quote_only, sort_order
+              is_active, is_popular, is_quote_only, is_quantifiable, sort_order
             )
           `)
           .in('service_id', svcIds)
@@ -170,7 +170,7 @@ export default function BookingPage() {
           *,
           customer:customers(id, full_name, email, phone),
           address:addresses(id, line1, city, state, postcode),
-          job_extras(id, extra_id, name, price)
+          job_extras(id, extra_id, name, price, quantity)
         `)
         .eq('id', editJobId)
         .single()
@@ -202,9 +202,11 @@ export default function BookingPage() {
         notes: job.notes || '',
       }))
       if (job.location_id) setLocationId(job.location_id)
-      setSelectedExtras(
-        (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
-      )
+      const editQtyMap: Record<string, number> = {}
+      for (const je of (job.job_extras || []).filter((e: any) => e.extra_id)) {
+        editQtyMap[je.extra_id] = je.quantity ?? 1
+      }
+      setExtraQuantities(editQtyMap)
       setCustomItems(
         (job.job_extras || [])
           .filter((e: any) => !e.extra_id)
@@ -226,7 +228,7 @@ export default function BookingPage() {
           *,
           customer:customers(id, full_name, email, phone),
           address:addresses(id, line1, city, state, postcode),
-          job_extras(id, extra_id, name, price)
+          job_extras(id, extra_id, name, price, quantity)
         `)
         .eq('id', rebookJobId)
         .single()
@@ -251,9 +253,11 @@ export default function BookingPage() {
         provider_id: job.provider_id || '',
         notes: job.notes || '',
       }))
-      setSelectedExtras(
-        (job.job_extras || []).filter((e: any) => e.extra_id).map((e: any) => e.extra_id)
-      )
+      const rebookQtyMap: Record<string, number> = {}
+      for (const je of (job.job_extras || []).filter((e: any) => e.extra_id)) {
+        rebookQtyMap[je.extra_id] = je.quantity ?? 1
+      }
+      setExtraQuantities(rebookQtyMap)
       setCustomItems(
         (job.job_extras || [])
           .filter((e: any) => !e.extra_id)
@@ -287,6 +291,7 @@ export default function BookingPage() {
       is_active: j.extras.is_active,
       is_popular: j.extras.is_popular,
       is_quote_only: j.extras.is_quote_only,
+      is_quantifiable: j.extras.is_quantifiable,
       sort_order: j.sort_order,
     }))
     .sort((a: any, b: any) => a.sort_order - b.sort_order)
@@ -314,8 +319,8 @@ export default function BookingPage() {
       bedrooms: form.bedrooms,
       bathrooms: form.bathrooms,
       selectedExtras: selectedServiceExtras
-        .filter((ex: any) => selectedExtras.includes(ex.id) && !ex.is_quote_only)
-        .map((ex: any) => ({ price: ex.price })),
+        .filter((ex: any) => (extraQuantities[ex.id] ?? 0) > 0 && !ex.is_quote_only)
+        .map((ex: any) => ({ price: ex.price, quantity: extraQuantities[ex.id] ?? 1 })),
       roomPricing: selectedService?.room_pricing || [],
     })
     const freqDisc = getFreqDiscount(form.frequency)
@@ -334,8 +339,11 @@ export default function BookingPage() {
   const subtotalCents = taxMode === 'exclusive' ? rawPrice : rawPrice - taxCents
   const totalToCharge = rawPrice + (taxMode === 'exclusive' ? taxCents : 0)
 
-  function toggleExtra(id: string) {
-    setSelectedExtras(e => e.includes(id) ? e.filter(x => x !== id) : [...e, id])
+  function updateExtraQty(id: string, qty: number) {
+    setExtraQuantities(prev => {
+      if (qty <= 0) { const { [id]: _, ...rest } = prev; return rest }
+      return { ...prev, [id]: qty }
+    })
   }
 
   async function handleSubmit() {
@@ -379,7 +387,7 @@ export default function BookingPage() {
             bathrooms: form.bathrooms,
             scheduled_at: scheduledAtIso,
             is_flexible_time: isFlexible,
-            extras: selectedExtras,
+            extras: Object.entries(extraQuantities).map(([id, qty]) => ({ id, quantity: qty })),
             custom_items: customItems,
             total_price: totalToCharge,
             tax_amount: taxCents,
@@ -547,7 +555,7 @@ export default function BookingPage() {
                 <label className={labelClass}>Location</label>
                 <select value={locationId} onChange={e => {
                   setLocationId(e.target.value)
-                  if (!editJobId) { update('service_id', services[0]?.id || ''); setSelectedExtras([]) }
+                  if (!editJobId) { update('service_id', services[0]?.id || ''); setExtraQuantities({}) }
                 }} className={inputClass}>
                   {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
@@ -555,7 +563,7 @@ export default function BookingPage() {
             )}
             <div>
               <label className={labelClass}>Service *</label>
-              <select value={form.service_id} onChange={e => { update('service_id', e.target.value); setSelectedExtras([]) }} className={inputClass}>
+              <select value={form.service_id} onChange={e => { update('service_id', e.target.value); setExtraQuantities({}) }} className={inputClass}>
                 {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
@@ -599,8 +607,8 @@ export default function BookingPage() {
             {selectedServiceExtras.some((e: any) => e.is_active) && (
               <AddonsPicker
                 extras={selectedServiceExtras}
-                selected={selectedExtras}
-                onChange={toggleExtra}
+                selected={extraQuantities}
+                onChange={updateExtraQty}
               />
             )}
             {customItems.length > 0 && (
@@ -843,11 +851,14 @@ export default function BookingPage() {
               { label: 'Service', value: selectedService?.name },
               { label: 'Frequency', value: selectedFreq.label },
               ...selectedServiceExtras
-                .filter((ex: any) => selectedExtras.includes(ex.id))
-                .map((ex: any) => ({
-                  label: ex.name,
-                  value: ex.is_quote_only ? 'Quote on arrival' : `+$${(ex.price / 100).toFixed(0)}`,
-                })),
+                .filter((ex: any) => (extraQuantities[ex.id] ?? 0) > 0)
+                .map((ex: any) => {
+                  const qty = extraQuantities[ex.id] ?? 1
+                  return {
+                    label: qty > 1 ? `${ex.name} ×${qty}` : ex.name,
+                    value: ex.is_quote_only ? 'Quote on arrival' : `+$${((ex.price * qty) / 100).toFixed(0)}`,
+                  }
+                }),
               ...customItems.map(ci => ({
                 label: ci.name,
                 value: `+$${(ci.price_cents / 100).toFixed(2)}`,

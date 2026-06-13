@@ -206,6 +206,7 @@ export default function ServicesPage() {
   const [editExtraDisclosureOpen, setEditExtraDisclosureOpen] = useState(false)
   const [editExtraIsQuoteOnly, setEditExtraIsQuoteOnly] = useState(false)
   const [editExtraIsPopular, setEditExtraIsPopular] = useState(false)
+  const [editExtraIsQuantifiable, setEditExtraIsQuantifiable] = useState(false)
   const [editExtraSaving, setEditExtraSaving] = useState(false)
 
   // Delete-reassign modal (services)
@@ -246,7 +247,7 @@ export default function ServicesPage() {
         .select('id, name, description, duration_minutes, pricing_type, base_price, is_active, sort_order')
         .eq('business_id', bizId).order('sort_order'),
       supabase.from('extras')
-        .select('id, name, description, default_price, default_duration_minutes, is_active, is_quote_only, sort_order')
+        .select('id, name, description, default_price, default_duration_minutes, is_active, is_popular, is_quote_only, is_quantifiable, sort_order')
         .eq('business_id', bizId).order('sort_order'),
     ])
 
@@ -315,7 +316,7 @@ export default function ServicesPage() {
     const svcIds = allServices.map(s => s.id)
     const [{ data: exts }, { data: junctions }] = await Promise.all([
       supabase.from('extras')
-        .select('id, name, description, default_price, default_duration_minutes, is_active, is_quote_only, sort_order')
+        .select('id, name, description, default_price, default_duration_minutes, is_active, is_popular, is_quote_only, is_quantifiable, sort_order')
         .eq('business_id', businessId).order('sort_order'),
       svcIds.length > 0
         ? supabase.from('service_extras')
@@ -432,6 +433,8 @@ export default function ServicesPage() {
     setEditExtraSvcOverrides({})
     setEditExtraDisclosureOpen(false)
     setEditExtraIsQuoteOnly(false)
+    setEditExtraIsPopular(false)
+    setEditExtraIsQuantifiable(false)
   }
 
   function openEditExtra(ex: any) {
@@ -452,6 +455,7 @@ export default function ServicesPage() {
     setEditExtraDisclosureOpen(false)
     setEditExtraIsQuoteOnly(ex.is_quote_only ?? false)
     setEditExtraIsPopular(ex.is_popular ?? false)
+    setEditExtraIsQuantifiable(ex.is_quantifiable ?? false)
   }
 
   function getPriceOverrideValue(svcId: string): number | null {
@@ -478,6 +482,7 @@ export default function ServicesPage() {
           default_price: defaultPrice,
           is_quote_only: editExtraIsQuoteOnly,
           is_popular: editExtraIsPopular,
+          is_quantifiable: editExtraIsQuoteOnly ? false : editExtraIsQuantifiable,
         }).eq('id', extraId)
       } else {
         const { data: newEx, error } = await supabase.from('extras').insert({
@@ -489,6 +494,7 @@ export default function ServicesPage() {
           is_active: true,
           is_quote_only: editExtraIsQuoteOnly,
           is_popular: editExtraIsPopular,
+          is_quantifiable: editExtraIsQuoteOnly ? false : editExtraIsQuantifiable,
           sort_order: allExtras.length,
         }).select('id').single()
         if (error || !newEx) throw new Error(error?.message || 'Failed to create add-on')
@@ -910,6 +916,18 @@ export default function ServicesPage() {
                   className={`w-9 h-5 rounded-full transition-colors cursor-pointer relative flex-shrink-0 ml-4 ${editExtraIsQuoteOnly ? 'bg-brand-500' : 'bg-gray-300'}`}
                 >
                   <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editExtraIsQuoteOnly ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+              <div className={`col-span-2 flex items-center justify-between py-1${editExtraIsQuoteOnly ? ' opacity-40 pointer-events-none' : ''}`}>
+                <div>
+                  <span className="text-xs font-medium text-gray-700">Quantifiable</span>
+                  <p className="text-xs text-gray-400">Customer can choose a quantity — price multiplies (e.g. per bedroom, per blind)</p>
+                </div>
+                <div
+                  onClick={() => !editExtraIsQuoteOnly && setEditExtraIsQuantifiable(v => !v)}
+                  className={`w-9 h-5 rounded-full transition-colors cursor-pointer relative flex-shrink-0 ml-4 ${editExtraIsQuantifiable && !editExtraIsQuoteOnly ? 'bg-brand-500' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editExtraIsQuantifiable && !editExtraIsQuoteOnly ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </div>
               </div>
               <div className="col-span-2">

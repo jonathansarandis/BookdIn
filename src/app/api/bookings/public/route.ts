@@ -153,23 +153,27 @@ export async function POST(request: NextRequest) {
     //   Extras must be (a) enabled for this location and (b) mapped to this service.
     let extraDetails: any[] = []
     if (extras?.length > 0) {
+      const extraIds: string[] = extras.map((e: any) => e.id)
+      const extrasQtyMap: Record<string, number> = {}
+      for (const e of extras) extrasQtyMap[e.id] = e.quantity ?? 1
+
       const [{ data: locExtRows }, { data: extRows }, { data: svcExtRows }] = await Promise.all([
         supabase
           .from('location_extras')
           .select('extra_id, price')
           .eq('location_id', location.id)
-          .in('extra_id', extras)
+          .in('extra_id', extraIds)
           .eq('is_enabled', true),
         supabase
           .from('extras')
           .select('id, name, default_price, is_quote_only')
-          .in('id', extras)
+          .in('id', extraIds)
           .eq('business_id', business_id),
         supabase
           .from('service_extras')
           .select('extra_id, price_override')
           .eq('service_id', service_id)
-          .in('extra_id', extras),
+          .in('extra_id', extraIds),
       ])
 
       const locPriceMap: Record<string, number | null> = {}
@@ -188,6 +192,7 @@ export async function POST(request: NextRequest) {
           name: ex.name,
           price: locPriceMap[ex.id] ?? svcOverrideMap[ex.id] ?? ex.default_price,
           is_quote_only: ex.is_quote_only,
+          quantity: extrasQtyMap[ex.id] ?? 1,
         }))
     }
 
@@ -201,7 +206,7 @@ export async function POST(request: NextRequest) {
       },
       bedrooms: service.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
       bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
-      selectedExtras: extraDetails.map(ex => ({ price: ex.price, is_quote_only: ex.is_quote_only })),
+      selectedExtras: extraDetails.map(ex => ({ price: ex.price, is_quote_only: ex.is_quote_only, quantity: ex.quantity })),
       roomPricing: service.room_pricing || [],
     })
     const discountedPrice = applyFrequencyDiscount(breakdown.total, discountPct)
@@ -346,6 +351,7 @@ export async function POST(request: NextRequest) {
           extra_id: ex.id,
           name: ex.name,
           price: ex.is_quote_only ? 0 : ex.price,
+          quantity: ex.quantity ?? 1,
         }))
       )
     }
