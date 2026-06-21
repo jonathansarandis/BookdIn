@@ -437,7 +437,7 @@ export default function BookingPage() {
           bathrooms: form.bathrooms,
           scheduled_at: scheduledAtIso,
           is_flexible_time: isFlexible,
-          extras: selectedExtras,
+          extras: Object.entries(extraQuantities).map(([id, qty]) => ({ id, quantity: qty })),
           custom_items: customItems,
           total_price: totalToCharge,
           tax_amount: taxCents,
