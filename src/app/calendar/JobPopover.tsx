@@ -118,8 +118,6 @@ export default function JobPopover({ job, businessTimezone, onClose }: Props) {
               <User className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-gray-900">{job?.customer?.full_name || '—'}</p>
-                {job?.customer?.email && <p className="text-xs text-gray-500">{job.customer.email}</p>}
-                {job?.customer?.phone && <p className="text-xs text-gray-500">{job.customer.phone}</p>}
               </div>
             </div>
 
