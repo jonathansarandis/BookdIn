@@ -51,18 +51,18 @@ export default async function DashboardPage() {
     supabase.from('jobs').select('id').eq('business_id', businessId).eq('payment_status', 'unpaid').not('status', 'in', '("cancelled")'),
     supabase.from('jobs').select('id').eq('business_id', businessId).is('provider_id', null).not('status', 'in', '("completed","cancelled")'),
     supabase.from('activity_logs').select('*').eq('business_id', businessId).order('created_at', { ascending: false }).limit(8),
-    supabase.from('jobs').select('total_price').eq('business_id', businessId).gte('scheduled_at', monthStart),
-    supabase.from('jobs').select('total_price').eq('business_id', businessId).gte('scheduled_at', lastMonthStart).lt('scheduled_at', lastMonthEnd),
-    supabase.from('jobs').select('total_price, created_at').eq('business_id', businessId).gte('created_at', thirtyDaysAgo).order('created_at'),
-    supabase.from('jobs').select('total_price').eq('business_id', businessId).gte('created_at', sixtyDaysAgo).lt('created_at', thirtyDaysAgo),
+    supabase.from('jobs').select('total_price, price_override').eq('business_id', businessId).gte('scheduled_at', monthStart),
+    supabase.from('jobs').select('total_price, price_override').eq('business_id', businessId).gte('scheduled_at', lastMonthStart).lt('scheduled_at', lastMonthEnd),
+    supabase.from('jobs').select('total_price, price_override, created_at').eq('business_id', businessId).gte('created_at', thirtyDaysAgo).order('created_at'),
+    supabase.from('jobs').select('total_price, price_override').eq('business_id', businessId).gte('created_at', sixtyDaysAgo).lt('created_at', thirtyDaysAgo),
     supabase.from('customers').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
     supabase.from('businesses').select('name').eq('id', businessId).single(),
   ])
 
-  const monthRevenue = monthJobs?.reduce((s, j) => s + (j.total_price || 0), 0) || 0
-  const lastMonthRevenue = lastMonthJobs?.reduce((s, j) => s + (j.total_price || 0), 0) || 0
-  const thirtyRevenue = thirtyDayJobs?.reduce((s, j) => s + (j.total_price || 0), 0) || 0
-  const prevThirtyRevenue = prevThirtyJobs?.reduce((s, j) => s + (j.total_price || 0), 0) || 0
+  const monthRevenue = monthJobs?.reduce((s, j) => s + (j.price_override ?? j.total_price ?? 0), 0) || 0
+  const lastMonthRevenue = lastMonthJobs?.reduce((s, j) => s + (j.price_override ?? j.total_price ?? 0), 0) || 0
+  const thirtyRevenue = thirtyDayJobs?.reduce((s, j) => s + (j.price_override ?? j.total_price ?? 0), 0) || 0
+  const prevThirtyRevenue = prevThirtyJobs?.reduce((s, j) => s + (j.price_override ?? j.total_price ?? 0), 0) || 0
 
   function pct(curr: number, prev: number) {
     if (prev === 0) return curr > 0 ? 100 : 0
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
   }
   for (const job of thirtyDayJobs || []) {
     const key = new Date(job.created_at).toISOString().slice(0, 10)
-    if (key in dailyRevenue) dailyRevenue[key] += (job.total_price || 0)
+    if (key in dailyRevenue) dailyRevenue[key] += (job.price_override ?? job.total_price ?? 0)
   }
   const chartValues = Object.values(dailyRevenue)
   const maxChart = Math.max(...chartValues, 1)
@@ -237,7 +237,7 @@ export default async function DashboardPage() {
                         <p className="text-xs text-blue-500">Booking details</p>
                       </div>
                     </div>
-                    <span className="text-sm font-bold text-gray-900">${((job.total_price || 0) / 100).toFixed(2)}</span>
+                    <span className="text-sm font-bold text-gray-900">${((job.price_override ?? job.total_price ?? 0) / 100).toFixed(2)}</span>
                   </div>
                   <div className="ml-3 space-y-0.5">
                     <div className="flex justify-between text-xs">

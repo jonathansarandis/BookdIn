@@ -125,7 +125,7 @@ export default function ReportsPage() {
     // Current period jobs
     const { data: currentJobs } = await supabase
       .from('jobs')
-      .select('id, total_price, payment_status, scheduled_at, service:services(name), customer:customers(full_name)')
+      .select('id, total_price, price_override, payment_status, scheduled_at, service:services(name), customer:customers(full_name)')
       .eq('business_id', businessId)
       .gte('scheduled_at', startDate.toISOString())
       .order('scheduled_at', { ascending: false })
@@ -133,7 +133,7 @@ export default function ReportsPage() {
     // Previous period jobs
     const { data: prevJobs } = await supabase
       .from('jobs')
-      .select('id, total_price')
+      .select('id, total_price, price_override')
       .eq('business_id', businessId)
       .gte('scheduled_at', prevStartDate.toISOString())
       .lt('scheduled_at', prevEndDate.toISOString())
@@ -151,8 +151,8 @@ export default function ReportsPage() {
       .eq('business_id', businessId)
       .gte('created_at', startDate.toISOString())
 
-    const currentRevenue = currentJobs?.reduce((sum, j) => sum + (j.total_price || 0), 0) || 0
-    const prevRevenue = prevJobs?.reduce((sum, j) => sum + (j.total_price || 0), 0) || 0
+    const currentRevenue = currentJobs?.reduce((sum, j) => sum + (j.price_override ?? j.total_price ?? 0), 0) || 0
+    const prevRevenue = prevJobs?.reduce((sum, j) => sum + (j.price_override ?? j.total_price ?? 0), 0) || 0
     const avgJobValue = currentJobs?.length ? Math.round(currentRevenue / currentJobs.length) : 0
 
     // Top services
@@ -161,7 +161,7 @@ export default function ReportsPage() {
       const name = job.service?.name || 'Unknown'
       if (!serviceCounts[name]) serviceCounts[name] = { name, count: 0, revenue: 0 }
       serviceCounts[name].count++
-      serviceCounts[name].revenue += job.total_price || 0
+      serviceCounts[name].revenue += job.price_override ?? job.total_price ?? 0
     }
     const topSvcs = Object.values(serviceCounts).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
 
@@ -169,14 +169,14 @@ export default function ReportsPage() {
     const monthly: Record<string, number> = {}
     const { data: allJobs } = await supabase
       .from('jobs')
-      .select('total_price, scheduled_at')
+      .select('total_price, price_override, scheduled_at')
       .eq('business_id', businessId)
       .gte('scheduled_at', new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString())
 
     for (const job of allJobs || []) {
       const d = new Date(job.scheduled_at)
       const key = `${d.getFullYear()}-${d.getMonth()}`
-      monthly[key] = (monthly[key] || 0) + (job.total_price || 0)
+      monthly[key] = (monthly[key] || 0) + (job.price_override ?? job.total_price ?? 0)
     }
 
     const monthlyData = []
@@ -424,7 +424,7 @@ export default function ReportsPage() {
                   <td className="px-5 py-3 text-gray-900 font-medium">{job.customer?.full_name || '—'}</td>
                   <td className="px-5 py-3 text-gray-500">{job.service?.name || '—'}</td>
                   <td className="px-5 py-3 text-gray-500">{job.scheduled_at ? formatDate(job.scheduled_at) : '—'}</td>
-                  <td className="px-5 py-3 text-right font-medium text-gray-900">{formatCurrency(job.total_price || 0)}</td>
+                  <td className="px-5 py-3 text-right font-medium text-gray-900">{formatCurrency(job.price_override ?? job.total_price ?? 0)}</td>
                 </tr>
               ))}
             </tbody>

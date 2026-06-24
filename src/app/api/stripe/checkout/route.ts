@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
       if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
-      amount = job.total_price || 0
+      amount = job.price_override ?? job.total_price ?? 0
       description = `${job.service?.name || 'Service'} - ${business?.name || 'BookdIn'}`
       customerEmail = job.customer?.email || ''
       returnPath = `/jobs/${jobId}`

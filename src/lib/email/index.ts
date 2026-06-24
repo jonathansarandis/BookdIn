@@ -95,8 +95,11 @@ export async function sendBookingConfirmation(params: {
         ? "Flexible — we'll confirm a specific time closer to your booking"
         : formatBusinessDateTime(params.job.scheduled_at, tz, 'h:mm a')
 
-      const taxCents = params.job.tax_amount ?? 0
-      const subtotalCents = params.job.total_price - taxCents
+      // price_override is an all-in figure with unknown tax composition here, so when
+      // present we treat it as inclusive and zero the GST/subtotal split (see templates.ts).
+      const displayTotalCents = params.job.price_override ?? params.job.total_price
+      const taxCents = params.job.price_override != null ? 0 : (params.job.tax_amount ?? 0)
+      const subtotalCents = displayTotalCents - taxCents
       const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`
 
       const vars: Record<string, string> = {
@@ -107,7 +110,7 @@ export async function sendBookingConfirmation(params: {
         address:             `${params.address.line1}, ${params.address.city} ${params.address.state} ${params.address.postcode}`,
         subtotal:            fmt(subtotalCents),
         gst:                 fmt(taxCents),
-        total:               fmt(params.job.total_price),
+        total:               fmt(displayTotalCents),
         business_name:       params.business.name,
         cancellation_fee:    `$${(cancellationFeeCents / 100).toFixed(0)}`,
         cancellation_cutoff: cancellationCutoff,

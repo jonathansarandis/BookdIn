@@ -434,6 +434,7 @@ export async function POST(request: NextRequest) {
               id: job.id,
               scheduled_at: scheduledAtIso,
               total_price: taxSplit.total,
+              price_override: null,
               tax_amount: taxSplit.tax,
               is_flexible_time: isFlexible,
             },

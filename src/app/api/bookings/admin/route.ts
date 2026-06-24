@@ -446,7 +446,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Confirmation email — fetch customer + address for email assembly
     const { data: jobForEmail } = await admin
       .from('jobs')
-      .select('customer:customers(full_name, email, phone), address:addresses(line1, city, state, postcode)')
+      .select('price_override, customer:customers(full_name, email, phone), address:addresses(line1, city, state, postcode)')
       .eq('id', job.id)
       .single()
 
@@ -464,6 +464,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             id: job.id,
             scheduled_at,
             total_price: taxSplit.total,
+            price_override: jobForEmail?.price_override ?? null,
             tax_amount: taxSplit.tax,
             is_flexible_time: is_flexible_time ?? false,
           },

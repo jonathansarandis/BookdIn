@@ -187,7 +187,7 @@ export default function JobPopover({ job, businessTimezone, onClose }: Props) {
           {/* Footer */}
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
             <p className="text-sm font-semibold text-gray-900">
-              ${((job?.total_price || job?.price || 0) / 100).toFixed(2)}
+              ${(((job?.price_override ?? job?.total_price ?? job?.price ?? 0)) / 100).toFixed(2)}
             </p>
             <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', PAYMENT_CHIP[paymentStatus] || 'bg-gray-100 text-gray-600')}>
               {PAYMENT_LABELS[paymentStatus] || paymentStatus}

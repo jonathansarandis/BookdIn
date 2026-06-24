@@ -20,6 +20,7 @@ interface JobEmailRow {
   id: string
   scheduled_at: string
   total_price: number
+  price_override: number | null
   tax_amount: number
   payment_status: string | null
   customer: { full_name: string; email: string } | null
@@ -79,7 +80,7 @@ export async function POST(
   const { data: rawJob } = await admin
     .from('jobs')
     .select(`
-      id, scheduled_at, total_price, tax_amount, payment_status,
+      id, scheduled_at, total_price, price_override, tax_amount, payment_status,
       customer:customers(full_name, email),
       service:services(name),
       address:addresses(line1, city, state, postcode),
@@ -105,6 +106,7 @@ export async function POST(
       id: job.id,
       scheduled_at: job.scheduled_at,
       total_price: job.total_price,
+      price_override: job.price_override,
       tax_amount: job.tax_amount,
     },
     customer: job.customer,

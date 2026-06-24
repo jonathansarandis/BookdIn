@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     // Create PaymentIntent with manual capture (holds funds, captures day before service)
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: job.total_price,
+      amount: job.price_override ?? job.total_price,
       currency: 'aud',
       payment_method: paymentMethodId,
       capture_method: 'manual',

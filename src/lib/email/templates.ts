@@ -43,6 +43,7 @@ export interface JobEmailData {
   id: string
   scheduled_at: string
   total_price: number
+  price_override?: number | null
   tax_amount?: number | null
   is_flexible_time?: boolean
 }
@@ -158,9 +159,13 @@ function bookingSummaryTable(
   const timeStr = job.is_flexible_time
     ? "Flexible — we'll confirm closer to your booking"
     : formatBusinessDateTime(job.scheduled_at, business.timezone, 'h:mm a')
-  const taxCents = job.tax_amount ?? 0
+  // When an operator sets a manual price_override, it's an all-in figure whose tax
+  // composition is unknown here (no tax rate/mode in the email layer), so we treat it
+  // as inclusive and suppress the GST/subtotal breakdown rather than show stale tax.
+  const displayTotalCents = job.price_override ?? job.total_price
+  const taxCents = job.price_override != null ? 0 : (job.tax_amount ?? 0)
   const showTax = taxCents > 0
-  const subtotalCents = job.total_price - taxCents
+  const subtotalCents = displayTotalCents - taxCents
   const taxLabel = business.tax_name || 'Tax'
 
   const labelStyle = 'margin:0 0 2px;color:#8a8275;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;'
@@ -211,7 +216,7 @@ function bookingSummaryTable(
       <tr>
         <td style="padding:14px 16px;background-color:#f0ebe3;">
           <p style="${labelStyle}">Total</p>
-          <p style="margin:0;color:#1a1a1a;font-size:17px;font-weight:600;">${formatMoney(job.total_price, business.currency)}</p>
+          <p style="margin:0;color:#1a1a1a;font-size:17px;font-weight:600;">${formatMoney(displayTotalCents, business.currency)}</p>
         </td>
       </tr>
     </table>`
@@ -345,7 +350,7 @@ export function bookingConfirmationTemplate(data: {
     `Date: ${dateStr}`,
     `Time: ${timeStr}`,
     `Address: ${formatAddr(address)}`,
-    `Total: ${formatMoney(job.total_price, business.currency)}`,
+    `Total: ${formatMoney(job.price_override ?? job.total_price, business.currency)}`,
     '',
     cardSetupUrl
       ? `Add your card on file: ${cardSetupUrl}`
@@ -529,7 +534,7 @@ export function reminderTemplate(data: {
     `Date: ${dateStr}`,
     `Time: ${timeStr}`,
     `Address: ${formatAddr(address)}`,
-    `Total: ${formatMoney(job.total_price, business.currency)}`,
+    `Total: ${formatMoney(job.price_override ?? job.total_price, business.currency)}`,
     '',
     'Please ensure someone is home and the property is accessible.',
     '',

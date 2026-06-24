@@ -190,7 +190,7 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-medium text-gray-900">{formatCurrency(job.price)}</p>
+                      <p className="text-sm font-medium text-gray-900">{formatCurrency(job.price_override ?? job.total_price ?? job.price)}</p>
                       <p className="text-xs text-gray-400">{formatDate(job.scheduled_at)}</p>
                     </div>
                     <span className={cn('status-pill', JOB_STATUS_COLORS[job.status])}>

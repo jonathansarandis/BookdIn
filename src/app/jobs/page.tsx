@@ -254,7 +254,7 @@ export default async function JobsPage({
                     </td>
                     <td className="px-4 py-3.5 hidden md:table-cell">
                       <Link href={`/jobs/${job.id}`} style={{ textDecoration: 'none' }}>
-                        <span className="text-sm font-semibold text-gray-900">{formatCurrency(job.total_price || job.price || 0)}</span>
+                        <span className="text-sm font-semibold text-gray-900">{formatCurrency(job.price_override ?? job.total_price ?? job.price ?? 0)}</span>
                       </Link>
                     </td>
                     <td className="px-4 py-3.5 hidden lg:table-cell">
