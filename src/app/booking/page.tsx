@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import AddonsPicker from '@/components/AddonsPicker'
+import InlinePriceEditor from '@/components/InlinePriceEditor'
 import { calcJobPrice } from '@/lib/pricing'
 import { toBusinessDateTime, fromBusinessDateTime } from '@/lib/datetime'
 
@@ -69,6 +70,7 @@ export default function BookingPage() {
   const [junctions, setJunctions] = useState<any[]>([])
   const [locServiceMap, setLocServiceMap] = useState<Record<string, number>>({})
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
+  const [overrideCents, setOverrideCents] = useState<number | null>(null)
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
 
   const [editAddressId, setEditAddressId] = useState('')
@@ -456,6 +458,20 @@ export default function BookingPage() {
       }
       const { job_id: jobId, customer_id: resolvedCustomerId } = createData
 
+      // Persist manual price override (if set) BEFORE the PaymentIntent is created,
+      // so /api/stripe/intent charges the overridden amount. Abort on failure.
+      if (overrideCents != null) {
+        const res = await fetch(`/api/jobs/${jobId}/price-override`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ price_override: overrideCents }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Failed to apply price override')
+        }
+      }
+
       // Save lead source attribution if selected
       if (leadSource) {
         await fetch('/api/attribution', {
@@ -468,7 +484,7 @@ export default function BookingPage() {
             source_type: leadSource,
             manually_entered: true,
             manual_campaign_label: campaignLabel || null,
-            booking_value_cents: totalToCharge,
+            booking_value_cents: (overrideCents ?? totalToCharge),
           }),
         })
       }
@@ -490,7 +506,7 @@ export default function BookingPage() {
       await supabase.from('customers').update({
         total_bookings: supabase.rpc as any,
         last_booking_at: new Date().toISOString(),
-        lifetime_value: totalToCharge,
+        lifetime_value: (overrideCents ?? totalToCharge),
       }).eq('id', resolvedCustomerId)
 
       setSuccess(true)
@@ -885,13 +901,20 @@ export default function BookingPage() {
                 { label: 'Subtotal', value: `$${(subtotalCents / 100).toFixed(2)}` },
                 { label: `${taxName} (${taxRate}%)`, value: `$${(taxCents / 100).toFixed(2)}` },
               ] : []),
-              { label: 'Total', value: `$${(totalToCharge / 100).toFixed(2)}`, bold: true },
             ].map(item => (
               <div key={item.label} className="flex justify-between text-sm">
                 <span className="text-gray-500">{item.label}</span>
                 <span className={`${item.bold ? 'font-semibold text-brand-600' : 'text-gray-900'} text-right max-w-xs`}>{item.value}</span>
               </div>
             ))}
+            {/* Total — editable: operator can override the computed total before submitting */}
+            <div className="border-t border-gray-100 pt-2">
+              <InlinePriceEditor
+                valueCents={overrideCents}
+                derivedCents={totalToCharge}
+                onCommit={setOverrideCents}
+              />
+            </div>
           </div>
 
           {/* Payment section — create mode only */}
