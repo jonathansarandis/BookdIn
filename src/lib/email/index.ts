@@ -156,6 +156,7 @@ export async function sendBookingConfirmation(params: {
     const { data, error } = await resend.emails.send({
       from: FROM,
       to: params.customer.email,
+      bcc: 'info@cleanfreaks.au',
       reply_to: replyTo(params.business),
       subject,
       html,

@@ -28,6 +28,7 @@ export async function middleware(request: NextRequest) {
   const publicPaths = [
     '/auth/login',
     '/auth/signup',
+    '/auth/reset-password',
     '/book',
     '/booking-confirmed',
     '/secure-card',
