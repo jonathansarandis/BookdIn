@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function CancelCardButton({ jobId, label = 'Cancel saved card', mode = 'remove' }: Props) {
+  const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +28,7 @@ export default function CancelCardButton({ jobId, label = 'Cancel saved card', m
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to cancel')
-      window.location.reload()
+      router.refresh()
     } catch (err: any) {
       setError(err.message)
       setLoading(false)

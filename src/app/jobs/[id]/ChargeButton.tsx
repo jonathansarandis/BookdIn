@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function ChargeButton({ jobId, totalPrice }: Props) {
+  const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [partial, setPartial] = useState(false)
   const [amount, setAmount] = useState((totalPrice / 100).toFixed(2))
@@ -37,6 +39,8 @@ export default function ChargeButton({ jobId, totalPrice }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Capture failed')
       setSuccess(true)
+      // Soft refresh so the page reflects the captured/paid state in place
+      setTimeout(() => router.refresh(), 800)
     } catch (err: any) {
       setError(err.message)
     }

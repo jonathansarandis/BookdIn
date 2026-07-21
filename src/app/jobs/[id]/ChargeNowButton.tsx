@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function ChargeNowButton({ jobId, totalPrice, label = 'Charge directly' }: Props) {
+  const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -26,7 +28,7 @@ export default function ChargeNowButton({ jobId, totalPrice, label = 'Charge dir
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Charge failed')
       setSuccess(true)
-      setTimeout(() => window.location.reload(), 800)
+      setTimeout(() => router.refresh(), 800)
     } catch (err: any) {
       setError(err.message)
     } finally {

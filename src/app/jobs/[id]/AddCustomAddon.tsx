@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export default function AddCustomAddon({ jobId }: Props) {
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
@@ -35,8 +37,9 @@ export default function AddCustomAddon({ jobId }: Props) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Request failed'); return }
-      // TODO: replace with router.refresh() for soft refresh post-launch
-      window.location.reload()
+      // Soft refresh: re-render the server page in place instead of a full reload
+      handleClose()
+      router.refresh()
     } catch (err: any) {
       setError(err.message || 'Network error')
     } finally {

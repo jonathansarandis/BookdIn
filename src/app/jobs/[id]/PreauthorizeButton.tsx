@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function PreauthorizeButton({ jobId, label = 'Pre-authorize now' }: Props) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +22,8 @@ export default function PreauthorizeButton({ jobId, label = 'Pre-authorize now' 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Pre-authorization failed')
       setSuccess(true)
-      setTimeout(() => window.location.reload(), 800)
+      // Soft refresh: re-render the server page in place instead of a full reload
+      setTimeout(() => router.refresh(), 800)
     } catch (err: any) {
       setError(err.message)
     } finally {
