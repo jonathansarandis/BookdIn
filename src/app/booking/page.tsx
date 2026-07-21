@@ -298,14 +298,16 @@ export default function BookingPage() {
     }))
     .sort((a: any, b: any) => a.sort_order - b.sort_order)
 
-  // Derive room counts from room_pricing embedded in the service row
+  // Derive room counts from room_pricing embedded in the service row.
+  // Rows can now exist per-location as well as at the default scope, so dedupe
+  // the counts (a count offered at any scope is offered) to avoid duplicates.
   const bedroomCounts = (() => {
-    const counts = (selectedService?.room_pricing || []).filter((r: any) => r.type === 'bedroom').map((r: any) => r.count).sort((a: number, b: number) => a - b)
+    const counts = [...new Set((selectedService?.room_pricing || []).filter((r: any) => r.type === 'bedroom').map((r: any) => r.count))].sort((a: number, b: number) => a - b)
     return counts.length > 0 ? counts : [1, 2, 3, 4, 5]
   })()
 
   const bathroomCounts = (() => {
-    const counts = (selectedService?.room_pricing || []).filter((r: any) => r.type === 'bathroom').map((r: any) => r.count).sort((a: number, b: number) => a - b)
+    const counts = [...new Set((selectedService?.room_pricing || []).filter((r: any) => r.type === 'bathroom').map((r: any) => r.count))].sort((a: number, b: number) => a - b)
     return counts.length > 0 ? counts : [1, 2, 3]
   })()
 
@@ -324,6 +326,7 @@ export default function BookingPage() {
         .filter((ex: any) => (extraQuantities[ex.id] ?? 0) > 0 && !ex.is_quote_only)
         .map((ex: any) => ({ price: ex.price, quantity: extraQuantities[ex.id] ?? 1 })),
       roomPricing: selectedService?.room_pricing || [],
+      locationId: locationId || null,
     })
     const freqDisc = getFreqDiscount(form.frequency)
     const discount = freqDisc > 0 ? Math.round(breakdown.total * freqDisc / 100) : 0

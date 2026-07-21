@@ -43,23 +43,47 @@ export async function POST(
 
   const body = await request.json()
   const { bedroomPrices, bathroomPrices } = body
+  // locationId scopes this save to one location. null/undefined = the
+  // service-level default set (location_id IS NULL). A specific id overrides
+  // for that location only. Saving one scope must never touch the others.
+  const locationId: string | null = body.locationId ?? null
 
-  // Delete existing room pricing for this service
-  const { error: deleteError } = await serviceClient
+  // If scoped to a specific location, make sure it belongs to this business.
+  if (locationId != null) {
+    const { data: location } = await serviceClient
+      .from('locations')
+      .select('id, business_id')
+      .eq('id', locationId)
+      .single()
+
+    if (!location || location.business_id !== profile.business_id) {
+      return NextResponse.json({ error: 'Location not found' }, { status: 404 })
+    }
+  }
+
+  // Delete only the rows in this (service, location) scope.
+  // location_id IS NULL needs .is(); a specific id needs .eq().
+  let deleteQuery = serviceClient
     .from('room_pricing')
     .delete()
     .eq('service_id', params.id)
+  deleteQuery = locationId == null
+    ? deleteQuery.is('location_id', null)
+    : deleteQuery.eq('location_id', locationId)
+
+  const { error: deleteError } = await deleteQuery
 
   if (deleteError) {
     console.error('Delete error:', deleteError)
     return NextResponse.json({ error: deleteError.message }, { status: 500 })
   }
 
-  // Insert new room pricing
+  // Insert new room pricing for this scope
   const rows = [
     ...bedroomPrices.map((b: any) => ({
       service_id: params.id,
       business_id: profile.business_id,
+      location_id: locationId,
       type: 'bedroom',
       count: b.count,
       price: Math.round(parseFloat(b.price || '0') * 100),
@@ -67,6 +91,7 @@ export async function POST(
     ...bathroomPrices.map((b: any) => ({
       service_id: params.id,
       business_id: profile.business_id,
+      location_id: locationId,
       type: 'bathroom',
       count: b.count,
       price: Math.round(parseFloat(b.price || '0') * 100),

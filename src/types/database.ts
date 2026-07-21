@@ -128,6 +128,28 @@ export interface Database {
         }>
       }
 
+      room_pricing: {
+        Row: {
+          id: string
+          service_id: string | null
+          business_id: string | null
+          location_id: string | null
+          type: string
+          count: number
+          price: number
+        }
+        Insert: {
+          id?: string
+          service_id: string | null
+          business_id: string | null
+          location_id?: string | null
+          type: string
+          count: number
+          price?: number
+        }
+        Update: Partial<Database['public']['Tables']['room_pricing']['Insert']>
+      }
+
       services: {
         Row: {
           id: string
@@ -353,6 +375,7 @@ export type Profile = Database['public']['Tables']['profiles']['Row']
 export type Customer = Database['public']['Tables']['customers']['Row']
 export type Address = Database['public']['Tables']['addresses']['Row']
 export type Service = Database['public']['Tables']['services']['Row']
+export type RoomPricing = Database['public']['Tables']['room_pricing']['Row']
 export type ServiceExtra = Database['public']['Tables']['service_extras']['Row']
 export type Provider = Database['public']['Tables']['providers']['Row']
 export type Job = Database['public']['Tables']['jobs']['Row']

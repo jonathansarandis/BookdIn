@@ -144,6 +144,7 @@ export default function BookingFormRenderer({
         bathrooms: svc.pricing_type === 'room_based' ? values.room_counts.bathrooms : null,
         selectedExtras: selectedExtraObjects.map((ex: any) => ({ price: ex.price, is_quote_only: ex.is_quote_only, quantity: ex.quantity })),
         roomPricing: roomPricing,
+        locationId: locationId || null,
       })
 
       const discountPct = svc.frequency_discount_eligible !== false

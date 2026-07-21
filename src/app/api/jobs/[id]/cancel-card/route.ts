@@ -9,9 +9,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
+  // mode 'release' = cancel the pre-auth hold but KEEP the saved card on file
+  //                  (returns the job to card_on_file so it can be re-authorized).
+  // mode 'remove'  = detach the card from this job (auth_released).
+  // Default is 'release' — the safe, non-destructive behaviour.
+  const body = await req.json().catch(() => ({}))
+  const mode: 'release' | 'remove' = body?.mode === 'remove' ? 'remove' : 'release'
+
   const userClient = createClient()
   const { data: { user } } = await userClient.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -43,9 +50,14 @@ export async function POST(
     return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   }
 
-  if (job.payment_status !== 'authorized') {
+  // Releasing a hold requires an active authorization. Removing a card is also
+  // valid straight from card_on_file (no active hold to release).
+  const allowedStatuses = mode === 'remove'
+    ? ['authorized', 'card_on_file']
+    : ['authorized']
+  if (!allowedStatuses.includes(job.payment_status)) {
     return NextResponse.json(
-      { error: `Cannot release pre-auth — payment status is '${job.payment_status}'` },
+      { error: `Cannot ${mode === 'remove' ? 'remove card' : 'release pre-auth'} — payment status is '${job.payment_status}'` },
       { status: 409 }
     )
   }
@@ -62,9 +74,13 @@ export async function POST(
     }
   }
 
+  // release -> back to card_on_file (card stays, can be re-authorized).
+  // remove  -> auth_released (card detached from this job's active flow).
+  const newStatus = mode === 'remove' ? 'auth_released' : 'card_on_file'
+
   const { data: updated, error: updateError } = await admin
     .from('jobs')
-    .update({ payment_status: 'auth_released' })
+    .update({ payment_status: newStatus })
     .eq('id', params.id)
     .select('id, payment_status, stripe_payment_method_id, stripe_customer_id, stripe_payment_intent_id')
     .single()
@@ -74,6 +90,6 @@ export async function POST(
     return NextResponse.json({ error: 'DB update failed — contact support' }, { status: 500 })
   }
 
-  console.log(`[cancel-card] auth_released for job ${params.id}:`, JSON.stringify(updated))
+  console.log(`[cancel-card] mode=${mode} -> ${newStatus} for job ${params.id}:`, JSON.stringify(updated))
   return NextResponse.json({ success: true, job: updated })
 }

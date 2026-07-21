@@ -241,6 +241,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
       selectedExtras: extraDetails.map(ex => ({ price: ex.price, is_quote_only: ex.is_quote_only, quantity: ex.quantity })),
       roomPricing: service.room_pricing || [],
+      locationId: location_id || null,
     })
     const discountedPrice = applyFrequencyDiscount(breakdown.total, discountPct)
     const customItemsTotal = Array.isArray(custom_items)

@@ -18,6 +18,7 @@ export type PricingType = 'fixed' | 'room_based' | 'hourly' | 'sqft_based' | 'cu
 export type RoomPricingRow = {
   id: string
   service_id: string
+  location_id?: string | null   // null/absent = service-level default; set = per-location override
   type: string   // 'bedroom' | 'bathroom' in practice; kept as string for forward-compat
   count: number
   price: number  // cents
@@ -34,6 +35,7 @@ export type PriceInput = {
   bathrooms?: number | null
   selectedExtras: Array<{ price: number; is_quote_only?: boolean; quantity?: number }>  // cents each
   roomPricing: RoomPricingRow[]             // all room_pricing rows for this service
+  locationId?: string | null                // selected location; picks per-location adders, falls back to default
 }
 
 export type PriceBreakdown = {
@@ -48,14 +50,26 @@ export type PriceBreakdown = {
  * Look up the price adder for a specific room type + count from a set of
  * room_pricing rows. Returns 0 when no matching row is configured — consistent
  * with the public booking form's getRoomPrice() fallback.
+ *
+ * Location resolution (Path 1, per-location adders):
+ *   - When locationId is provided, a row matching that location wins.
+ *   - Otherwise (or if no location-specific row exists) the service-level
+ *     default row (location_id null/absent) is used.
+ * This keeps existing service-level pricing working unchanged: with all rows
+ * at location_id null, behaviour is identical to before.
  */
 export function lookupRoomPrice(
   rows: RoomPricingRow[],
   roomType: string,
   count: number,
+  locationId?: string | null,
 ): number {
-  const match = rows.find(r => r.type === roomType && r.count === count)
-  return match?.price ?? 0
+  const forType = rows.filter(r => r.type === roomType && r.count === count)
+  const specific = locationId != null
+    ? forType.find(r => r.location_id === locationId)
+    : undefined
+  const fallback = forType.find(r => r.location_id == null)
+  return (specific ?? fallback)?.price ?? 0
 }
 
 /**
@@ -65,7 +79,7 @@ export function lookupRoomPrice(
  * All arithmetic is integer cents — no floating point.
  */
 export function calcJobPrice(input: PriceInput): PriceBreakdown {
-  const { service, bedrooms, bathrooms, selectedExtras, roomPricing } = input
+  const { service, bedrooms, bathrooms, selectedExtras, roomPricing, locationId } = input
 
   const base = service.base_price
 
@@ -75,8 +89,8 @@ export function calcJobPrice(input: PriceInput): PriceBreakdown {
   // we maintain that behaviour here.
   let rooms = 0
   if (service.pricing_type === 'room_based') {
-    const bedroomAdder  = bedrooms  != null ? lookupRoomPrice(roomPricing, 'bedroom',  bedrooms)  : 0
-    const bathroomAdder = bathrooms != null ? lookupRoomPrice(roomPricing, 'bathroom', bathrooms) : 0
+    const bedroomAdder  = bedrooms  != null ? lookupRoomPrice(roomPricing, 'bedroom',  bedrooms,  locationId) : 0
+    const bathroomAdder = bathrooms != null ? lookupRoomPrice(roomPricing, 'bathroom', bathrooms, locationId) : 0
     rooms = bedroomAdder + bathroomAdder
   }
 

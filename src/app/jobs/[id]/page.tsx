@@ -410,7 +410,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             {paymentStatus === 'authorized' && (
               <div className="space-y-2">
                 <ChargeButton jobId={job.id} totalPrice={chargeableCents} />
-                <CancelCardButton jobId={job.id} label="Cancel pre-authorization" />
+                <CancelCardButton jobId={job.id} label="Cancel pre-authorization" mode="release" />
               </div>
             )}
 
@@ -482,7 +482,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                         <div className="opacity-80">
                           <ChargeNowButton jobId={child.id} totalPrice={child.total_price} label="Capture payment" />
                         </div>
-                        <CancelCardButton jobId={child.id} label="Cancel pre-authorization" />
+                        <CancelCardButton jobId={child.id} label="Cancel pre-authorization" mode="release" />
                       </div>
                     )}
                     {child.payment_status === 'paid' && (

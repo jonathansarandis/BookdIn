@@ -44,6 +44,37 @@ export default function EditServicePage() {
     { count: 3, price: '0' },
   ])
 
+  // Per-location room pricing (VA Request 8, Path 1).
+  // roomLocationId '' = the service-level default set (location_id NULL).
+  // A specific id edits that location's overrides. allRoomRows caches every
+  // scope so switching locations doesn't refetch.
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [roomLocationId, setRoomLocationId] = useState('')
+  const [allRoomRows, setAllRoomRows] = useState<any[]>([])
+
+  // Build the bedroom/bathroom editor rows for a given location scope.
+  // A specific location with no overrides yet inherits the default set as a
+  // starting point, so operators edit *from* the inherited prices.
+  function applyRoomScope(rows: any[], locId: string) {
+    const norm = locId || null
+    const pick = (type: string) => {
+      let subset = rows.filter(r => r.type === type && r.location_id === norm)
+      if (subset.length === 0 && norm !== null) {
+        subset = rows.filter(r => r.type === type && r.location_id == null)
+      }
+      return subset.sort((a, b) => a.count - b.count)
+    }
+    const beds = pick('bedroom')
+    const baths = pick('bathroom')
+    if (beds.length) setBedroomPrices(beds.map(b => ({ count: b.count, price: (b.price / 100).toFixed(2) })))
+    if (baths.length) setBathroomPrices(baths.map(b => ({ count: b.count, price: (b.price / 100).toFixed(2) })))
+  }
+
+  function onChangeRoomLocation(locId: string) {
+    setRoomLocationId(locId)
+    applyRoomScope(allRoomRows, locId)
+  }
+
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -97,17 +128,25 @@ export default function EditServicePage() {
         is_quote_only: ex.is_quote_only ?? false,
       })) || [])
 
-      // Load room pricing
+      // Load business locations for the per-location room pricing selector
+      const { data: locs } = await supabase
+        .from('locations')
+        .select('id, name')
+        .eq('business_id', profile?.business_id)
+        .eq('is_active', true)
+        .order('name')
+      setLocations(locs || [])
+
+      // Load ALL room pricing rows (every location scope) for this service
       const { data: roomPricing } = await supabase
         .from('room_pricing')
         .select('*')
         .eq('service_id', serviceId)
 
       if (roomPricing?.length) {
-        const beds = roomPricing.filter(r => r.type === 'bedroom').sort((a, b) => a.count - b.count)
-        const baths = roomPricing.filter(r => r.type === 'bathroom').sort((a, b) => a.count - b.count)
-        if (beds.length) setBedroomPrices(beds.map(b => ({ count: b.count, price: (b.price / 100).toFixed(2) })))
-        if (baths.length) setBathroomPrices(baths.map(b => ({ count: b.count, price: (b.price / 100).toFixed(2) })))
+        setAllRoomRows(roomPricing)
+        // Start on the service-level default scope ('')
+        applyRoomScope(roomPricing, '')
       }
 
       setFetching(false)
@@ -189,7 +228,7 @@ export default function EditServicePage() {
         const res = await fetch(`/api/services/${serviceId}/room-pricing`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bedroomPrices, bathroomPrices }),
+          body: JSON.stringify({ bedroomPrices, bathroomPrices, locationId: roomLocationId || null }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Failed to save room pricing')
@@ -289,6 +328,29 @@ export default function EditServicePage() {
           {form.pricing_type === 'room_based' && (
             <div className="space-y-4 pt-2 border-t border-gray-100">
               <p className="text-xs text-gray-500">Set the additional price added for each bedroom/bathroom count. Base price = 1 bed / 1 bath.</p>
+
+              {/* Per-location scope selector — only when the business has locations */}
+              {locations.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Pricing for</label>
+                  <select
+                    value={roomLocationId}
+                    onChange={e => onChangeRoomLocation(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">All locations (default)</option>
+                    {locations.map(loc => (
+                      <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {roomLocationId
+                      ? 'Overrides the default for this location. Values start from the default until you save.'
+                      : 'Applies everywhere unless a location has its own prices below.'}
+                  </p>
+                </div>
+              )}
+
               <div>
                 <p className="text-xs font-medium text-gray-700 mb-2">Bedroom pricing (additional cost)</p>
                 <div className="space-y-2">

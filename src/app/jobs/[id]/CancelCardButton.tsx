@@ -5,9 +5,12 @@ import { Loader2 } from 'lucide-react'
 interface Props {
   jobId: string
   label?: string
+  // 'release' = cancel the pre-auth hold but keep the saved card on file.
+  // 'remove'  = detach the card from this job.
+  mode?: 'release' | 'remove'
 }
 
-export default function CancelCardButton({ jobId, label = 'Cancel saved card' }: Props) {
+export default function CancelCardButton({ jobId, label = 'Cancel saved card', mode = 'remove' }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -16,7 +19,11 @@ export default function CancelCardButton({ jobId, label = 'Cancel saved card' }:
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/jobs/${jobId}/cancel-card`, { method: 'POST' })
+      const res = await fetch(`/api/jobs/${jobId}/cancel-card`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to cancel')
       window.location.reload()
@@ -40,8 +47,8 @@ export default function CancelCardButton({ jobId, label = 'Cancel saved card' }:
   return (
     <div className="space-y-2 bg-red-50 rounded-xl p-3">
       <p className="text-xs text-red-700">
-        {label === 'Cancel pre-authorization'
-          ? 'This will release the pre-authorized hold and remove the saved card from this job.'
+        {mode === 'release'
+          ? 'This will release the pre-authorized hold. The saved card stays on file and can be pre-authorized again.'
           : 'This will remove the saved card from this job. The customer will need to re-enter their card.'}
       </p>
       {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
