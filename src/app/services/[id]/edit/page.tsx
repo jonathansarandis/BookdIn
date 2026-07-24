@@ -14,7 +14,7 @@ const PRICING_TYPES = [
   { value: 'sqft_based', label: 'Per sq ft',    desc: 'Based on property size' },
 ]
 
-interface Extra { id?: string; name: string; price: string; duration: string; is_popular: boolean; is_quote_only: boolean }
+interface Extra { id?: string; name: string; price: string; duration: string; is_popular: boolean; is_quote_only: boolean; is_quantifiable: boolean }
 interface RoomPrice { count: number; price: string }
 
 export default function EditServicePage() {
@@ -85,6 +85,7 @@ export default function EditServicePage() {
     weekend_fee: '0',
     travel_fee: '0',
     is_active: true,
+    frequency_discount_eligible: true,
   })
 
   function update(field: string, value: any) {
@@ -117,6 +118,7 @@ export default function EditServicePage() {
         weekend_fee: ((service.weekend_fee || 0) / 100).toFixed(2),
         travel_fee: ((service.travel_fee || 0) / 100).toFixed(2),
         is_active: service.is_active,
+        frequency_discount_eligible: service.frequency_discount_eligible ?? true,
       })
 
       setExtras(service.service_extras?.map((ex: any) => ({
@@ -126,6 +128,7 @@ export default function EditServicePage() {
         duration: ex.duration_minutes?.toString() || '0',
         is_popular: ex.is_popular ?? false,
         is_quote_only: ex.is_quote_only ?? false,
+        is_quantifiable: ex.is_quantifiable ?? false,
       })) || [])
 
       // Load business locations for the per-location room pricing selector
@@ -154,7 +157,7 @@ export default function EditServicePage() {
     load()
   }, [serviceId])
 
-  function addExtra() { setExtras(e => [...e, { name: '', price: '', duration: '0', is_popular: false, is_quote_only: false }]) }
+  function addExtra() { setExtras(e => [...e, { name: '', price: '', duration: '0', is_popular: false, is_quote_only: false, is_quantifiable: false }]) }
 
   function updateExtra(i: number, field: string, value: any) {
     setExtras(e => e.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex))
@@ -185,6 +188,7 @@ export default function EditServicePage() {
           weekend_fee: Math.round(parseFloat(form.weekend_fee || '0') * 100),
           travel_fee: Math.round(parseFloat(form.travel_fee || '0') * 100),
           is_active: form.is_active,
+          frequency_discount_eligible: form.frequency_discount_eligible,
         })
         .eq('id', serviceId)
 
@@ -207,6 +211,7 @@ export default function EditServicePage() {
             sort_order: i,
             is_popular: ex.is_popular,
             is_quote_only: ex.is_quote_only,
+            is_quantifiable: ex.is_quantifiable ?? false,
           }).eq('id', ex.id)
         } else {
           await supabase.from('service_extras').insert({
@@ -219,6 +224,7 @@ export default function EditServicePage() {
             is_active: true,
             is_popular: ex.is_popular ?? false,
             is_quote_only: ex.is_quote_only ?? false,
+            is_quantifiable: ex.is_quantifiable ?? false,
           })
         }
       }
@@ -405,6 +411,20 @@ export default function EditServicePage() {
               </div>
             ))}
           </div>
+
+          {/* Frequency discount toggle */}
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <div>
+              <p className="text-xs font-medium text-gray-700">Apply frequency discounts</p>
+              <p className="text-[11px] text-gray-400">Turn off for services like Deep Clean or End-of-Lease that shouldn't be discounted for recurring frequency.</p>
+            </div>
+            <div
+              onClick={() => update('frequency_discount_eligible', !form.frequency_discount_eligible)}
+              className={`w-9 h-5 rounded-full transition-colors flex-shrink-0 ${form.frequency_discount_eligible ? 'bg-brand-500' : 'bg-gray-300'} relative cursor-pointer`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.frequency_discount_eligible ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </div>
+          </div>
         </div>
 
         {/* Extras */}
@@ -416,7 +436,7 @@ export default function EditServicePage() {
               <Plus className="w-3.5 h-3.5" /> Add extra
             </button>
           </div>
-          <p className="text-xs text-gray-500">Mark popular add-ons to surface them at the top of the booking form. Mark quote only when the price varies and needs a custom quote.</p>
+          <p className="text-xs text-gray-500">Mark popular to surface at the top. Mark quote only when the price needs a custom quote. Mark <span className="font-medium">Qty ×</span> to let customers add it multiple times (e.g. carpet steam per room).</p>
           {extras.length === 0 && (
             <p className="text-xs text-gray-400">No add-ons — e.g. Oven clean, Carpet steam, Interior windows</p>
           )}
@@ -444,6 +464,12 @@ export default function EditServicePage() {
                 onClick={() => updateExtra(i, 'is_quote_only', !extra.is_quote_only)}
                 className={`flex-shrink-0 h-[34px] w-20 rounded-lg border text-xs font-medium transition-colors ${extra.is_quote_only ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-400'}`}>
                 Quote only
+              </button>
+              <button type="button"
+                title="Let customers add this add-on multiple times (shows a +/- stepper)"
+                onClick={() => updateExtra(i, 'is_quantifiable', !extra.is_quantifiable)}
+                className={`flex-shrink-0 h-[34px] w-14 rounded-lg border text-xs font-medium transition-colors ${extra.is_quantifiable ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 text-gray-500 hover:border-gray-400'}`}>
+                Qty ×
               </button>
               <button type="button" onClick={() => removeExtra(i)}
                 className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 transition-colors">
