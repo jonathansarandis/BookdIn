@@ -69,7 +69,9 @@ export interface AddressValue {
 }
 
 export interface ContactInfoValue {
-  full_name: string
+  first_name: string
+  last_name: string
+  full_name: string   // derived: `${first_name} ${last_name}`, kept for downstream/db
   email: string
   phone: string
   customer_notes: string

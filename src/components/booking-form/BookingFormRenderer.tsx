@@ -97,7 +97,7 @@ export default function BookingFormRenderer({
     frequency: 'one_time',
     date_time: { scheduled_date: '', scheduled_time: 'flexible', is_flexible: true },
     address: { line1: '', city: '', state: '', postcode: '' },
-    contact_info: { full_name: '', email: '', phone: '', customer_notes: '' },
+    contact_info: { first_name: '', last_name: '', full_name: '', email: '', phone: '', customer_notes: '' },
     tnc_accepted: false,
     custom: {},
   })
@@ -507,7 +507,8 @@ export default function BookingFormRenderer({
         }
         case 'contact_info': {
           const c = values.contact_info
-          if (!c.full_name?.trim()) return 'Enter your name'
+          if (!c.first_name?.trim()) return 'Enter your first name'
+          if (!c.last_name?.trim()) return 'Enter your last name'
           if (!c.email?.trim()) return 'Enter your email'
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) return 'Enter a valid email address'
           if (!c.phone?.trim()) return 'Enter your phone number'

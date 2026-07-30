@@ -468,6 +468,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             price_override: jobForEmail?.price_override ?? null,
             tax_amount: taxSplit.tax,
             is_flexible_time: is_flexible_time ?? false,
+            bedrooms: service.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
+            bathrooms: service.pricing_type === 'room_based' ? (bathrooms ?? null) : null,
+            extras: extraDetails.map((e: any) => ({ name: e.name, price: e.is_quote_only ? 0 : e.price, quantity: e.quantity ?? 1 })),
           },
           customer: jobForEmail.customer,
           business: {

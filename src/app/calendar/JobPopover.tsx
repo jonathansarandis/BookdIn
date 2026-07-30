@@ -161,11 +161,11 @@ export default function JobPopover({ job, businessTimezone, onClose }: Props) {
               <Briefcase className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm text-gray-900 font-medium">{job?.service?.name || '—'}</p>
-                {job?.service?.pricing_type === 'room_based' && (job?.bedrooms || job?.bathrooms) && (
+                {(job?.bedrooms != null || job?.bathrooms != null) && (
                   <p className="text-xs text-gray-500 mt-0.5">
                     {[
-                      job.bedrooms && `${job.bedrooms} bed`,
-                      job.bathrooms && `${job.bathrooms} bath`,
+                      job.bedrooms != null && `${job.bedrooms} bed`,
+                      job.bathrooms != null && `${job.bathrooms} bath`,
                     ].filter(Boolean).join(' · ')}
                   </p>
                 )}

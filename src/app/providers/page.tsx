@@ -92,6 +92,17 @@ export default function ProvidersPage() {
     const data = await res.json()
     setInviting(null)
     if (res.ok) {
+      // Copy the portal link so the admin can paste it straight to the cleaner
+      // (works even if invite email delivery isn't configured).
+      if (data.link) {
+        try {
+          await navigator.clipboard.writeText(data.link)
+          alert(`Portal link copied to clipboard — paste it to ${provider.display_name || 'the cleaner'}.\n\n${data.link}`)
+        } catch {
+          // Clipboard blocked — show the link so it can be copied manually
+          prompt('Copy this portal link and send it to the cleaner:', data.link)
+        }
+      }
       setInviteSuccess(provider.id)
       setTimeout(() => setInviteSuccess(null), 3000)
     } else {

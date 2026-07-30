@@ -19,6 +19,7 @@ import FollowUpChargeButton from '@/app/jobs/[id]/FollowUpChargeButton'
 import AddCustomAddon from '@/app/jobs/[id]/AddCustomAddon'
 import PriceOverrideEditor from '@/app/jobs/[id]/PriceOverrideEditor'
 import ProviderFeeEditor from '@/app/jobs/[id]/ProviderFeeEditor'
+import RefundButton from '@/app/jobs/[id]/RefundButton'
 import { getChargeableAmount, getProviderPayout } from '@/lib/pricing'
 
 const STATUS_STYLES = {
@@ -416,12 +417,15 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
             {/* paid */}
             {paymentStatus === 'paid' && (
-              <p className="text-xs text-green-600 text-center">
-                ✓ Payment received
-                {job.final_charged_amount && job.final_charged_amount !== job.total_price
-                  ? ` · $${(job.final_charged_amount / 100).toFixed(2)} charged`
-                  : ''}
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-green-600 text-center">
+                  ✓ Payment received
+                  {job.final_charged_amount && job.final_charged_amount !== job.total_price
+                    ? ` · $${(job.final_charged_amount / 100).toFixed(2)} charged`
+                    : ''}
+                </p>
+                <RefundButton jobId={job.id} chargedCents={job.final_charged_amount ?? derivedTotalCents} />
+              </div>
             )}
 
             {/* auth_failed — retry pre-auth or collect new card */}

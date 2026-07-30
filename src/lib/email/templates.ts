@@ -46,6 +46,9 @@ export interface JobEmailData {
   price_override?: number | null
   tax_amount?: number | null
   is_flexible_time?: boolean
+  bedrooms?: number | null
+  bathrooms?: number | null
+  extras?: Array<{ name: string; price: number; quantity?: number | null }>
 }
 
 export interface TemplateResult {
@@ -172,6 +175,32 @@ function bookingSummaryTable(
   const valueStyle = 'margin:0;color:#1a1a1a;font-size:14px;line-height:1.5;'
   const cellStyle = 'padding:14px 16px;border-bottom:1px solid #ebe5d9;'
 
+  // Itemised price breakdown: a line for the service (with room counts) plus
+  // one line per add-on, so the customer sees exactly what makes up the total.
+  const extras = (job.extras || []).filter(e => e && e.name)
+  const extrasTotalCents = extras.reduce((sum, e) => sum + (e.price || 0) * (e.quantity || 1), 0)
+  const serviceLineCents = subtotalCents - extrasTotalCents
+  const roomSuffix = [
+    job.bedrooms != null ? `${job.bedrooms} bed` : null,
+    job.bathrooms != null ? `${job.bathrooms} bath` : null,
+  ].filter(Boolean).join(' / ')
+  const serviceLineLabel = roomSuffix ? `${service.name} (${roomSuffix})` : service.name
+
+  const lineRow = (label: string, cents: number) => `
+      <tr>
+        <td style="${cellStyle}">
+          <p style="${valueStyle}display:inline-block;">${label}</p>
+          <p style="${valueStyle}float:right;font-weight:600;">${formatMoney(cents, business.currency)}</p>
+        </td>
+      </tr>`
+
+  const breakdownRows =
+    lineRow(serviceLineLabel, serviceLineCents) +
+    extras.map(e => lineRow(
+      (e.quantity && e.quantity > 1) ? `${e.name} ×${e.quantity}` : e.name,
+      (e.price || 0) * (e.quantity || 1),
+    )).join('')
+
   const taxRows = showTax ? `
       <tr>
         <td style="${cellStyle}">
@@ -212,6 +241,7 @@ function bookingSummaryTable(
           <p style="${valueStyle}">${formatAddr(address)}</p>
         </td>
       </tr>
+      ${breakdownRows}
       ${taxRows}
       <tr>
         <td style="padding:14px 16px;background-color:#f0ebe3;">
