@@ -78,9 +78,14 @@ function LoginPageInner() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5" htmlFor="password">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-gray-600" htmlFor="password">
+                  Password
+                </label>
+                <Link href="/auth/forgot-password" className="text-xs font-medium text-brand-600 hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"
