@@ -17,22 +17,21 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // The recovery token arrives in the URL hash — only readable client-side.
-    const hash = window.location.hash.slice(1)
-    const params = new URLSearchParams(hash)
-    const accessToken = params.get('access_token')
-    const refreshToken = params.get('refresh_token')
-    const type = params.get('type')
+    // Supabase's browser client uses the PKCE flow, so the recovery link
+    // comes back as `?code=...` in the query string (not a hash fragment
+    // with access_token/refresh_token, which is the older implicit flow).
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
 
-    if (!accessToken || !refreshToken || type !== 'recovery') {
+    if (!code) {
       setStage('invalid')
       return
     }
 
-    supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+    supabase.auth.exchangeCodeForSession(code)
       .then(({ error }) => {
         if (error) { setStage('invalid'); return }
-        // Clear the tokens from the URL bar without a navigation
+        // Clear the code from the URL bar without a navigation
         window.history.replaceState(null, '', window.location.pathname)
         setStage('form')
       })
