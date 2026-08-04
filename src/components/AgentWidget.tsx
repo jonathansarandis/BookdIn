@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Bot, X, CreditCard, UserX, PhoneCall, Calendar, ChevronRight, AlertCircle, Send, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import AgentMessageModal from './AgentMessageModal'
 
 const TASK_ICONS: Record<string, any> = { chase_payment: CreditCard, assign_provider: UserX, follow_up_lead: PhoneCall, fill_calendar: Calendar }
 const PRIORITY_DOT: Record<string, string> = { urgent: 'bg-red-500', high: 'bg-amber-500', medium: 'bg-blue-400' }
@@ -31,6 +31,7 @@ export default function AgentWidget() {
   const [greetingLoading, setGreetingLoading] = useState(false)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [messageTask, setMessageTask] = useState<any>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -115,24 +116,19 @@ export default function AgentWidget() {
   const tasks = (brief.tasks || []).filter((t: any) => !dismissed.has(t.id)).slice(0, 4)
   const urgentCount = (brief.tasks || []).filter((t: any) => t.priority === 'urgent' && !dismissed.has(t.id)).length
 
-  async function handleAction(task: any) {
-    if (task.type === 'chase_payment') {
-      if (task.jobId) window.open(`/jobs/${task.jobId}`, '_blank')
-      if (task.contactId && task.crmStage === 'lead') {
-        const supabase = createClient()
-        await supabase.from('crm_contacts')
-          .update({ stage: 'contacted', last_activity_at: new Date().toISOString() })
-          .eq('id', task.contactId).eq('stage', 'lead')
-        setBrief((prev: any) => prev ? { ...prev, tasks: prev.tasks.map((t: any) => t.contactId === task.contactId ? { ...t, crmStage: 'contacted' } : t) } : prev)
-      }
-    } else if (task.type === 'follow_up_lead') {
-      if (task.contactId) window.open(`/crm/${task.contactId}`, '_blank')
-      else if (task.quoteId) window.open(`/quotes/${task.quoteId}`, '_blank')
+  function handleAction(task: any) {
+    if (task.type === 'chase_payment' || task.type === 'follow_up_lead') {
+      setMessageTask(task)
     } else if (task.jobId) {
       window.open(`/jobs/${task.jobId}`, '_blank')
     } else {
       window.open('/calendar', '_blank')
     }
+  }
+
+  function handleMessageSent(contactId: string | null) {
+    if (!contactId) return
+    setBrief((prev: any) => prev ? { ...prev, tasks: prev.tasks.map((t: any) => t.contactId === contactId ? { ...t, crmStage: 'contacted' } : t) } : prev)
   }
 
   return (
@@ -267,6 +263,14 @@ export default function AgentWidget() {
           </div>
         )}
       </div>
+
+      {messageTask && (
+        <AgentMessageModal
+          task={messageTask}
+          onClose={() => setMessageTask(null)}
+          onSent={handleMessageSent}
+        />
+      )}
     </div>
   )
 }

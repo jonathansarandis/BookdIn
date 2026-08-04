@@ -204,3 +204,95 @@ export async function sendDialpadSms(params: SendDialpadSmsParams): Promise<Send
     return { status: 'failed', error: `network: ${err.message}`, rendered_text: text }
   }
 }
+
+export interface SendDialpadSmsRawParams {
+  business: BusinessSmsConfig
+  toPhone: string         // E.164 format (e.g. +61412345678)
+  text: string            // pre-composed message — sent as-is, no template rendering
+  customerId?: string
+  customerFirstName?: string
+  customerLastName?: string
+  customerEmail?: string
+  businessName?: string
+}
+
+/**
+ * Send an arbitrary, already-composed SMS via Dialpad — no template rendering.
+ * Use this for ad-hoc outreach (e.g. AI-drafted, VA-approved messages) where the text
+ * isn't the business's configured booking-confirmation template. Same auth/contact-upsert
+ * behavior as sendDialpadSms; never throws.
+ */
+export async function sendDialpadSmsRaw(params: SendDialpadSmsRawParams): Promise<SendDialpadSmsResult> {
+  const { business, toPhone, text } = params
+
+  if (!business.sms_enabled) return { status: 'skipped', error: 'sms_enabled is false' }
+  if (business.sms_provider !== 'dialpad') return { status: 'skipped', error: `unsupported provider: ${business.sms_provider}` }
+  if (!business.sms_api_key_encrypted || !business.sms_api_key_iv) return { status: 'skipped', error: 'missing api key' }
+  if (!business.sms_user_id) return { status: 'skipped', error: 'missing user_id' }
+  if (!toPhone) return { status: 'skipped', error: 'missing recipient phone' }
+  if (!text?.trim()) return { status: 'skipped', error: 'empty message text' }
+
+  let apiKey: string
+  try {
+    apiKey = decrypt(business.sms_api_key_encrypted, business.sms_api_key_iv)
+  } catch (err: any) {
+    return { status: 'failed', error: `decrypt failed: ${err.message}` }
+  }
+
+  const normalizedPhone = normalizeAuPhone(toPhone)
+  if (!normalizedPhone) {
+    return { status: 'failed', error: `phone could not be normalized to E.164: ${toPhone}` }
+  }
+
+  if (params.customerId && params.customerFirstName) {
+    try {
+      const contactResult = await upsertDialpadContact({
+        apiKey,
+        uid: `bookdin-cust-${params.customerId}`,
+        firstName: params.customerFirstName,
+        lastName: params.customerLastName,
+        phone: normalizedPhone,
+        email: params.customerEmail,
+        companyName: params.businessName,
+      })
+      if (contactResult.status === 'failed') {
+        console.warn('Dialpad contact upsert failed (non-blocking):', contactResult.error)
+      }
+    } catch (err: any) {
+      console.warn('Dialpad contact upsert threw (non-blocking):', err.message)
+    }
+  }
+
+  try {
+    const response = await fetch('https://dialpad.com/api/v2/sms', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: business.sms_user_id,
+        to_numbers: [normalizedPhone],
+        text,
+      }),
+    })
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '<no body>')
+      return {
+        status: 'failed',
+        error: `dialpad http ${response.status}: ${body.slice(0, 500)}`,
+        rendered_text: text,
+      }
+    }
+
+    const data = await response.json().catch(() => null)
+    return {
+      status: 'sent',
+      message_id: data?.id ? String(data.id) : undefined,
+      rendered_text: text,
+    }
+  } catch (err: any) {
+    return { status: 'failed', error: `network: ${err.message}`, rendered_text: text }
+  }
+}

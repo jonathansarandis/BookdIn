@@ -3,12 +3,15 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Bot, Send, RefreshCw, AlertCircle, CheckCircle2, Loader2, TrendingUp, TrendingDown, Calendar, CreditCard, UserX, PhoneCall, X } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import AgentMessageModal from '@/components/AgentMessageModal'
 
 interface Task {
   id: string; type: string; priority: 'urgent' | 'high' | 'medium'
   title: string; subtitle: string; action: string
-  jobId?: string; quoteId?: string; contactId?: string; crmStage?: string; customerPhone?: string; date?: string
+  jobId?: string; quoteId?: string; contactId?: string; crmStage?: string
+  customerId?: string; customerName?: string; customerPhone?: string; customerEmail?: string
+  amount?: number; jobDate?: string; quoteTotal?: number; quoteSentAt?: string; daysSinceCreated?: number
+  date?: string
 }
 interface Message { role: 'user' | 'assistant'; content: string; timestamp: string }
 
@@ -46,6 +49,7 @@ export default function AgentPage() {
   const [sending, setSending] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [briefSent, setBriefSent] = useState(false)
+  const [messageTask, setMessageTask] = useState<Task | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { loadBrief() }, [])
@@ -82,24 +86,19 @@ export default function AgentPage() {
 
   function handleSend() { if (!input.trim() || sending) return; const m = input.trim(); setInput(''); sendMsg(m) }
   function handleKey(e: React.KeyboardEvent) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }
-  async function handleAction(task: Task) {
-    if (task.type === 'chase_payment') {
-      if (task.jobId) window.open(`/jobs/${task.jobId}`, '_blank')
-      if (task.contactId && task.crmStage === 'lead') {
-        const supabase = createClient()
-        await supabase.from('crm_contacts')
-          .update({ stage: 'contacted', last_activity_at: new Date().toISOString() })
-          .eq('id', task.contactId).eq('stage', 'lead')
-        setBrief((prev: any) => prev ? { ...prev, tasks: prev.tasks.map((t: any) => t.contactId === task.contactId ? { ...t, crmStage: 'contacted' } : t) } : prev)
-      }
-    } else if (task.type === 'follow_up_lead') {
-      if (task.contactId) window.open(`/crm/${task.contactId}`, '_blank')
-      else if (task.quoteId) window.open(`/quotes/${task.quoteId}`, '_blank')
+  function handleAction(task: Task) {
+    if (task.type === 'chase_payment' || task.type === 'follow_up_lead') {
+      setMessageTask(task)
     } else if (task.jobId) {
       window.open(`/jobs/${task.jobId}`, '_blank')
     } else if (task.type === 'fill_calendar') {
       window.open('/calendar', '_blank')
     }
+  }
+
+  function handleMessageSent(contactId: string | null) {
+    if (!contactId) return
+    setBrief((prev: any) => prev ? { ...prev, tasks: prev.tasks.map((t: any) => t.contactId === contactId ? { ...t, crmStage: 'contacted' } : t) } : prev)
   }
 
   const activeTasks = (brief?.tasks || []).filter((t: Task) => !dismissed.has(t.id))
@@ -260,6 +259,14 @@ export default function AgentPage() {
           </div>
         </div>
       </div>
+
+      {messageTask && (
+        <AgentMessageModal
+          task={messageTask}
+          onClose={() => setMessageTask(null)}
+          onSent={handleMessageSent}
+        />
+      )}
     </div>
   )
 }

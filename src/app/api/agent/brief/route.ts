@@ -88,18 +88,18 @@ export async function GET() {
   for (const job of (pendingPayment || []).slice(0, 5)) {
     const value = (job.price_override ?? job.total_price ?? 0)
     const linked = customerToContact[job.customer_id]
-    tasks.push({ id: `payment-${job.id}`, type: 'chase_payment', priority: 'urgent', title: `Chase payment — ${job.customer?.full_name}`, subtitle: `$${(value / 100).toFixed(2)} unpaid · ${new Date(job.scheduled_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`, jobId: job.id, contactId: linked?.contactId, crmStage: linked?.stage, customerPhone: job.customer?.phone, customerEmail: job.customer?.email, amount: value, action: 'Send reminder' })
+    tasks.push({ id: `payment-${job.id}`, type: 'chase_payment', priority: 'urgent', title: `Chase payment — ${job.customer?.full_name}`, subtitle: `$${(value / 100).toFixed(2)} unpaid · ${new Date(job.scheduled_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`, jobId: job.id, contactId: linked?.contactId, crmStage: linked?.stage, customerId: job.customer_id, customerName: job.customer?.full_name, customerPhone: job.customer?.phone, customerEmail: job.customer?.email, amount: value, jobDate: new Date(job.scheduled_at).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }), action: 'Send reminder' })
   }
   for (const job of (unassignedJobs || []).slice(0, 3)) {
     tasks.push({ id: `assign-${job.id}`, type: 'assign_provider', priority: 'high', title: `Assign team — ${job.customer?.full_name}`, subtitle: `${job.address?.state || 'Unknown'} · ${new Date(job.scheduled_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`, jobId: job.id, action: 'Assign' })
   }
   for (const quote of (noResponseLeads || []).slice(0, 3)) {
     const linked = customerToContact[quote.customer_id]
-    tasks.push({ id: `quote-${quote.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up — ${quote.customer?.full_name}`, subtitle: `Quote sent ${new Date(quote.created_at).toLocaleDateString('en-AU')} · no response`, quoteId: quote.id, contactId: linked?.contactId, crmStage: linked?.stage, customerPhone: quote.customer?.phone, action: 'Call / SMS' })
+    tasks.push({ id: `quote-${quote.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up — ${quote.customer?.full_name}`, subtitle: `Quote sent ${new Date(quote.created_at).toLocaleDateString('en-AU')} · no response`, quoteId: quote.id, contactId: linked?.contactId, crmStage: linked?.stage, customerId: quote.customer_id, customerName: quote.customer?.full_name, customerPhone: quote.customer?.phone, customerEmail: quote.customer?.email, quoteTotal: quote.total, quoteSentAt: new Date(quote.created_at).toLocaleDateString('en-AU'), action: 'Call / SMS' })
   }
   for (const contact of (crmStaleLeads || []).slice(0, 3)) {
     const daysSince = Math.floor((now.getTime() - new Date(contact.created_at).getTime()) / 86400000)
-    tasks.push({ id: `crm-lead-${contact.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up lead — ${contact.full_name}`, subtitle: `${contact.phone || contact.email || 'No contact info'} · Lead for ${daysSince}d, not yet contacted`, contactId: contact.id, crmStage: contact.stage, customerPhone: contact.phone, action: 'Call / SMS' })
+    tasks.push({ id: `crm-lead-${contact.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up lead — ${contact.full_name}`, subtitle: `${contact.phone || contact.email || 'No contact info'} · Lead for ${daysSince}d, not yet contacted`, contactId: contact.id, crmStage: contact.stage, customerName: contact.full_name, customerPhone: contact.phone, customerEmail: contact.email, daysSinceCreated: daysSince, action: 'Call / SMS' })
   }
   for (const gap of calendarGaps.slice(0, 2)) {
     tasks.push({ id: `gap-${gap.date}`, type: 'fill_calendar', priority: 'medium', title: `Fill calendar — ${gap.label}`, subtitle: `Only ${gap.count} job${gap.count !== 1 ? 's' : ''} booked · target is 5+`, date: gap.date, action: 'View leads' })
