@@ -45,6 +45,8 @@ export async function middleware(request: NextRequest) {
     '/api/secure-card',
     '/api/stripe/webhook',
     '/api/cron',
+    '/api/providers/accept',
+    '/api/providers/invite',
     '/provider/login',
     '/provider/accept',
     '/.well-known',
