@@ -8,13 +8,14 @@ import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/utils'
 import type { Profile, Business } from '@/types/database'
 import {
-  LayoutDashboard, Calendar, ClipboardList, Users,
+  LayoutDashboard, Bot, Calendar, ClipboardList, Users,
   DollarSign, FileText, BarChart2, Settings, Zap,
   Tag, Gift, Share2, ChevronUp, MessageSquare, Briefcase, UserCog, RefreshCw, Upload, Target, LogOut
 } from 'lucide-react'
 
 const NAV = [
-  { href: '/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
+  { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/agent",       label: "AI Agent",     icon: Bot },
   { href: '/calendar',     label: 'Calendar',     icon: Calendar },
   { href: '/jobs',         label: 'Bookings',     icon: ClipboardList },
   { href: '/customers',    label: 'Customers',    icon: Users },
