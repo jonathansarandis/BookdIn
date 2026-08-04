@@ -56,16 +56,23 @@ export default function JobMessages({
   async function send() {
     if (!text.trim() || sending) return
     setSending(true)
+    const content = text.trim()
     await supabase.from('messages').insert({
       job_id:      jobId,
       business_id: businessId,
       sender_id:   (await supabase.auth.getUser()).data.user?.id,
       sender_name: senderName,
       sender_role: 'owner',
-      content:     text.trim(),
+      content,
     })
     setText('')
     setSending(false)
+
+    fetch('/api/notify/job-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId, event: 'message', sender_role: 'owner', preview: content }),
+    }).catch(() => {})
   }
 
   return (

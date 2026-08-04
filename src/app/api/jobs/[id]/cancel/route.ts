@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendCancellation } from '@/lib/email'
+import { notifyJobEvent } from '@/lib/push/notifyJobEvent'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -15,6 +16,7 @@ interface ProfileCheck {
 interface JobAuthCheck {
   business_id: string
   status: string
+  provider_id: string | null
   cancellation_email_sent_at: string | null
   payment_status: string | null
   stripe_payment_intent_id: string | null
@@ -63,7 +65,7 @@ export async function POST(
   // 3. Verify job belongs to caller's business (404 avoids leaking job existence)
   const { data: rawJobCheck } = await supabase
     .from('jobs')
-    .select('business_id, status, cancellation_email_sent_at, payment_status, stripe_payment_intent_id, business:businesses(stripe_account_id)')
+    .select('business_id, status, provider_id, cancellation_email_sent_at, payment_status, stripe_payment_intent_id, business:businesses(stripe_account_id)')
     .eq('id', params.id)
     .single()
   const jobCheck = rawJobCheck as unknown as JobAuthCheck | null
@@ -106,6 +108,10 @@ export async function POST(
       entity_type: 'job',
       entity_id: params.id,
     })
+
+    if (jobCheck.provider_id) {
+      await notifyJobEvent(params.id, { event: 'cancelled' })
+    }
   }
 
   // 5. Email action: independent of status — send if column is null

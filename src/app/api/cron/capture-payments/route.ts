@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
 import { getChargeableAmount } from '@/lib/pricing'
+import { sendExpoPush } from '@/lib/push/expo'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
       try {
         const { data: staff } = await supabase
           .from('profiles')
-          .select('id')
+          .select('id, push_token')
           .eq('business_id', job.business_id)
 
         if (staff?.length) {
@@ -150,6 +151,16 @@ export async function GET(request: NextRequest) {
               action_url: `/jobs/${job.id}`,
             }))
           )
+
+          const pushTokens = staff.filter((s: { push_token: string | null }) => s.push_token).map((s: { push_token: string }) => s.push_token)
+          if (pushTokens.length) {
+            await sendExpoPush(pushTokens.map((to: string) => ({
+              to,
+              title: `Card authorization failed — ${customerName}`,
+              body: `Pre-authorization for ${serviceName} on ${date} failed. Check and retry.`,
+              data: { jobId: job.id, type: 'auth_failed' },
+            })))
+          }
         }
       } catch (notifErr: any) {
         console.error(`[capture-payments] auth_failed notification error for job ${job.id}:`, notifErr.message)

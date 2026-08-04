@@ -48,6 +48,14 @@ export default function ProviderAssigner({ jobId, currentProviderId, currentProv
       setProviderColor(provider?.color || null)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+
+      if (id) {
+        fetch('/api/notify/job-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_id: jobId, event: 'assigned' }),
+        }).catch(() => {})
+      }
     }
   }
 

@@ -47,6 +47,8 @@ export async function middleware(request: NextRequest) {
     '/api/cron',
     '/api/providers/accept',
     '/api/providers/invite',
+    '/api/push/register',
+    '/api/notify/job-event',
     '/provider/login',
     '/provider/accept',
     '/.well-known',

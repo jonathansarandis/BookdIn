@@ -7,6 +7,7 @@ import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { fromBusinessDateTime } from '@/lib/datetime'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
+import { sendExpoPush } from '@/lib/push/expo'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -402,7 +403,7 @@ export async function POST(request: NextRequest) {
         try {
           const { data: staffProfiles } = await supabase
             .from('profiles')
-            .select('id, email, full_name')
+            .select('id, email, full_name, push_token')
             .eq('business_id', business_id)
 
           if (staffProfiles?.length) {
@@ -418,6 +419,15 @@ export async function POST(request: NextRequest) {
                 action_url: `/jobs/${job.id}`,
               }))
             )
+            const pushTokens = staffProfiles.filter(s => s.push_token).map(s => s.push_token as string)
+            if (pushTokens.length) {
+              await sendExpoPush(pushTokens.map(to => ({
+                to,
+                title: `New booking — ${customer.full_name}`,
+                body: `${service?.name} on ${formatDate(scheduled_date)}. Call to confirm.`,
+                data: { jobId: job.id, type: 'booking_created' },
+              })))
+            }
           }
           await logStep(supabase, submissionId!, { step: 'staff_notification', status: 'ok', duration_ms: Date.now() - t_notif })
         } catch (e: any) {
