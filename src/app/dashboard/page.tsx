@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
 import { Calendar, CreditCard, UserCog, Zap, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import Link from 'next/link'
@@ -21,9 +22,12 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('business_id, role').eq('id', user.id).single()
   const businessId = profile?.business_id
   if (!businessId) return <div className="p-8 text-gray-500">No business found.</div>
+
+  // Staff (VA) land on the guided daily checklist instead of the full owner dashboard.
+  if (profile.role === 'staff') redirect('/agent/workflow')
 
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
