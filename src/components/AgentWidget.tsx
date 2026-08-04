@@ -3,10 +3,13 @@ import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Bot, X, CreditCard, UserX, PhoneCall, Calendar, ChevronRight, AlertCircle, Send, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 const TASK_ICONS: Record<string, any> = { chase_payment: CreditCard, assign_provider: UserX, follow_up_lead: PhoneCall, fill_calendar: Calendar }
 const PRIORITY_DOT: Record<string, string> = { urgent: 'bg-red-500', high: 'bg-amber-500', medium: 'bg-blue-400' }
-const QUICK_ACTIONS = ['Who owes payment?', "What's on today?", 'How busy next week?']
+const CRM_STAGE_LABELS: Record<string, string> = { lead: 'Lead', contacted: 'Contacted', quoted: 'Quoted', won: 'Won', lost: 'Lost' }
+const CRM_STAGE_COLORS: Record<string, string> = { lead: 'bg-gray-100 text-gray-600', contacted: 'bg-blue-50 text-blue-700', quoted: 'bg-purple-50 text-purple-700', won: 'bg-green-50 text-green-700', lost: 'bg-red-50 text-red-700' }
+const QUICK_ACTIONS = ['Who owes payment?', "What's on today?", 'How busy next week?', 'Who needs a follow up?']
 
 const MARKDOWN_COMPONENTS = {
   p: ({ children }: any) => <p className="whitespace-pre-wrap mb-1.5 last:mb-0">{children}</p>,
@@ -112,10 +115,24 @@ export default function AgentWidget() {
   const tasks = (brief.tasks || []).filter((t: any) => !dismissed.has(t.id)).slice(0, 4)
   const urgentCount = (brief.tasks || []).filter((t: any) => t.priority === 'urgent' && !dismissed.has(t.id)).length
 
-  function handleAction(task: any) {
-    if (task.jobId) window.open(`/jobs/${task.jobId}`, '_blank')
-    else if (task.quoteId) window.open(`/quotes/${task.quoteId}`, '_blank')
-    else window.open('/calendar', '_blank')
+  async function handleAction(task: any) {
+    if (task.type === 'chase_payment') {
+      if (task.jobId) window.open(`/jobs/${task.jobId}`, '_blank')
+      if (task.contactId && task.crmStage === 'lead') {
+        const supabase = createClient()
+        await supabase.from('crm_contacts')
+          .update({ stage: 'contacted', last_activity_at: new Date().toISOString() })
+          .eq('id', task.contactId).eq('stage', 'lead')
+        setBrief((prev: any) => prev ? { ...prev, tasks: prev.tasks.map((t: any) => t.contactId === task.contactId ? { ...t, crmStage: 'contacted' } : t) } : prev)
+      }
+    } else if (task.type === 'follow_up_lead') {
+      if (task.contactId) window.open(`/crm/${task.contactId}`, '_blank')
+      else if (task.quoteId) window.open(`/quotes/${task.quoteId}`, '_blank')
+    } else if (task.jobId) {
+      window.open(`/jobs/${task.jobId}`, '_blank')
+    } else {
+      window.open('/calendar', '_blank')
+    }
   }
 
   return (
@@ -226,7 +243,14 @@ export default function AgentWidget() {
                 <div key={task.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_DOT[task.priority]}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
+                      {task.crmStage && (
+                        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${CRM_STAGE_COLORS[task.crmStage] || 'bg-gray-100 text-gray-600'}`}>
+                          {CRM_STAGE_LABELS[task.crmStage] || task.crmStage}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400 truncate">{task.subtitle}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

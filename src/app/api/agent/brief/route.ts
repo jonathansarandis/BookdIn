@@ -18,6 +18,7 @@ export async function GET() {
   const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).toISOString()
   const lastWeekStart = new Date(now.getTime() - 7 * 86400000).toISOString()
   const fortyEightHoursAgo = new Date(now.getTime() - 48 * 3600000).toISOString()
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 3600000).toISOString()
 
   const [
     { data: pendingPayment },
@@ -28,8 +29,9 @@ export async function GET() {
     { data: thisWeekJobs },
     { data: lastWeekJobs },
     { data: noResponseLeads },
+    { data: crmStaleLeads },
   ] = await Promise.all([
-    supabase.from('jobs').select('id, total_price, price_override, customer:customers(full_name, phone, email), scheduled_at, created_at')
+    supabase.from('jobs').select('id, total_price, price_override, customer_id, customer:customers(full_name, phone, email), scheduled_at, created_at')
       .eq('business_id', businessId).eq('payment_status', 'unpaid').not('status', 'in', '("cancelled","completed")').order('created_at', { ascending: false }),
     supabase.from('jobs').select('id, status, scheduled_at, customer:customers(full_name), address:addresses(city, state), provider:providers(display_name)')
       .eq('business_id', businessId).gte('scheduled_at', todayStart).lt('scheduled_at', todayEnd).order('scheduled_at'),
@@ -43,9 +45,27 @@ export async function GET() {
       .eq('business_id', businessId).gte('scheduled_at', lastWeekStart).lt('scheduled_at', todayEnd).not('status', 'eq', 'cancelled'),
     supabase.from('jobs').select('total_price, price_override')
       .eq('business_id', businessId).gte('scheduled_at', new Date(now.getTime() - 14 * 86400000).toISOString()).lt('scheduled_at', lastWeekStart).not('status', 'eq', 'cancelled'),
-    supabase.from('quotes').select('id, created_at, customer:customers(full_name, phone, email), total, status')
-      .eq('business_id', businessId).eq('status', 'sent').lt('created_at', new Date(now.getTime() - 24 * 3600000).toISOString()).order('created_at', { ascending: false }).limit(20),
+    supabase.from('quotes').select('id, created_at, customer_id, customer:customers(full_name, phone, email), total, status')
+      .eq('business_id', businessId).eq('status', 'sent').lt('created_at', twentyFourHoursAgo).order('created_at', { ascending: false }).limit(20),
+    supabase.from('crm_contacts').select('id, full_name, phone, email, stage, created_at')
+      .eq('business_id', businessId).eq('stage', 'lead').lt('created_at', twentyFourHoursAgo).order('created_at', { ascending: true }).limit(10),
   ])
+
+  // Link pending-payment jobs and no-response quotes back to their CRM contact (if any) so
+  // action buttons and the "What needs you" list can show/advance pipeline stage.
+  const linkedCustomerIds = Array.from(new Set([
+    ...(pendingPayment || []).map(j => j.customer_id).filter(Boolean),
+    ...(noResponseLeads || []).map(q => q.customer_id).filter(Boolean),
+  ]))
+  let customerToContact: Record<string, { contactId: string; stage: string }> = {}
+  if (linkedCustomerIds.length) {
+    const { data: linkedContacts } = await supabase
+      .from('crm_contacts').select('id, customer_id, stage')
+      .eq('business_id', businessId).in('customer_id', linkedCustomerIds)
+    for (const c of linkedContacts || []) {
+      customerToContact[c.customer_id] = { contactId: c.id, stage: c.stage }
+    }
+  }
 
   const thisWeekRevenue = thisWeekJobs?.reduce((s, j) => s + (j.price_override ?? j.total_price ?? 0), 0) || 0
   const lastWeekRevenue = lastWeekJobs?.reduce((s, j) => s + (j.price_override ?? j.total_price ?? 0), 0) || 0
@@ -67,13 +87,19 @@ export async function GET() {
   const tasks: any[] = []
   for (const job of (pendingPayment || []).slice(0, 5)) {
     const value = (job.price_override ?? job.total_price ?? 0)
-    tasks.push({ id: `payment-${job.id}`, type: 'chase_payment', priority: 'urgent', title: `Chase payment — ${job.customer?.full_name}`, subtitle: `$${(value / 100).toFixed(2)} unpaid · ${new Date(job.scheduled_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`, jobId: job.id, customerPhone: job.customer?.phone, customerEmail: job.customer?.email, amount: value, action: 'Send reminder' })
+    const linked = customerToContact[job.customer_id]
+    tasks.push({ id: `payment-${job.id}`, type: 'chase_payment', priority: 'urgent', title: `Chase payment — ${job.customer?.full_name}`, subtitle: `$${(value / 100).toFixed(2)} unpaid · ${new Date(job.scheduled_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`, jobId: job.id, contactId: linked?.contactId, crmStage: linked?.stage, customerPhone: job.customer?.phone, customerEmail: job.customer?.email, amount: value, action: 'Send reminder' })
   }
   for (const job of (unassignedJobs || []).slice(0, 3)) {
     tasks.push({ id: `assign-${job.id}`, type: 'assign_provider', priority: 'high', title: `Assign team — ${job.customer?.full_name}`, subtitle: `${job.address?.state || 'Unknown'} · ${new Date(job.scheduled_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`, jobId: job.id, action: 'Assign' })
   }
   for (const quote of (noResponseLeads || []).slice(0, 3)) {
-    tasks.push({ id: `quote-${quote.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up — ${quote.customer?.full_name}`, subtitle: `Quote sent ${new Date(quote.created_at).toLocaleDateString('en-AU')} · no response`, quoteId: quote.id, customerPhone: quote.customer?.phone, action: 'Call / SMS' })
+    const linked = customerToContact[quote.customer_id]
+    tasks.push({ id: `quote-${quote.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up — ${quote.customer?.full_name}`, subtitle: `Quote sent ${new Date(quote.created_at).toLocaleDateString('en-AU')} · no response`, quoteId: quote.id, contactId: linked?.contactId, crmStage: linked?.stage, customerPhone: quote.customer?.phone, action: 'Call / SMS' })
+  }
+  for (const contact of (crmStaleLeads || []).slice(0, 3)) {
+    const daysSince = Math.floor((now.getTime() - new Date(contact.created_at).getTime()) / 86400000)
+    tasks.push({ id: `crm-lead-${contact.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up lead — ${contact.full_name}`, subtitle: `${contact.phone || contact.email || 'No contact info'} · Lead for ${daysSince}d, not yet contacted`, contactId: contact.id, crmStage: contact.stage, customerPhone: contact.phone, action: 'Call / SMS' })
   }
   for (const gap of calendarGaps.slice(0, 2)) {
     tasks.push({ id: `gap-${gap.date}`, type: 'fill_calendar', priority: 'medium', title: `Fill calendar — ${gap.label}`, subtitle: `Only ${gap.count} job${gap.count !== 1 ? 's' : ''} booked · target is 5+`, date: gap.date, action: 'View leads' })
@@ -89,6 +115,13 @@ export async function GET() {
       noResponseLeadCount: noResponseLeads?.length || 0,
       thisWeekRevenue, lastWeekRevenue, revenueChange,
       nextWeekJobCount: nextWeekJobs?.length || 0,
+      crmStaleLeadCount: crmStaleLeads?.length || 0,
+      crmFollowUpLeads: (crmStaleLeads || []).map(c => ({
+        name: c.full_name,
+        phone: c.phone || null,
+        email: c.email || null,
+        daysSinceCreated: Math.floor((now.getTime() - new Date(c.created_at).getTime()) / 86400000),
+      })),
     },
     tasks, calendarGaps,
     todayJobs: todayJobs || [],
