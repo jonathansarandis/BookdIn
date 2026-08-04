@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { sendDialpadSmsRaw } from '@/lib/sms/dialpad'
 import { upsertCrmContact, logCrmActivity } from '@/lib/crm/upsert'
+import { appendDailyLogEntry, dateInTimezone } from '@/lib/agent/dailyLog'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
 
   const body = await request.json()
   const {
-    channel, taskType, taskTitle,
+    channel, taskId, taskType, taskTitle, amount,
     contactId: providedContactId, customerId, customerName, customerPhone, customerEmail,
     to, text, emailSubject, emailBody,
   } = body
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('name, phone, contact_email, brand_color, sms_provider, sms_api_key_encrypted, sms_api_key_iv, sms_user_id, sms_enabled')
+    .select('name, phone, contact_email, brand_color, timezone, sms_provider, sms_api_key_encrypted, sms_api_key_iv, sms_user_id, sms_enabled')
     .eq('id', businessId).single()
   if (!business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
 
@@ -139,6 +140,14 @@ export async function POST(request: Request) {
       .update({ stage: 'contacted' })
       .eq('id', contactId).eq('stage', 'lead')
   }
+
+  // Daily memory: record this send so the agent knows what's already been actioned today.
+  const today = dateInTimezone(business.timezone)
+  await appendDailyLogEntry(supabase, businessId, today, 'messages_sent', {
+    channel, taskId, taskType, taskTitle, contactId, customerName,
+    to, amount: typeof amount === 'number' ? amount : undefined,
+    messageId: sendResult.messageId,
+  })
 
   return NextResponse.json({ success: true, contactId, messageId: sendResult.messageId })
 }

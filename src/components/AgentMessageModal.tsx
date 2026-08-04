@@ -76,8 +76,10 @@ export default function AgentMessageModal({ task, onClose, onSent }: Props) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channel,
+          taskId: task.id,
           taskType: task.type,
           taskTitle: task.title,
+          amount: task.amount,
           contactId: task.contactId,
           customerId: task.customerId,
           customerName: task.customerName,

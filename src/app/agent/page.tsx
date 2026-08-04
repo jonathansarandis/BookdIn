@@ -50,6 +50,9 @@ export default function AgentPage() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [briefSent, setBriefSent] = useState(false)
   const [messageTask, setMessageTask] = useState<Task | null>(null)
+  const [outcomeNote, setOutcomeNote] = useState('')
+  const [loggingOutcome, setLoggingOutcome] = useState(false)
+  const [outcomeLogged, setOutcomeLogged] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { loadBrief() }, [])
@@ -99,6 +102,33 @@ export default function AgentPage() {
   function handleMessageSent(contactId: string | null) {
     if (!contactId) return
     setBrief((prev: any) => prev ? { ...prev, tasks: prev.tasks.map((t: any) => t.contactId === contactId ? { ...t, crmStage: 'contacted' } : t) } : prev)
+  }
+
+  function handleDismiss(task: Task) {
+    setDismissed(p => new Set([...p, task.id]))
+    fetch('/api/agent/dismiss-task', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: task.id, taskType: task.type, taskTitle: task.title }),
+    }).catch(err => console.error('Agent page: failed to log dismissed task', err))
+  }
+
+  async function handleLogOutcome() {
+    if (!outcomeNote.trim() || loggingOutcome) return
+    setLoggingOutcome(true)
+    try {
+      const res = await fetch('/api/agent/log-outcome', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: outcomeNote.trim() }),
+      })
+      if (!res.ok) throw new Error(`Log failed: ${res.status}`)
+      setOutcomeNote('')
+      setOutcomeLogged(true)
+      setTimeout(() => setOutcomeLogged(false), 3000)
+    } catch (err) {
+      console.error('Agent page: failed to log outcome', err)
+    } finally {
+      setLoggingOutcome(false)
+    }
   }
 
   const activeTasks = (brief?.tasks || []).filter((t: Task) => !dismissed.has(t.id))
@@ -176,7 +206,7 @@ export default function AgentPage() {
                         <p className="text-xs text-gray-500 truncate">{task.subtitle}</p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <button onClick={() => setDismissed(p => new Set([...p, task.id]))} className="text-gray-300 hover:text-gray-500"><X className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => handleDismiss(task)} className="text-gray-300 hover:text-gray-500"><X className="w-3.5 h-3.5" /></button>
                         <button onClick={() => handleAction(task)} className="px-3 py-1.5 text-xs font-semibold text-white rounded-lg" style={{ background: '#0A0F1E' }}>{task.action}</button>
                       </div>
                     </div>
@@ -184,6 +214,25 @@ export default function AgentPage() {
                 })}
               </div>
             )}
+            <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2">
+              <input
+                value={outcomeNote}
+                onChange={e => setOutcomeNote(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleLogOutcome() }}
+                placeholder="Report an outcome (e.g. chased 12 payments, 8 converted)"
+                disabled={loggingOutcome}
+                className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+              />
+              <button
+                onClick={handleLogOutcome}
+                disabled={!outcomeNote.trim() || loggingOutcome}
+                className="flex-shrink-0 px-3 py-2 text-xs font-semibold text-white rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                style={{ background: outcomeLogged ? '#16a34a' : '#0A0F1E' }}
+              >
+                {loggingOutcome ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : outcomeLogged ? <CheckCircle2 className="w-3.5 h-3.5" /> : null}
+                {outcomeLogged ? 'Logged' : 'Log'}
+              </button>
+            </div>
           </div>
         </div>
 

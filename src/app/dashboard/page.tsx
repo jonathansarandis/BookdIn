@@ -4,6 +4,7 @@ import { formatCurrency } from '@/lib/utils'
 import { Calendar, CreditCard, UserCog, Zap, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import Link from 'next/link'
 import AgentWidget from '@/components/AgentWidget'
+import AgentDailySummary from '@/components/AgentDailySummary'
 import { cn } from '@/lib/utils'
 
 export const metadata = { title: 'Dashboard' }
@@ -99,6 +100,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-5 animate-fade-in">
       <AgentWidget />
+      <AgentDailySummary />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>

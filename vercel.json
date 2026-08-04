@@ -12,6 +12,14 @@
     {
       "path": "/api/cron/recurring-jobs",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/morning-briefing",
+      "schedule": "30 21 * * 0-4"
+    },
+    {
+      "path": "/api/cron/eod-summary",
+      "schedule": "0 8 * * 1-5"
     }
   ]
 }
