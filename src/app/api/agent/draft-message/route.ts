@@ -52,6 +52,7 @@ Rules:
 - emailSubject: short and clear, no "Re:" unless replying to something specific
 - emailBody: 2-4 short plain-text paragraphs (no HTML, no markdown), signed off with "${businessName}"
 - Never invent specific details (URLs, dates, amounts) beyond what's given in the brief
+- Never use em dashes (—) in the sms or emailBody text. Use a comma, a period, or restructure the sentence instead
 - Natural and human — avoid corporate boilerplate like "We hope this message finds you well"`
 
   try {
