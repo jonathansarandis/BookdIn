@@ -50,6 +50,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     rebook_source_job_id,
     is_flexible_time,
     custom_items,
+    lead_source,
   } = body
   let location_id = body.location_id
 
@@ -127,6 +128,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     // Customer resolution (create path only)
     let resolvedCustomerId: string = customer_id || ''
+    // A customer_id sent directly (picked from the existing-customer dropdown) or
+    // found by email lookup below both mean this is a returning customer.
+    let isExistingCustomer = !!customer_id
     if (!editJobId && !resolvedCustomerId) {
       const t_cx = Date.now()
       try {
@@ -138,6 +142,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           .single()
 
         if (existing) {
+          isExistingCustomer = true
           resolvedCustomerId = existing.id
           await logStep(admin, submissionId!, { step: 'customer_lookup', status: 'ok', duration_ms: Date.now() - t_cx })
         } else {
@@ -394,11 +399,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const { upsertCrmContact, logCrmActivity } = await import('@/lib/crm/upsert')
         const crmResult = await upsertCrmContact(admin, {
           business_id: businessId,
-          customer_id,
+          // Bug fix: this used to reference the raw `customer_id` body param, which
+          // is undefined whenever the booking was for a brand-new customer (that
+          // path only sets `resolvedCustomerId` after creating the customer row) —
+          // every new-customer admin booking was silently failing to link to CRM.
+          customer_id: resolvedCustomerId,
           full_name: customerForCrm.full_name,
           email: customerForCrm.email,
           phone: customerForCrm.phone || null,
-          source: 'admin',
+          // The VA's explicit pick (ManualSourceSelector) always wins when given;
+          // otherwise fall back to 'returning' for a known customer, 'admin' default
+          // for a genuinely new one with no source selected.
+          source: lead_source || (isExistingCustomer ? 'returning' : 'admin'),
         })
         if (crmResult.contact_id) {
           await logCrmActivity(admin, {

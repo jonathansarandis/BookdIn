@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Phone, Mail, Clock, Plus, Loader2, FileText, CheckCircle2 } from 'lucide-react'
+import LostReasonModal, { LOST_REASONS } from '@/components/crm/LostReasonModal'
+import { formatSourceLabel } from '@/lib/crm/sourceLabels'
 
 const STAGES = [
   { key: 'lead',      label: 'Lead' },
@@ -52,6 +54,7 @@ export default function CRMContactPage() {
   const [businessId, setBusinessId] = useState('')
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [showFollowupForm, setShowFollowupForm] = useState(false)
+  const [showLostModal, setShowLostModal] = useState(false)
 
   const [activityForm, setActivityForm] = useState({
     type: 'note',
@@ -81,16 +84,24 @@ export default function CRMContactPage() {
     setLoading(false)
   }
 
-  async function handleStageChange(stage: string) {
-    await supabase.from('crm_contacts').update({ stage, last_activity_at: new Date().toISOString() }).eq('id', params.id)
-    
+  async function handleStageChange(stage: string, lostReason?: string, lostReasonNotes?: string) {
+    if (stage === 'lost' && !lostReason) { setShowLostModal(true); return }
+
+    await supabase.from('crm_contacts').update({
+      stage,
+      last_activity_at: new Date().toISOString(),
+      ...(stage === 'lost' ? { lost_reason: lostReason || null, lost_reason_notes: lostReasonNotes || null } : {}),
+    }).eq('id', params.id)
+
     // Log stage change as activity
+    const lostReasonLabel = lostReason ? LOST_REASONS.find(r => r.value === lostReason)?.label : null
     await supabase.from('crm_activities').insert({
       business_id: businessId,
       contact_id: params.id,
       user_id: userId,
       type: stage === 'won' ? 'won' : stage === 'lost' ? 'lost' : 'note',
       title: `Stage changed to ${stage}`,
+      body: lostReasonLabel ? `Reason: ${lostReasonLabel}${lostReasonNotes ? ` — ${lostReasonNotes}` : ''}` : null,
     })
 
     await fetchData()
@@ -153,7 +164,7 @@ export default function CRMContactPage() {
           </Link>
           <div>
             <h1 className="text-xl font-bold text-gray-900">{contact.full_name}</h1>
-            {contact.source && <p className="text-sm text-gray-500 capitalize">{contact.source}</p>}
+            {contact.source && <p className="text-sm text-gray-500">{formatSourceLabel(contact.source)}</p>}
           </div>
         </div>
         <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${STAGE_COLORS[contact.stage]}`}>
@@ -270,6 +281,13 @@ export default function CRMContactPage() {
                 <a href={`tel:${contact.phone}`} className="text-gray-700">{contact.phone}</a>
               </div>
             )}
+            {contact.stage === 'lost' && contact.lost_reason && (
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-1">Lost reason</p>
+                <p className="text-sm text-red-600 font-medium">{LOST_REASONS.find(r => r.value === contact.lost_reason)?.label || contact.lost_reason}</p>
+                {contact.lost_reason_notes && <p className="text-sm text-gray-600 mt-0.5">{contact.lost_reason_notes}</p>}
+              </div>
+            )}
             {contact.notes && (
               <div className="pt-2 border-t border-gray-100">
                 <p className="text-xs text-gray-500 mb-1">Notes</p>
@@ -339,6 +357,17 @@ export default function CRMContactPage() {
           </div>
         </div>
       </div>
+
+      {showLostModal && (
+        <LostReasonModal
+          contactName={contact.full_name}
+          onCancel={() => setShowLostModal(false)}
+          onConfirm={async (reason, notes) => {
+            await handleStageChange('lost', reason, notes)
+            setShowLostModal(false)
+          }}
+        />
+      )}
     </div>
   )
 }

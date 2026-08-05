@@ -453,6 +453,7 @@ export default function BookingPage() {
           booking_source: 'admin',
           payment_method: paymentMethod,
           rebook_source_job_id: rebookJobId || null,
+          lead_source: leadSource || null,
         }),
       })
       const createData = await createRes.json()

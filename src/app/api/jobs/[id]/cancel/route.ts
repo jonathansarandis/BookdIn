@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendCancellation } from '@/lib/email'
 import { notifyJobEvent } from '@/lib/push/notifyJobEvent'
+import { advanceCrmStage } from '@/lib/crm/stageAutomation'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -15,6 +16,7 @@ interface ProfileCheck {
 
 interface JobAuthCheck {
   business_id: string
+  customer_id: string
   status: string
   provider_id: string | null
   cancellation_email_sent_at: string | null
@@ -65,7 +67,7 @@ export async function POST(
   // 3. Verify job belongs to caller's business (404 avoids leaking job existence)
   const { data: rawJobCheck } = await supabase
     .from('jobs')
-    .select('business_id, status, provider_id, cancellation_email_sent_at, payment_status, stripe_payment_intent_id, business:businesses(stripe_account_id)')
+    .select('business_id, customer_id, status, provider_id, cancellation_email_sent_at, payment_status, stripe_payment_intent_id, business:businesses(stripe_account_id)')
     .eq('id', params.id)
     .single()
   const jobCheck = rawJobCheck as unknown as JobAuthCheck | null
@@ -112,6 +114,15 @@ export async function POST(
     if (jobCheck.provider_id) {
       await notifyJobEvent(params.id, { event: 'cancelled' })
     }
+
+    await advanceCrmStage(supabase, {
+      businessId: jobCheck.business_id,
+      customerId: jobCheck.customer_id,
+      toStage: 'lost',
+      excludeStages: ['won'],
+      activityType: 'lost',
+      activityTitle: 'Booking cancelled',
+    })
   }
 
   // 5. Email action: independent of status — send if column is null

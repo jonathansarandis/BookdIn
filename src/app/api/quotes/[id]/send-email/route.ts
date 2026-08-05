@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { advanceCrmStage } from '@/lib/crm/stageAutomation'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -184,6 +185,15 @@ export async function POST(
       .from('quotes')
       .update({ status: 'sent', sent_at: new Date().toISOString() })
       .eq('id', params.id)
+
+    await advanceCrmStage(serviceClient, {
+      businessId: quote.business_id,
+      customerId: quote.customer_id,
+      toStage: 'quoted',
+      excludeStages: ['quoted', 'won', 'lost'],
+      activityType: 'quote_sent',
+      activityTitle: 'Quote sent',
+    })
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { advanceCrmStage } from '@/lib/crm/stageAutomation'
 
 const serviceClient = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,6 +48,14 @@ export async function POST(
         .from('quotes')
         .update({ status: 'sent', sent_at: now })
         .eq('id', params.id)
+      await advanceCrmStage(serviceClient, {
+        businessId: quote.business_id,
+        customerId: quote.customer_id,
+        toStage: 'quoted',
+        excludeStages: ['quoted', 'won', 'lost'],
+        activityType: 'quote_sent',
+        activityTitle: 'Quote sent',
+      })
       return NextResponse.json({ success: true })
     }
 
@@ -69,6 +78,14 @@ export async function POST(
         .from('quotes')
         .update({ status: 'declined' })
         .eq('id', params.id)
+      await advanceCrmStage(serviceClient, {
+        businessId: quote.business_id,
+        customerId: quote.customer_id,
+        toStage: 'lost',
+        excludeStages: ['won'],
+        activityType: 'lost',
+        activityTitle: 'Quote declined',
+      })
       return NextResponse.json({ success: true })
     }
 

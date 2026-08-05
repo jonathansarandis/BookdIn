@@ -183,6 +183,12 @@ export default function BookingFormRenderer({
         }
       } catch { /* best-effort attribution capture */ }
 
+      // document.referrer reflects the page that linked here (e.g. google.com,
+      // facebook.com) — used server-side to tag the CRM contact's lead source when
+      // there's no gclid. Distinct from the fetch's own Referer header, which would
+      // just show this booking page's own URL (same-origin request), not useful here.
+      const referrerUrl = (typeof document !== 'undefined' && document.referrer) || null
+
       const payload = {
         business_id: businessId,
         location_id: locationId,
@@ -192,6 +198,7 @@ export default function BookingFormRenderer({
         scheduled_time: values.date_time.is_flexible ? 'flexible' : values.date_time.scheduled_time,
         total_price: taxSplit.total,
         tax_amount: taxSplit.tax,
+        referrer_url: referrerUrl,
         extras: Object.entries(values.extras as Record<string, number>).map(([id, qty]) => ({ id, quantity: qty })),
         customer: {
           full_name: values.contact_info.full_name,

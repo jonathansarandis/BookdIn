@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
     customer_notes,
     utm_data,
     attribution: bodyAttribution,
+    referrer_url,
     bedrooms,
     bathrooms,
   } = body
@@ -236,6 +237,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Create or find customer
     let customerId: string
+    let isExistingCustomer = false
     const t_cx = Date.now()
     try {
       const { data: existingCustomer } = await supabase
@@ -246,6 +248,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (existingCustomer) {
+        isExistingCustomer = true
         customerId = existingCustomer.id
         // Per-field update: only write non-null new values; null incoming = preserve existing
         const updates: Record<string, string> = {}
@@ -377,13 +380,18 @@ export async function POST(request: NextRequest) {
         const t_crm = Date.now()
         try {
           const { upsertCrmContact, logCrmActivity } = await import('@/lib/crm/upsert')
+          const { deriveBookingLeadSource } = await import('@/lib/crm/leadSource')
           const crmResult = await upsertCrmContact(supabase, {
             business_id,
             customer_id: customerId,
             full_name: customer.full_name,
             email: customer.email,
             phone: customer.phone || null,
-            source: 'website',
+            source: deriveBookingLeadSource({
+              isExistingCustomer,
+              gclid, gbraid, wbraid,
+              referer: referrer_url,
+            }),
           })
           if (crmResult.contact_id) {
             await logCrmActivity(supabase, {

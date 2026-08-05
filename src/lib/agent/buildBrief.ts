@@ -32,6 +32,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
     { data: noResponseLeads },
     { data: crmStaleLeads },
     { data: businessRow },
+    { data: dueFollowUps },
   ] = await Promise.all([
     supabase.from('jobs').select('id, total_price, price_override, customer_id, customer:customers(full_name, phone, email), scheduled_at, created_at')
       .eq('business_id', businessId).eq('payment_status', 'unpaid').not('status', 'in', '("cancelled","completed")').order('created_at', { ascending: false }),
@@ -52,6 +53,13 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
     supabase.from('crm_contacts').select('id, full_name, phone, email, stage, created_at')
       .eq('business_id', businessId).eq('stage', 'lead').lt('created_at', twentyFourHoursAgo).order('created_at', { ascending: true }).limit(10),
     supabase.from('businesses').select('timezone, google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_developer_token_iv, google_ads_refresh_token_encrypted, google_ads_refresh_token_iv, google_ads_login_customer_id').eq('id', businessId).single(),
+    // Contacts with an explicitly-set follow-up due today or overdue — distinct from
+    // crmStaleLeads above (which is "lead stage, no contact yet in 24h" regardless of
+    // whether anyone ever set a follow-up date). Won/Lost are terminal, so excluded.
+    supabase.from('crm_contacts').select('id, full_name, phone, email, stage, next_followup_at')
+      .eq('business_id', businessId).not('stage', 'in', '("won","lost")')
+      .not('next_followup_at', 'is', null).lte('next_followup_at', now.toISOString())
+      .order('next_followup_at', { ascending: true }).limit(10),
   ])
 
   const yesterdayDate = dateInTimezone(businessRow?.timezone, -1)
@@ -135,6 +143,17 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
     const daysSince = Math.floor((now.getTime() - new Date(contact.created_at).getTime()) / 86400000)
     tasks.push({ id: `crm-lead-${contact.id}`, type: 'follow_up_lead', priority: 'medium', title: `Follow up lead — ${contact.full_name}`, subtitle: `${contact.phone || contact.email || 'No contact info'} · Lead for ${daysSince}d, not yet contacted`, contactId: contact.id, crmStage: contact.stage, customerName: contact.full_name, customerPhone: contact.phone, customerEmail: contact.email, daysSinceCreated: daysSince, action: 'Call / SMS' })
   }
+  for (const contact of (dueFollowUps || []).slice(0, 5)) {
+    const overdue = new Date(contact.next_followup_at) < new Date(todayStart)
+    tasks.push({
+      id: `followup-${contact.id}`, type: 'follow_up_due', priority: overdue ? 'high' : 'medium',
+      title: `Follow up — ${contact.full_name}`,
+      subtitle: `${overdue ? 'Overdue' : 'Due today'} · ${contact.stage}`,
+      contactId: contact.id, crmStage: contact.stage,
+      customerName: contact.full_name, customerPhone: contact.phone, customerEmail: contact.email,
+      followupAt: contact.next_followup_at, action: 'Call / SMS',
+    })
+  }
   for (const gap of calendarGaps.slice(0, 2)) {
     tasks.push({ id: `gap-${gap.date}`, type: 'fill_calendar', priority: 'medium', title: `Fill calendar — ${gap.label}`, subtitle: `Only ${gap.count} job${gap.count !== 1 ? 's' : ''} booked · target is 5+`, date: gap.date, action: 'View leads' })
   }
@@ -160,6 +179,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
       googleAds: googleAdsSummary,
       nextWeekJobCount: nextWeekJobs?.length || 0,
       crmStaleLeadCount: crmStaleLeads?.length || 0,
+      dueFollowUpCount: dueFollowUps?.length || 0,
       crmFollowUpLeads: (crmStaleLeads || []).map((c: any) => ({
         name: c.full_name,
         phone: c.phone || null,

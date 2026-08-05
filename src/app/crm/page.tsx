@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { Plus, Phone, Mail, Clock, Users } from 'lucide-react'
+import LostReasonModal from '@/components/crm/LostReasonModal'
 
 const STAGES = [
   { key: 'lead',      label: 'Lead',      color: '#6b7280' },
@@ -29,6 +30,7 @@ function getInitials(name: string) {
 export default function CRMPage() {
   const [contacts, setContacts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [lostModalContact, setLostModalContact] = useState<any>(null)
   const supabase = createClient()
 
   useEffect(() => { fetchContacts() }, [])
@@ -46,9 +48,18 @@ export default function CRMPage() {
     setLoading(false)
   }
 
-  async function moveStage(contactId: string, newStage: string) {
-    await supabase.from('crm_contacts').update({ stage: newStage, last_activity_at: new Date().toISOString() }).eq('id', contactId)
+  async function moveStage(contactId: string, newStage: string, lostReason?: string, lostReasonNotes?: string) {
+    await supabase.from('crm_contacts').update({
+      stage: newStage,
+      last_activity_at: new Date().toISOString(),
+      ...(newStage === 'lost' ? { lost_reason: lostReason || null, lost_reason_notes: lostReasonNotes || null } : {}),
+    }).eq('id', contactId)
     setContacts(prev => prev.map(c => c.id === contactId ? { ...c, stage: newStage } : c))
+  }
+
+  function handleStageButtonClick(contact: any, newStage: string) {
+    if (newStage === 'lost') { setLostModalContact(contact); return }
+    moveStage(contact.id, newStage)
   }
 
   const contactsByStage = STAGES.reduce((acc, stage) => {
@@ -63,9 +74,14 @@ export default function CRMPage() {
           <h1 className="text-xl font-bold text-gray-900">CRM</h1>
           <p className="text-sm text-gray-500 mt-0.5">{contacts.length} contacts</p>
         </div>
-        <Link href="/crm/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white" style={{ background: '#2563FF', textDecoration: 'none' }}>
-          <Plus className="w-4 h-4" /> Add contact
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/reports/leads" className="text-sm text-gray-500 hover:text-brand-600 transition-colors">
+            Leads report →
+          </Link>
+          <Link href="/crm/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white" style={{ background: '#2563FF', textDecoration: 'none' }}>
+            <Plus className="w-4 h-4" /> Add contact
+          </Link>
+        </div>
       </div>
 
       {loading ? (
@@ -136,7 +152,7 @@ export default function CRMPage() {
                       </Link>
                       <div className="flex gap-1 mt-2 pt-2 border-t border-gray-50">
                         {STAGES.filter(s => s.key !== stage.key).map(s => (
-                          <button key={s.key} onClick={() => moveStage(contact.id, s.key)}
+                          <button key={s.key} onClick={() => handleStageButtonClick(contact, s.key)}
                             className="flex-1 text-[10px] py-1 rounded-md font-medium transition-all"
                             style={{ background: `${s.color}15`, color: s.color }}>
                             {s.label}
@@ -155,6 +171,17 @@ export default function CRMPage() {
             )
           })}
         </div>
+      )}
+
+      {lostModalContact && (
+        <LostReasonModal
+          contactName={lostModalContact.full_name}
+          onCancel={() => setLostModalContact(null)}
+          onConfirm={async (reason, notes) => {
+            await moveStage(lostModalContact.id, 'lost', reason, notes)
+            setLostModalContact(null)
+          }}
+        />
       )}
     </div>
   )

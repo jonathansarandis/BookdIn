@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { JOB_STATUS_LABELS } from '@/lib/utils'
+import { advanceCrmStage } from '@/lib/crm/stageAutomation'
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   pending:     ['confirmed'],
@@ -24,6 +25,8 @@ interface Props {
   currentStatus: string
   providers: { id: string; display_name: string }[]
   currentProviderId: string | null
+  customerId?: string | null
+  businessId?: string | null
 }
 
 export function CancelBookingButton({ jobId, status }: { jobId: string; status: string }) {
@@ -69,7 +72,7 @@ export function CancelBookingButton({ jobId, status }: { jobId: string; status: 
   )
 }
 
-export default function JobStatusUpdater({ jobId, currentStatus, providers, currentProviderId }: Props) {
+export default function JobStatusUpdater({ jobId, currentStatus, providers, currentProviderId, customerId, businessId }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState(currentProviderId || '')
@@ -93,6 +96,20 @@ export default function JobStatusUpdater({ jobId, currentStatus, providers, curr
       entity_type: 'job',
       entity_id: jobId,
     })
+
+    // A confirmed booking is the strongest possible signal a lead converted —
+    // moves the CRM contact to Won from any prior stage (including a stale
+    // "lost" one, since re-confirming is a genuine win-back).
+    if (newStatus === 'confirmed' && customerId && businessId) {
+      await advanceCrmStage(supabase, {
+        businessId,
+        customerId,
+        toStage: 'won',
+        excludeStages: ['won'],
+        activityType: 'won',
+        activityTitle: 'Booking confirmed',
+      })
+    }
 
     setLoading(false)
     setOpen(false)

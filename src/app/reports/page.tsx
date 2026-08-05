@@ -413,6 +413,20 @@ export default function ReportsPage() {
         <span className="text-sm text-gray-400 group-hover:text-brand-600 transition-colors">View report →</span>
       </Link>
 
+      {/* Leads link */}
+      <Link href="/reports/leads" className="flex items-center justify-between bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:bg-brand-50 transition-colors group">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+            <Users className="w-4.5 h-4.5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Leads</p>
+            <p className="text-xs text-gray-500">Pipeline conversion, lead sources, and lost reasons</p>
+          </div>
+        </div>
+        <span className="text-sm text-gray-400 group-hover:text-brand-600 transition-colors">View report →</span>
+      </Link>
+
       {/* Recent bookings */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">

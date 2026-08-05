@@ -7,7 +7,19 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
-const SOURCES = ['website', 'referral', 'social', 'walk-in', 'phone', 'email', 'other']
+// Same taxonomy used by ManualSourceSelector (admin bookings) and the automated
+// public-booking-form detection, so /reports/leads' "Leads by source" breakdown
+// is consistent regardless of how the contact was created.
+const SOURCES = [
+  { value: 'paid_search', label: 'Google Ads' },
+  { value: 'organic', label: 'Organic' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'direct', label: 'Direct' },
+  { value: 'returning', label: 'Returning' },
+  { value: 'social', label: 'Social media' },
+  { value: 'email', label: 'Email campaign' },
+  { value: 'manual', label: 'Other (manual)' },
+]
 
 export default function NewCRMContactPage() {
   const router = useRouter()
@@ -114,7 +126,7 @@ export default function NewCRMContactPage() {
               <label className={labelClass}>Source</label>
               <select value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} className={inputClass}>
                 <option value="">Select source...</option>
-                {SOURCES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
             <div>
