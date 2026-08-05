@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const SCOPE = 'https://www.googleapis.com/auth/adwords'
+const SCOPE = 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.email'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
