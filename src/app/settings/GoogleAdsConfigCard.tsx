@@ -116,7 +116,7 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
             Auto-populates weekly ad spend per location on the profit report.
           </p>
         </div>
-        <label className="inline-flex items-center cursor-pointer flex-shrink-0">
+        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
           <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="sr-only peer" />
           <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-checked:bg-brand-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all" />
         </label>

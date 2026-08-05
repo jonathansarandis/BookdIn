@@ -134,7 +134,7 @@ export default function SmsConfigCard({ businessId }: { businessId?: string }) {
             Send a confirmation SMS to customers in addition to the email. Currently supports Dialpad.
           </p>
         </div>
-        <label className="inline-flex items-center cursor-pointer flex-shrink-0">
+        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
           <input
             type="checkbox"
             checked={enabled}
