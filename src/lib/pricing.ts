@@ -177,13 +177,34 @@ export function getChargeableAmount(job: {
 // ─── Provider payout ─────────────────────────────────────────────────────────
 
 /**
+ * Re-derive a job's pre-GST amount from override-aware gross (getChargeableAmount)
+ * when price_override is set — because tax_amount was computed from the original
+ * total and is stale in that case. Shared by getProviderPayout and weekly profit
+ * reporting so both agree on the same ex-GST figure for the same job.
+ *
+ * taxRate is a percentage integer (e.g. 10 for 10% GST).
+ */
+export function getExGstAmount(
+  job: {
+    price_override?: number | null
+    total_price?: number | null
+    price?: number | null
+    tax_amount?: number | null
+  },
+  taxRate: number,
+): number {
+  if (job.price_override != null) {
+    const chargeable = getChargeableAmount(job)
+    return taxRate > 0 ? Math.round(chargeable * 100 / (100 + taxRate)) : chargeable
+  }
+  return (job.total_price ?? job.price ?? 0) - (job.tax_amount ?? 0)
+}
+
+/**
  * Compute the provider's payout in cents for a single job.
  *
- * payout = floor(preGstBase × payout_percent/100) + provider_fee_extra
- *
- * preGstBase uses the override-aware gross (getChargeableAmount), re-deriving the
- * pre-tax amount from the override when one exists — because tax_amount was computed
- * from the original total and is stale in that case.
+ * payout = floor(preGstBase × payRate/100) + provider_fee_extra
+ * payRate = job.pay_rate_override (one-off adjustment) if set, else provider.payout_percent
  *
  * taxRate is a percentage integer (e.g. 10 for 10% GST).
  * taxMode must match the business setting — 'exclusive' is the common AU case.
@@ -195,23 +216,14 @@ export function getProviderPayout(
     price?: number | null
     tax_amount?: number | null
     provider_fee_extra?: number | null
+    pay_rate_override?: number | null
   },
   provider: { payout_percent?: number | null },
   taxRate: number,
   taxMode: 'exclusive' | 'inclusive',
 ): number {
-  const chargeable = getChargeableAmount(job)
-
-  let preGstBase: number
-  if (job.price_override != null) {
-    preGstBase = taxRate > 0
-      ? Math.round(chargeable * 100 / (100 + taxRate))
-      : chargeable
-  } else {
-    preGstBase = (job.total_price ?? job.price ?? 0) - (job.tax_amount ?? 0)
-  }
-
-  const pct = provider.payout_percent ?? 0
+  const preGstBase = getExGstAmount(job, taxRate)
+  const pct = job.pay_rate_override ?? provider.payout_percent ?? 0
   return Math.round(preGstBase * pct / 100) + (job.provider_fee_extra ?? 0)
 }
 

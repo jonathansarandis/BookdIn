@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getDailyLog, dateInTimezone } from '@/lib/agent/dailyLog'
+import { calculateWeeklyProfit, getMonday } from '@/lib/reports/weeklyProfit'
 
 /**
  * Builds the full agent brief (summary + tasks + calendar gaps) for one business.
@@ -54,6 +55,16 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
 
   const yesterdayDate = dateInTimezone(businessRow?.timezone, -1)
   const yesterdayLog = await getDailyLog(supabase, businessId, yesterdayDate)
+
+  // Real weekly profit (revenue - subcontractor pay - GST - manually-entered costs),
+  // same calculation /reports/profit shows — replaces the old spreadsheet as the
+  // agent's source for "how's the business actually doing this week".
+  const thisMonday = getMonday(now)
+  const lastMonday = new Date(thisMonday.getTime() - 7 * 86400000)
+  const [thisWeekProfitResult, lastWeekProfitResult] = await Promise.all([
+    calculateWeeklyProfit(supabase, businessId, thisMonday),
+    calculateWeeklyProfit(supabase, businessId, lastMonday),
+  ])
 
   // Link pending-payment jobs and no-response quotes back to their CRM contact (if any) so
   // action buttons and the "What needs you" list can show/advance pipeline stage.
@@ -118,6 +129,13 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
       unassignedCount: unassignedJobs?.length || 0,
       noResponseLeadCount: noResponseLeads?.length || 0,
       thisWeekRevenue, lastWeekRevenue, revenueChange,
+      // Real profit (revenue − subcontractor pay − GST − manual costs) for completed
+      // jobs so far this week — grows through the week as jobs are completed, same as
+      // the /reports/profit page. Not the same as thisWeekRevenue above (that's gross
+      // sales across all jobs regardless of completion or expenses).
+      thisWeekProfitSoFar: thisWeekProfitResult.totalProfit,
+      lastWeekProfit: lastWeekProfitResult.totalProfit,
+      profitByLocation: thisWeekProfitResult.locations.map(l => ({ location: l.locationName, profit: l.profit, revenueExGst: l.revenueExGst })),
       nextWeekJobCount: nextWeekJobs?.length || 0,
       crmStaleLeadCount: crmStaleLeads?.length || 0,
       crmFollowUpLeads: (crmStaleLeads || []).map((c: any) => ({
