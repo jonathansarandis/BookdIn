@@ -104,6 +104,27 @@ export default function IntegrationsPage() {
       comingSoon: true,
     },
     {
+      name: 'Google Ads',
+      description: 'Automatically pull weekly ad spend per campaign into the profit report, mapped to the right location.',
+      logo: (
+        <div className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="#4285F4" d="M9.5 3.5h5v17h-5z"/>
+            <path fill="#34A853" d="M3.5 15.5l7.5-13 2.5 4.33-7.5 13z"/>
+            <path fill="#FBBC04" d="M20.5 15.5l-7.5-13-2.5 4.33 7.5 13z"/>
+          </svg>
+        </div>
+      ),
+      connected: !!business?.google_ads_enabled && !!business?.google_ads_customer_id && !!business?.google_ads_credentials_encrypted,
+      status: business?.google_ads_credentials_encrypted
+        ? business?.google_ads_enabled ? 'Connected' : 'Configured, not enabled'
+        : 'Not connected',
+      action: null,
+      actionLabel: null,
+      settingsUrl: '/settings',
+      category: 'Marketing',
+    },
+    {
       name: 'Twilio SMS',
       description: 'Send SMS reminders and notifications to your customers.',
       logo: (
@@ -167,12 +188,12 @@ export default function IntegrationsPage() {
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
-                      {integration.settingsUrl && integration.connected && (
+                      {integration.settingsUrl && (
                         <a
                           href={integration.settingsUrl}
                           className="text-xs text-gray-400 hover:text-gray-600"
                         >
-                          Manage →
+                          {integration.connected ? 'Manage →' : 'Set up →'}
                         </a>
                       )}
                     </div>

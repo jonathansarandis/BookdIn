@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calculateWeeklyProfit, getMonday, toDateString, type WeeklyProfitResult, type LocationProfit } from '@/lib/reports/weeklyProfit'
 import { formatCurrency } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Loader2, ExternalLink } from 'lucide-react'
 
 function fmtWeek(start: Date) {
   const end = new Date(start.getTime() + 6 * 86400000)
@@ -31,6 +32,8 @@ export default function ProfitReportPage() {
   const [previous, setPrevious] = useState<WeeklyProfitResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [googleAdsConfigured, setGoogleAdsConfigured] = useState<boolean | null>(null)
+  const [googleAdsSpend, setGoogleAdsSpend] = useState<Record<string, number> | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -46,12 +49,16 @@ export default function ProfitReportPage() {
     if (!businessId) return
     setLoading(true)
     const prevWeekStart = new Date(weekStart.getTime() - 7 * 86400000)
-    const [curr, prev] = await Promise.all([
+    const weekStartStr = toDateString(weekStart)
+    const [curr, prev, googleAdsRes] = await Promise.all([
       calculateWeeklyProfit(supabase, businessId, weekStart),
       calculateWeeklyProfit(supabase, businessId, prevWeekStart),
+      fetch(`/api/integrations/google-ads/weekly-spend?week_start=${weekStartStr}`).then(r => r.json()).catch(() => ({ configured: false })),
     ])
     setCurrent(curr)
     setPrevious(prev)
+    setGoogleAdsConfigured(!!googleAdsRes.configured)
+    setGoogleAdsSpend(googleAdsRes.spend || null)
     setLoading(false)
   }, [businessId, weekStart])
 
@@ -181,6 +188,16 @@ export default function ProfitReportPage() {
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Expenses (entered manually)</p>
                       {COST_FIELDS.map(f => {
                         const isCarried = f.carriesForward && loc.carriedForward
+
+                        const locKey = loc.locationName.toLowerCase()
+                        const googleAdsValueDollars = f.key === 'adSpend' ? googleAdsSpend?.[locKey] : undefined
+                        const isFromGoogleAds = f.key === 'adSpend' && !loc.adSpend && googleAdsValueDollars != null
+                        const showConnectPrompt = f.key === 'adSpend' && !loc.adSpend && googleAdsConfigured === false
+
+                        const displayValue = isFromGoogleAds
+                          ? googleAdsValueDollars!.toFixed(2)
+                          : (loc[f.key] ? (loc[f.key] / 100).toFixed(2) : '')
+
                         return (
                           <div key={f.key} className="flex items-center justify-between text-sm py-1">
                             <span className="text-gray-500 flex items-center gap-1.5">
@@ -188,15 +205,23 @@ export default function ProfitReportPage() {
                               {isCarried && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">from last week</span>
                               )}
+                              {isFromGoogleAds && (
+                                <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">from Google Ads</span>
+                              )}
+                              {showConnectPrompt && (
+                                <Link href="/integrations" className="text-[10px] font-medium text-brand-600 hover:underline flex items-center gap-0.5">
+                                  Connect Google Ads <ExternalLink className="w-2.5 h-2.5" />
+                                </Link>
+                              )}
                             </span>
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs text-gray-400">$</span>
                               <input
                                 type="number" min="0" step="0.01"
-                                defaultValue={loc[f.key] ? (loc[f.key] / 100).toFixed(2) : ''}
+                                defaultValue={displayValue}
                                 placeholder="0.00"
                                 onBlur={e => saveCost(loc.locationId, f.dbField, e.target.value)}
-                                className={`w-24 text-right text-sm border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCarried ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200'}`}
+                                className={`w-24 text-right text-sm border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCarried ? 'border-amber-200 bg-amber-50/40' : isFromGoogleAds ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200'}`}
                               />
                               {savingKey === `${loc.locationId}-${f.dbField}` && <Loader2 className="w-3 h-3 text-gray-300 animate-spin" />}
                             </div>
