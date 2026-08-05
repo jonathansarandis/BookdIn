@@ -100,30 +100,22 @@ export interface WeeklySpendByLocation {
 }
 
 /**
- * Pulls per-campaign cost for the given date range and rolls it up by location.
- * Amounts are in dollars (not cents) — matches the shape the profit report's API
- * contract specifies. Never throws for expected failure modes (bad credentials,
- * network errors) — callers should still wrap this, since a malformed customer ID
- * or an unexpected Google Ads response shape can still throw.
+ * Runs a GAQL search against the Google Ads API for one business, handling auth
+ * (OAuth refresh), the developer token, and the login-customer-id header — required
+ * whenever the target customer is a client account under a Google Ads Manager (MCC)
+ * account, which identifies which manager account we're acting through. Every
+ * Google Ads API call should go through this so that requirement is never missed.
  */
-export async function getWeeklySpendByLocation(
-  business: BusinessGoogleAdsConfig,
-  weekStartStr: string, // YYYY-MM-DD, Monday
-  weekEndInclusiveStr: string, // YYYY-MM-DD, Sunday
-): Promise<WeeklySpendByLocation> {
+async function searchGoogleAds(business: BusinessGoogleAdsConfig, query: string): Promise<any[]> {
   const creds = decryptGoogleAdsCredentials(business)
   const accessToken = await getAccessToken(creds)
   const customerId = business.google_ads_customer_id!.replace(/-/g, '')
-
-  const query = `SELECT campaign.name, metrics.cost_micros FROM campaign WHERE segments.date BETWEEN '${weekStartStr}' AND '${weekEndInclusiveStr}'`
 
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${accessToken}`,
     'developer-token': creds.developer_token,
     'Content-Type': 'application/json',
   }
-  // Required whenever the target customer is a client account under a Google Ads
-  // Manager (MCC) account — identifies which manager account we're acting through.
   if (business.google_ads_login_customer_id) {
     headers['login-customer-id'] = business.google_ads_login_customer_id.replace(/-/g, '')
   }
@@ -140,7 +132,25 @@ export async function getWeeklySpendByLocation(
   }
 
   const data = await res.json()
-  const results: any[] = data.results || []
+  return data.results || []
+}
+
+/**
+ * Pulls per-campaign cost for the given date range and rolls it up by location.
+ * Amounts are in dollars (not cents) — matches the shape the profit report's API
+ * contract specifies. Never throws for expected failure modes (bad credentials,
+ * network errors) — callers should still wrap this, since a malformed customer ID
+ * or an unexpected Google Ads response shape can still throw.
+ */
+export async function getWeeklySpendByLocation(
+  business: BusinessGoogleAdsConfig,
+  weekStartStr: string, // YYYY-MM-DD, Monday
+  weekEndInclusiveStr: string, // YYYY-MM-DD, Sunday
+): Promise<WeeklySpendByLocation> {
+  const results = await searchGoogleAds(
+    business,
+    `SELECT campaign.name, metrics.cost_micros FROM campaign WHERE segments.date BETWEEN '${weekStartStr}' AND '${weekEndInclusiveStr}'`,
+  )
 
   const totals: WeeklySpendByLocation = { melbourne: 0, perth: 0, adelaide: 0, sydney: 0 }
   for (const row of results) {
@@ -157,4 +167,56 @@ export async function getWeeklySpendByLocation(
   }
 
   return totals
+}
+
+export interface LocationAdPerformance {
+  spend: number
+  conversions: number
+  /** null when conversions is 0 — cost/0 is meaningless, not infinite spend efficiency. */
+  costPerConversion: number | null
+}
+
+export type WeeklyAdPerformanceByLocation = Record<'melbourne' | 'perth' | 'adelaide' | 'sydney', LocationAdPerformance>
+
+/**
+ * Same rollup as getWeeklySpendByLocation but also pulls conversions, so callers
+ * (the AI agent brief) can compute cost-per-conversion per location.
+ */
+export async function getWeeklyAdPerformanceByLocation(
+  business: BusinessGoogleAdsConfig,
+  weekStartStr: string, // YYYY-MM-DD, Monday
+  weekEndInclusiveStr: string, // YYYY-MM-DD, Sunday
+): Promise<WeeklyAdPerformanceByLocation> {
+  const results = await searchGoogleAds(
+    business,
+    `SELECT campaign.name, metrics.cost_micros, metrics.conversions FROM campaign WHERE segments.date BETWEEN '${weekStartStr}' AND '${weekEndInclusiveStr}'`,
+  )
+
+  const totals: Record<'melbourne' | 'perth' | 'adelaide' | 'sydney', { spend: number; conversions: number }> = {
+    melbourne: { spend: 0, conversions: 0 },
+    perth: { spend: 0, conversions: 0 },
+    adelaide: { spend: 0, conversions: 0 },
+    sydney: { spend: 0, conversions: 0 },
+  }
+  for (const row of results) {
+    const campaignName: string | undefined = row.campaign?.name
+    if (!campaignName) continue
+    const location = mapCampaignToLocation(campaignName)
+    if (!location) continue
+    const costMicros: number = Number(row.metrics?.costMicros ?? row.metrics?.cost_micros ?? 0)
+    totals[location].spend += costMicros / 1_000_000
+    totals[location].conversions += Number(row.metrics?.conversions ?? 0)
+  }
+
+  const result = {} as WeeklyAdPerformanceByLocation
+  for (const key of Object.keys(totals) as (keyof typeof totals)[]) {
+    const spend = Math.round(totals[key].spend * 100) / 100
+    const conversions = Math.round(totals[key].conversions * 100) / 100
+    result[key] = {
+      spend,
+      conversions,
+      costPerConversion: conversions > 0 ? Math.round((spend / conversions) * 100) / 100 : null,
+    }
+  }
+  return result
 }

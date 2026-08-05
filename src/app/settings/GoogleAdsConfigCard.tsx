@@ -147,7 +147,7 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
         ) : (
           <a
             href="/api/settings/google-ads/connect"
-            className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0 inline-flex items-center gap-1.5"
+            className="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors flex-shrink-0 inline-flex items-center gap-1.5"
           >
             Connect with Google <ExternalLink className="w-3 h-3" />
           </a>

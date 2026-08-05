@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getDailyLog, dateInTimezone } from '@/lib/agent/dailyLog'
-import { calculateWeeklyProfit, getMonday } from '@/lib/reports/weeklyProfit'
+import { calculateWeeklyProfit, getMonday, toDateString } from '@/lib/reports/weeklyProfit'
+import { isGoogleAdsConfigured, getWeeklyAdPerformanceByLocation } from '@/lib/googleAds'
 
 /**
  * Builds the full agent brief (summary + tasks + calendar gaps) for one business.
@@ -50,7 +51,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
       .eq('business_id', businessId).eq('status', 'sent').lt('created_at', twentyFourHoursAgo).order('created_at', { ascending: false }).limit(20),
     supabase.from('crm_contacts').select('id, full_name, phone, email, stage, created_at')
       .eq('business_id', businessId).eq('stage', 'lead').lt('created_at', twentyFourHoursAgo).order('created_at', { ascending: true }).limit(10),
-    supabase.from('businesses').select('timezone').eq('id', businessId).single(),
+    supabase.from('businesses').select('timezone, google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_developer_token_iv, google_ads_refresh_token_encrypted, google_ads_refresh_token_iv, google_ads_login_customer_id').eq('id', businessId).single(),
   ])
 
   const yesterdayDate = dateInTimezone(businessRow?.timezone, -1)
@@ -65,6 +66,24 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
     calculateWeeklyProfit(supabase, businessId, thisMonday),
     calculateWeeklyProfit(supabase, businessId, lastMonday),
   ])
+
+  // Same Google Ads data source as /reports/profit (getWeeklyAdPerformanceByLocation),
+  // extended with conversions so the agent can reason about cost-per-conversion, not
+  // just raw spend. Never lets a Google Ads failure break the whole brief.
+  let googleAdsSummary: any = null
+  if (businessRow && isGoogleAdsConfigured(businessRow as any)) {
+    const weekStartStr = toDateString(thisMonday)
+    const weekEndStr = toDateString(new Date(thisMonday.getTime() + 6 * 86400000))
+    try {
+      const byLocation = await getWeeklyAdPerformanceByLocation(businessRow as any, weekStartStr, weekEndStr)
+      const totalSpend = Math.round(
+        Object.values(byLocation).reduce((s, l) => s + l.spend, 0) * 100
+      ) / 100
+      googleAdsSummary = { totalSpend, byLocation }
+    } catch (e: any) {
+      googleAdsSummary = { error: e.message || 'Google Ads request failed' }
+    }
+  }
 
   // Link pending-payment jobs and no-response quotes back to their CRM contact (if any) so
   // action buttons and the "What needs you" list can show/advance pipeline stage.
@@ -136,6 +155,9 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
       thisWeekProfitSoFar: thisWeekProfitResult.totalProfit,
       lastWeekProfit: lastWeekProfitResult.totalProfit,
       profitByLocation: thisWeekProfitResult.locations.map(l => ({ location: l.locationName, profit: l.profit, revenueExGst: l.revenueExGst })),
+      // Google Ads spend/conversions/CPA for this week, by location — null when not
+      // connected, { error } when the API call failed, otherwise { totalSpend, byLocation }.
+      googleAds: googleAdsSummary,
       nextWeekJobCount: nextWeekJobs?.length || 0,
       crmStaleLeadCount: crmStaleLeads?.length || 0,
       crmFollowUpLeads: (crmStaleLeads || []).map((c: any) => ({
