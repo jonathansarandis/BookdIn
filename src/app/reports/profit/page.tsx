@@ -14,13 +14,13 @@ function fmtWeek(start: Date) {
   return `${startLabel} – ${endLabel}`
 }
 
-const COST_FIELDS: { key: keyof Pick<LocationProfit, 'adminPay' | 'adSpend' | 'subscriptionFees' | 'refunds' | 'perfMaxSpend' | 'otherCosts'>; dbField: string; label: string }[] = [
-  { key: 'adminPay', dbField: 'admin_pay', label: 'Admin team pay' },
-  { key: 'adSpend', dbField: 'ad_spend', label: 'Advertising (Google Ads)' },
-  { key: 'subscriptionFees', dbField: 'subscription_fees', label: 'Subscription fees' },
-  { key: 'refunds', dbField: 'refunds', label: 'Refunds' },
-  { key: 'perfMaxSpend', dbField: 'perf_max_spend', label: 'Perf Max test campaign' },
-  { key: 'otherCosts', dbField: 'other_costs', label: 'Other costs' },
+const COST_FIELDS: { key: keyof Pick<LocationProfit, 'adminPay' | 'adSpend' | 'subscriptionFees' | 'refunds' | 'perfMaxSpend' | 'otherCosts'>; dbField: string; label: string; carriesForward: boolean }[] = [
+  { key: 'adminPay', dbField: 'admin_pay', label: 'Admin team pay', carriesForward: true },
+  { key: 'adSpend', dbField: 'ad_spend', label: 'Advertising (Google Ads)', carriesForward: false },
+  { key: 'subscriptionFees', dbField: 'subscription_fees', label: 'Subscription fees', carriesForward: true },
+  { key: 'refunds', dbField: 'refunds', label: 'Refunds', carriesForward: true },
+  { key: 'perfMaxSpend', dbField: 'perf_max_spend', label: 'Perf Max test campaign', carriesForward: true },
+  { key: 'otherCosts', dbField: 'other_costs', label: 'Other costs', carriesForward: false },
 ]
 
 export default function ProfitReportPage() {
@@ -65,10 +65,16 @@ export default function ProfitReportPage() {
     const cents = Math.round((parseFloat(dollarValue) || 0) * 100)
     setSavingKey(`${locationId}-${dbField}`)
     const weekStartStr = toDateString(weekStart)
-    await supabase.from('weekly_costs').upsert(
-      { business_id: businessId, location_id: locationId, week_start: weekStartStr, [dbField]: cents },
-      { onConflict: 'location_id,week_start' }
-    )
+
+    // Snapshot every currently-displayed cost value (including any carried-forward
+    // suggestions from last week) so editing one field doesn't zero out the others —
+    // this week's row, once created, becomes the explicit source of truth for all of them.
+    const loc = current?.locations.find(l => l.locationId === locationId)
+    const payload: Record<string, any> = { business_id: businessId, location_id: locationId, week_start: weekStartStr }
+    for (const f of COST_FIELDS) payload[f.dbField] = loc ? loc[f.key] : 0
+    payload[dbField] = cents
+
+    await supabase.from('weekly_costs').upsert(payload, { onConflict: 'location_id,week_start' })
     await load()
     setSavingKey(null)
   }
@@ -173,22 +179,30 @@ export default function ProfitReportPage() {
 
                     <div className="pt-2 border-t border-gray-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Expenses (entered manually)</p>
-                      {COST_FIELDS.map(f => (
-                        <div key={f.key} className="flex items-center justify-between text-sm py-1">
-                          <span className="text-gray-500">{f.label}</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-400">$</span>
-                            <input
-                              type="number" min="0" step="0.01"
-                              defaultValue={loc[f.key] ? (loc[f.key] / 100).toFixed(2) : ''}
-                              placeholder="0.00"
-                              onBlur={e => saveCost(loc.locationId, f.dbField, e.target.value)}
-                              className="w-24 text-right text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            {savingKey === `${loc.locationId}-${f.dbField}` && <Loader2 className="w-3 h-3 text-gray-300 animate-spin" />}
+                      {COST_FIELDS.map(f => {
+                        const isCarried = f.carriesForward && loc.carriedForward
+                        return (
+                          <div key={f.key} className="flex items-center justify-between text-sm py-1">
+                            <span className="text-gray-500 flex items-center gap-1.5">
+                              {f.label}
+                              {isCarried && (
+                                <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">from last week</span>
+                              )}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-gray-400">$</span>
+                              <input
+                                type="number" min="0" step="0.01"
+                                defaultValue={loc[f.key] ? (loc[f.key] / 100).toFixed(2) : ''}
+                                placeholder="0.00"
+                                onBlur={e => saveCost(loc.locationId, f.dbField, e.target.value)}
+                                className={`w-24 text-right text-sm border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCarried ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200'}`}
+                              />
+                              {savingKey === `${loc.locationId}-${f.dbField}` && <Loader2 className="w-3 h-3 text-gray-300 animate-spin" />}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
 
                     <div className="flex justify-between items-center pt-3 border-t border-gray-200">

@@ -31,6 +31,10 @@ export interface LocationProfit {
   totalExpenses: number
   profit: number
   jobCount: number
+  /** True for the 4 carried-forward fields when this week has no explicit
+   *  entry yet and the value shown is copied from the most recent prior
+   *  week — so the UI can flag it as a suggestion, not a confirmed figure. */
+  carriedForward: boolean
 }
 
 export interface WeeklyProfitResult {
@@ -77,6 +81,26 @@ export async function calculateWeeklyProfit(
   const taxMode = (business?.tax_mode ?? 'exclusive') as 'exclusive' | 'inclusive'
   const costsByLocation = new Map((costs || []).map((c: any) => [c.location_id, c]))
 
+  // For locations with no weekly_costs row yet this week, carry forward
+  // admin_pay/subscription_fees/refunds/perf_max_spend from their most
+  // recent prior week — ad_spend and other_costs are never carried
+  // forward (ad_spend is meant to come from Google Ads, other_costs is
+  // genuinely one-off).
+  const needsFallback = (locations || []).filter((loc: any) => !costsByLocation.has(loc.id)).map((l: any) => l.id)
+  const fallbackByLocation = new Map<string, any>()
+  if (needsFallback.length) {
+    const { data: priorCosts } = await supabase
+      .from('weekly_costs')
+      .select('location_id, week_start, admin_pay, subscription_fees, refunds, perf_max_spend')
+      .eq('business_id', businessId)
+      .in('location_id', needsFallback)
+      .lt('week_start', weekStartStr)
+      .order('week_start', { ascending: false })
+    for (const c of priorCosts || []) {
+      if (!fallbackByLocation.has(c.location_id)) fallbackByLocation.set(c.location_id, c)
+    }
+  }
+
   const locationResults: LocationProfit[] = (locations || []).map((loc: any) => {
     const locJobs = (jobs || []).filter((j: any) => j.location_id === loc.id)
 
@@ -90,11 +114,14 @@ export async function calculateWeeklyProfit(
 
     const gst = Math.round(revenueExGst * taxRate / 100)
     const c = costsByLocation.get(loc.id) as any
-    const adminPay = c?.admin_pay ?? 0
+    const fallback = fallbackByLocation.get(loc.id) as any
+    const carriedForward = !c && !!fallback
+
+    const adminPay = c?.admin_pay ?? fallback?.admin_pay ?? 0
     const adSpend = c?.ad_spend ?? 0
-    const subscriptionFees = c?.subscription_fees ?? 0
-    const refunds = c?.refunds ?? 0
-    const perfMaxSpend = c?.perf_max_spend ?? 0
+    const subscriptionFees = c?.subscription_fees ?? fallback?.subscription_fees ?? 0
+    const refunds = c?.refunds ?? fallback?.refunds ?? 0
+    const perfMaxSpend = c?.perf_max_spend ?? fallback?.perf_max_spend ?? 0
     const otherCosts = c?.other_costs ?? 0
 
     const totalExpenses = subcontractorPay + gst + adminPay + adSpend + subscriptionFees + refunds + perfMaxSpend + otherCosts
@@ -104,7 +131,7 @@ export async function calculateWeeklyProfit(
       locationId: loc.id, locationName: loc.name,
       revenueExGst, revenueIncGst, subcontractorPay, gst,
       adminPay, adSpend, subscriptionFees, refunds, perfMaxSpend, otherCosts,
-      totalExpenses, profit, jobCount: locJobs.length,
+      totalExpenses, profit, jobCount: locJobs.length, carriedForward,
     }
   })
 
