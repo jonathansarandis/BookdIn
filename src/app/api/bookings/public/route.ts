@@ -8,6 +8,7 @@ import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricin
 import { fromBusinessDateTime } from '@/lib/datetime'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
 import { sendExpoPush } from '@/lib/push/expo'
+import { inferLocationIdFromState } from '@/lib/bookings/inferLocation'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,7 +33,6 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const {
     business_id,
-    location_id,
     service_id,
     frequency,
     scheduled_date,
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     bedrooms,
     bathrooms,
   } = body
+  let location_id = body.location_id
   const isFlexible = scheduled_time === 'flexible'
   const effectiveTime = isFlexible ? '09:00' : scheduled_time
   const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
@@ -85,7 +86,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 })
     }
 
-    // Validate location belongs to this business
+    // Validate location belongs to this business — if the client didn't send one,
+    // try to infer it from the customer's address state before failing closed.
+    if (!location_id) {
+      location_id = await inferLocationIdFromState(supabase, business_id, address?.state)
+    }
     if (!location_id) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 })
     }

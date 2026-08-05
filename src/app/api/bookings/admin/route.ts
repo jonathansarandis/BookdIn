@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
+import { inferLocationIdFromState } from '@/lib/bookings/inferLocation'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -30,7 +31,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const {
     editJobId,
     service_id,
-    location_id,
     frequency,
     bedrooms,
     bathrooms,
@@ -51,6 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     is_flexible_time,
     custom_items,
   } = body
+  let location_id = body.location_id
 
   const admin = createAdminClient()
 
@@ -74,7 +75,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .single()
   if (!business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
 
-  // Validate location belongs to this business
+  // Validate location belongs to this business — if the client didn't send one,
+  // try to infer it from the booking's address state before failing closed.
+  if (!location_id) {
+    let stateForInference = address?.state
+    if (!stateForInference && address_id) {
+      const { data: existingAddr } = await admin.from('addresses').select('state').eq('id', address_id).single()
+      stateForInference = existingAddr?.state
+    }
+    location_id = await inferLocationIdFromState(admin, businessId, stateForInference)
+  }
   if (!location_id) {
     return NextResponse.json({ error: 'Location is required' }, { status: 400 })
   }

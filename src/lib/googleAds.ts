@@ -16,7 +16,7 @@ export interface BusinessGoogleAdsConfig {
   google_ads_refresh_token_iv: string | null
 }
 
-const API_VERSION = 'v17'
+const API_VERSION = 'v24'
 
 function getOAuthClientCredentials(): { client_id: string; client_secret: string } {
   const client_id = process.env.GOOGLE_ADS_CLIENT_ID

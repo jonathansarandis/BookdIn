@@ -34,6 +34,7 @@ export default function ProfitReportPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [googleAdsConfigured, setGoogleAdsConfigured] = useState<boolean | null>(null)
   const [googleAdsSpend, setGoogleAdsSpend] = useState<Record<string, number> | null>(null)
+  const [googleAdsError, setGoogleAdsError] = useState<string | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -53,12 +54,15 @@ export default function ProfitReportPage() {
     const [curr, prev, googleAdsRes] = await Promise.all([
       calculateWeeklyProfit(supabase, businessId, weekStart),
       calculateWeeklyProfit(supabase, businessId, prevWeekStart),
-      fetch(`/api/integrations/google-ads/weekly-spend?week_start=${weekStartStr}`).then(r => r.json()).catch(() => ({ configured: false })),
+      fetch(`/api/integrations/google-ads/weekly-spend?week_start=${weekStartStr}`)
+        .then(async r => ({ ...(await r.json().catch(() => ({}))), ok: r.ok }))
+        .catch(() => ({ configured: false, ok: false, error: 'Could not reach the Google Ads integration' })),
     ])
     setCurrent(curr)
     setPrevious(prev)
     setGoogleAdsConfigured(!!googleAdsRes.configured)
     setGoogleAdsSpend(googleAdsRes.spend || null)
+    setGoogleAdsError(googleAdsRes.ok === false ? (googleAdsRes.error || 'Failed to load Google Ads spend') : null)
     setLoading(false)
   }, [businessId, weekStart])
 
@@ -193,6 +197,7 @@ export default function ProfitReportPage() {
                         const googleAdsValueDollars = f.key === 'adSpend' ? googleAdsSpend?.[locKey] : undefined
                         const isFromGoogleAds = f.key === 'adSpend' && !loc.adSpend && googleAdsValueDollars != null
                         const showConnectPrompt = f.key === 'adSpend' && !loc.adSpend && googleAdsConfigured === false
+                        const showGoogleAdsError = f.key === 'adSpend' && !loc.adSpend && googleAdsConfigured === true && !!googleAdsError
 
                         const displayValue = isFromGoogleAds
                           ? googleAdsValueDollars!.toFixed(2)
@@ -212,6 +217,14 @@ export default function ProfitReportPage() {
                                 <Link href="/integrations" className="text-[10px] font-medium text-brand-600 hover:underline flex items-center gap-0.5">
                                   Connect Google Ads <ExternalLink className="w-2.5 h-2.5" />
                                 </Link>
+                              )}
+                              {showGoogleAdsError && (
+                                <span
+                                  className="text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full cursor-help"
+                                  title={googleAdsError || 'Failed to load Google Ads spend'}
+                                >
+                                  Google Ads error
+                                </span>
                               )}
                             </span>
                             <div className="flex items-center gap-1.5">
