@@ -69,6 +69,12 @@ export default function SettingsPage() {
     } else if (params.get('stripe_error')) {
       setFlashMessage({ type: 'error', text: `Stripe connection failed: ${params.get('stripe_error')}` })
       window.history.replaceState({}, '', window.location.pathname)
+    } else if (params.get('google_ads_success') === 'true') {
+      setFlashMessage({ type: 'success', text: 'Google Ads connected successfully!' })
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (params.get('google_ads_error')) {
+      setFlashMessage({ type: 'error', text: `Google Ads connection failed: ${params.get('google_ads_error')}` })
+      window.history.replaceState({}, '', window.location.pathname)
     }
 
     fetchData()

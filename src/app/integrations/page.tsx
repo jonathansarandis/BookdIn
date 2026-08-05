@@ -115,8 +115,8 @@ export default function IntegrationsPage() {
           </svg>
         </div>
       ),
-      connected: !!business?.google_ads_enabled && !!business?.google_ads_customer_id && !!business?.google_ads_credentials_encrypted,
-      status: business?.google_ads_credentials_encrypted
+      connected: !!business?.google_ads_enabled && !!business?.google_ads_customer_id && !!business?.google_ads_refresh_token_encrypted,
+      status: business?.google_ads_refresh_token_encrypted
         ? business?.google_ads_enabled ? 'Connected' : 'Configured, not enabled'
         : 'Not connected',
       action: null,

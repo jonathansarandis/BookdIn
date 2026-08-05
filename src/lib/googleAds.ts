@@ -10,19 +10,38 @@ export interface GoogleAdsCredentials {
 export interface BusinessGoogleAdsConfig {
   google_ads_customer_id: string | null
   google_ads_enabled: boolean
-  google_ads_credentials_encrypted: string | null
-  google_ads_credentials_iv: string | null
+  google_ads_developer_token_encrypted: string | null
+  google_ads_developer_token_iv: string | null
+  google_ads_refresh_token_encrypted: string | null
+  google_ads_refresh_token_iv: string | null
 }
 
 const API_VERSION = 'v17'
 
+function getOAuthClientCredentials(): { client_id: string; client_secret: string } {
+  const client_id = process.env.GOOGLE_ADS_CLIENT_ID
+  const client_secret = process.env.GOOGLE_ADS_CLIENT_SECRET
+  if (!client_id || !client_secret) {
+    throw new Error('GOOGLE_ADS_CLIENT_ID/GOOGLE_ADS_CLIENT_SECRET are not set in environment')
+  }
+  return { client_id, client_secret }
+}
+
 export function isGoogleAdsConfigured(business: BusinessGoogleAdsConfig): boolean {
-  return !!(business.google_ads_enabled && business.google_ads_customer_id && business.google_ads_credentials_encrypted && business.google_ads_credentials_iv)
+  return !!(
+    business.google_ads_enabled &&
+    business.google_ads_customer_id &&
+    business.google_ads_developer_token_encrypted &&
+    business.google_ads_developer_token_iv &&
+    business.google_ads_refresh_token_encrypted &&
+    business.google_ads_refresh_token_iv
+  )
 }
 
 export function decryptGoogleAdsCredentials(business: BusinessGoogleAdsConfig): GoogleAdsCredentials {
-  const json = decrypt(business.google_ads_credentials_encrypted!, business.google_ads_credentials_iv!)
-  return JSON.parse(json)
+  const developer_token = decrypt(business.google_ads_developer_token_encrypted!, business.google_ads_developer_token_iv!)
+  const refresh_token = decrypt(business.google_ads_refresh_token_encrypted!, business.google_ads_refresh_token_iv!)
+  return { developer_token, refresh_token, ...getOAuthClientCredentials() }
 }
 
 /**

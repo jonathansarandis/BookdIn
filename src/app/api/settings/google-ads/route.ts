@@ -1,11 +1,12 @@
 // @ts-nocheck
 // src/app/api/settings/google-ads/route.ts
-// Same shape as /api/settings/sms: only touches the encrypted credential blob
-// when the caller actually sent new values, and reports back whether
-// credentials are configured (never the values themselves, once saved).
+// Handles the parts of Google Ads config that aren't OAuth: the customer ID,
+// the enabled flag, and the developer token (a Google Ads API Center value,
+// not part of the OAuth handshake, so it's still pasted in manually). The
+// refresh token itself is set by /api/settings/google-ads/callback.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { encrypt, decrypt } from '@/lib/crypto'
+import { encrypt } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,9 +22,7 @@ export async function POST(req: Request) {
       google_ads_customer_id,
       google_ads_enabled,
       developer_token,   // optional plaintext — only present when the user is setting/rotating it
-      client_id,
-      client_secret,
-      refresh_token,
+      disconnect,        // optional — clears the refresh token and connected email
     } = body
 
     if (!business_id) return NextResponse.json({ error: 'Missing business_id' }, { status: 400 })
@@ -38,38 +37,21 @@ export async function POST(req: Request) {
       google_ads_enabled: !!google_ads_enabled,
     }
 
-    const anyCredentialProvided = developer_token || client_id || client_secret || refresh_token
-    if (anyCredentialProvided) {
-      // Merge with whatever's already stored so a partial update (e.g. just rotating
-      // the refresh token) doesn't blank out the other three fields.
-      let existing: Record<string, string> = {}
-      const { data: current } = await supabase
-        .from('businesses')
-        .select('google_ads_credentials_encrypted, google_ads_credentials_iv')
-        .eq('id', business_id)
-        .single()
-      if (current?.google_ads_credentials_encrypted && current?.google_ads_credentials_iv) {
-        try {
-          existing = JSON.parse(decrypt(current.google_ads_credentials_encrypted, current.google_ads_credentials_iv))
-        } catch (err: any) {
-          return NextResponse.json({ error: `Could not decrypt existing credentials: ${err.message}` }, { status: 500 })
-        }
-      }
-
-      const merged = {
-        developer_token: developer_token || existing.developer_token || '',
-        client_id: client_id || existing.client_id || '',
-        client_secret: client_secret || existing.client_secret || '',
-        refresh_token: refresh_token || existing.refresh_token || '',
-      }
-
+    if (developer_token) {
       try {
-        const { ciphertext, iv } = encrypt(JSON.stringify(merged))
-        updates.google_ads_credentials_encrypted = ciphertext
-        updates.google_ads_credentials_iv = iv
+        const { ciphertext, iv } = encrypt(developer_token)
+        updates.google_ads_developer_token_encrypted = ciphertext
+        updates.google_ads_developer_token_iv = iv
       } catch (err: any) {
         return NextResponse.json({ error: `Encryption failed: ${err.message}` }, { status: 500 })
       }
+    }
+
+    if (disconnect) {
+      updates.google_ads_refresh_token_encrypted = null
+      updates.google_ads_refresh_token_iv = null
+      updates.google_ads_connected_email = null
+      updates.google_ads_enabled = false
     }
 
     const { error } = await supabase.from('businesses').update(updates).eq('id', business_id)
