@@ -14,6 +14,7 @@ export interface BusinessGoogleAdsConfig {
   google_ads_developer_token_iv: string | null
   google_ads_refresh_token_encrypted: string | null
   google_ads_refresh_token_iv: string | null
+  google_ads_login_customer_id?: string | null
 }
 
 const API_VERSION = 'v24'
@@ -116,13 +117,20 @@ export async function getWeeklySpendByLocation(
 
   const query = `SELECT campaign.name, metrics.cost_micros FROM campaign WHERE segments.date BETWEEN '${weekStartStr}' AND '${weekEndInclusiveStr}'`
 
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${accessToken}`,
+    'developer-token': creds.developer_token,
+    'Content-Type': 'application/json',
+  }
+  // Required whenever the target customer is a client account under a Google Ads
+  // Manager (MCC) account — identifies which manager account we're acting through.
+  if (business.google_ads_login_customer_id) {
+    headers['login-customer-id'] = business.google_ads_login_customer_id.replace(/-/g, '')
+  }
+
   const res = await fetch(`https://googleads.googleapis.com/${API_VERSION}/customers/${customerId}/googleAds:search`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'developer-token': creds.developer_token,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({ query }),
   })
 

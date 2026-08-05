@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_developer_token_iv, google_ads_refresh_token_encrypted, google_ads_refresh_token_iv')
+    .select('google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_developer_token_iv, google_ads_refresh_token_encrypted, google_ads_refresh_token_iv, google_ads_login_customer_id')
     .eq('id', businessId)
     .single()
 
