@@ -147,7 +147,7 @@ export default function AgentPage() {
             <AgentIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white">Clean Freaks AI Agent</h1>
+            <h1 className="text-lg font-bold text-white">{brief?.businessName ? `${brief.businessName} AI Agent` : 'AI Agent'}</h1>
             <p className="text-xs text-gray-400">Daily operations coach · Powered by Claude</p>
           </div>
         </div>
@@ -247,7 +247,7 @@ export default function AgentPage() {
               <AgentIcon className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900">Clean Freaks Agent</p>
+              <p className="text-sm font-semibold text-gray-900">{brief?.businessName ? `${brief.businessName} Agent` : 'AI Agent'}</p>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
                 <p className="text-xs text-gray-400">Online · {getGreeting()}</p>

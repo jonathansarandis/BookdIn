@@ -52,7 +52,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
       .eq('business_id', businessId).eq('status', 'sent').lt('created_at', twentyFourHoursAgo).order('created_at', { ascending: false }).limit(20),
     supabase.from('crm_contacts').select('id, full_name, phone, email, stage, created_at')
       .eq('business_id', businessId).eq('stage', 'lead').lt('created_at', twentyFourHoursAgo).order('created_at', { ascending: true }).limit(10),
-    supabase.from('businesses').select('timezone, google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_developer_token_iv, google_ads_refresh_token_encrypted, google_ads_refresh_token_iv, google_ads_login_customer_id').eq('id', businessId).single(),
+    supabase.from('businesses').select('name, timezone, google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_developer_token_iv, google_ads_refresh_token_encrypted, google_ads_refresh_token_iv, google_ads_login_customer_id').eq('id', businessId).single(),
     // Contacts with an explicitly-set follow-up due today or overdue — distinct from
     // crmStaleLeads above (which is "lead stage, no contact yet in 24h" regardless of
     // whether anyone ever set a follow-up date). Won/Lost are terminal, so excluded.
@@ -159,6 +159,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
   }
 
   return {
+    businessName: businessRow?.name || null,
     summary: {
       pendingPaymentCount: pendingPayment?.length || 0,
       pendingPaymentValue: pendingPayment?.reduce((s: number, j: any) => s + (j.price_override ?? j.total_price ?? 0), 0) || 0,
