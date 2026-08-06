@@ -1,11 +1,13 @@
 // @ts-nocheck
 "use client";
 import Link from "next/link";
+import { useEffect } from "react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import BrowserFrame from "@/components/marketing/BrowserFrame";
 import PhoneFrame from "@/components/marketing/PhoneFrame";
 import { GradientOrb, Grain, CurveDivider } from "@/components/marketing/Atmosphere";
+import { useTilt } from "@/hooks/useTilt";
 
 const dark = {
   bg: "linear-gradient(150deg, #0A0F1E 0%, #0D0B20 55%, #0A0F1E 100%)",
@@ -122,7 +124,7 @@ function FeatureSection({
   return (
     <section style={{ background: theme.bg, position: "relative", overflow: "hidden", padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
       {theme === dark && <Grain />}
-      <div className="bd-feature-grid" style={{
+      <div className="bd-feature-grid bd-reveal" style={{
         maxWidth: 1320, margin: "0 auto", position: "relative", zIndex: 1,
         display: "grid", gridTemplateColumns: imageSide === "right" ? "4fr 7fr" : "7fr 4fr",
         gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
@@ -133,7 +135,60 @@ function FeatureSection({
   );
 }
 
+function PricingCard({ p }: { p: { name: string; price: string; period: string; desc: string; featured: boolean } }) {
+  const { ref, rotateX, rotateY, scale } = useTilt<HTMLDivElement>(4, 1.02);
+  return (
+    <div
+      ref={ref}
+      className={p.featured ? "bd-shimmer" : undefined}
+      style={{
+        background: p.featured
+          ? "linear-gradient(#0A0F1E,#0A0F1E), linear-gradient(115deg, rgba(124,58,237,0.9), rgba(37,99,255,0.6) 35%, rgba(124,58,237,0.25) 60%, rgba(124,58,237,0.9) 100%)"
+          : light.cardBg,
+        backgroundOrigin: p.featured ? "border-box" : undefined,
+        backgroundClip: p.featured ? "padding-box, border-box" : undefined,
+        backgroundSize: p.featured ? "100% 100%, 300% 300%" : undefined,
+        border: p.featured ? "1px solid transparent" : `1px solid ${light.cardBorder}`,
+        borderRadius: 18, padding: "2.2rem", position: "relative",
+        boxShadow: p.featured ? "0 24px 60px rgba(37,99,255,0.22)" : "0 2px 10px rgba(10,15,30,0.03)",
+        transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(${scale})`,
+        transformOrigin: "center", willChange: "transform",
+      }}>
+      {p.featured && <div style={{ position: "absolute", top: "1.4rem", right: "1.4rem", background: BLUE, color: "#fff", fontSize: "0.68rem", fontWeight: 700, padding: "3px 10px", borderRadius: 100 }}>Most popular</div>}
+      <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: p.featured ? dark.faint : light.faint, marginBottom: "0.8rem" }}>{p.name}</div>
+      <div style={{ fontSize: "3rem", fontWeight: 700, color: p.featured ? "#fff" : light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
+        {p.price}<span style={{ fontSize: "0.95rem", fontWeight: 400, color: p.featured ? dark.faint : light.faint }}>{p.period}</span>
+      </div>
+      <p style={{ fontSize: "0.9rem", color: p.featured ? dark.body : light.body, margin: "0.9rem 0 1.7rem", lineHeight: 1.65 }}>{p.desc}</p>
+      <Link href="/auth/signup" style={{
+        display: "block", textAlign: "center", padding: "0.85rem",
+        borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: "0.95rem",
+        background: p.featured ? BLUE : "transparent",
+        color: p.featured ? "#fff" : light.headline,
+        border: p.featured ? "none" : `1px solid ${light.cardBorder}`,
+      }}>
+        {p.price === "Custom" ? "Contact us" : "Start 14-day trial"}
+      </Link>
+    </div>
+  );
+}
+
 export default function HomePageContent() {
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const els = document.querySelectorAll(".bd-reveal");
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("bd-revealed");
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: "0px 0px -60px 0px" });
+    els.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", overflowX: "hidden", background: dark.base }}>
       <style>{`
@@ -143,9 +198,15 @@ export default function HomePageContent() {
         .bd-shimmer { animation: bdShimmer 7s linear infinite; }
         .bd-bullet-row { transition: background 0.2s ease, transform 0.2s ease; }
         .bd-bullet-row:hover { background: rgba(124,58,237,0.07); transform: translateX(4px); }
+        @keyframes bdOrbFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-24px); } }
+        .bd-orb-float { animation-name: bdOrbFloat; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+        .bd-reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+        .bd-revealed { opacity: 1; transform: translateY(0); }
         @media (prefers-reduced-motion: reduce) {
           .bd-anim { animation: none; opacity: 1; transform: none; }
           .bd-shimmer { animation: none; }
+          .bd-orb-float { animation: none; }
+          .bd-reveal { opacity: 1; transform: none; transition: none; }
         }
         @media (max-width: 900px) {
           .bd-feature-grid { grid-template-columns: 1fr !important; }
@@ -160,7 +221,7 @@ export default function HomePageContent() {
       {/* ── HERO ── */}
       <section style={{
         background: dark.bg, position: "relative", overflow: "hidden",
-        paddingTop: "10rem", paddingBottom: "clamp(4rem, 8vw, 7rem)",
+        paddingTop: "11rem", paddingBottom: "clamp(5rem, 9vw, 8rem)",
       }}>
         <Grain />
         <GradientOrb color={PURPLE} size={560} top={-200} left={-180} opacity={0.3} blur={130} />
@@ -192,7 +253,11 @@ export default function HomePageContent() {
             color: dark.headline, animationDelay: "70ms",
           }}>
             The booking platform with a built-in{" "}
-            <span style={{ color: PURPLE_LIGHT }}>AI business manager</span>
+            <span style={{
+              backgroundImage: `linear-gradient(90deg, ${PURPLE}, #4f46e5, ${BLUE})`,
+              WebkitBackgroundClip: "text", backgroundClip: "text",
+              color: "transparent", WebkitTextFillColor: "transparent",
+            }}>AI business manager</span>
           </h1>
 
           <p className="bd-anim" style={{
@@ -224,18 +289,25 @@ export default function HomePageContent() {
           </p>
         </div>
 
+        {/* Divider between headline area and screenshot */}
+        <div className="bd-anim" style={{
+          width: 160, height: 1, margin: "clamp(3rem, 6vw, 4.5rem) auto 0",
+          background: "linear-gradient(90deg, transparent, rgba(167,139,250,0.5), transparent)",
+          position: "relative", zIndex: 1, animationDelay: "300ms",
+        }} />
+
         {/* Massive hero screenshot */}
-        <div className="bd-anim" style={{ marginTop: "clamp(3.5rem, 7vw, 5.5rem)", padding: "0 2rem", position: "relative", zIndex: 1, animationDelay: "340ms" }}>
+        <div className="bd-anim" style={{ marginTop: "clamp(3rem, 6vw, 4.5rem)", padding: "0 2rem", position: "relative", zIndex: 1, animationDelay: "360ms" }}>
           <div style={{ position: "relative", width: "90vw", maxWidth: 1200, margin: "0 auto" }}>
             <GradientOrb color={PURPLE} size={900} top="12%" left="calc(50% - 450px)" opacity={0.22} blur={140} />
-            <BrowserFrame src="/screenshots/dashboard.png" alt="BookdIn dashboard with AI Agent brief, revenue, and today's schedule" glow tilt animatedBorder />
+            <BrowserFrame src="/screenshots/dashboard.png" alt="BookdIn dashboard with AI Agent brief, revenue, and today's schedule" glow animatedBorder />
           </div>
         </div>
       </section>
 
       {/* ── TRUST + STATS (light breathing band) ── */}
       <section style={{ background: light.bg, padding: "clamp(3rem, 6vw, 5rem) 2rem clamp(4rem, 7vw, 6rem)" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div className="bd-reveal" style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             flexWrap: "wrap", gap: "1.5rem", paddingBottom: "clamp(2.5rem, 5vw, 4rem)",
@@ -266,10 +338,10 @@ export default function HomePageContent() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "1.2rem" }}>
             {[
-              { val: "AI", label: "Daily business coaching", sub: "No competitor has this" },
-              { val: "99.9%", label: "Uptime guaranteed", sub: "Enterprise infrastructure" },
-              { val: "14", label: "Day free trial", sub: "No credit card needed" },
-              { val: "$49", label: "Starting price /mo", sub: "No per-booking fees" },
+              { icon: "🧠", val: "AI", label: "Daily business coaching", sub: "No competitor has this" },
+              { icon: "🛡️", val: "99.9%", label: "Uptime guaranteed", sub: "Enterprise infrastructure" },
+              { icon: "⏳", val: "14", label: "Day free trial", sub: "No credit card needed" },
+              { icon: "💰", val: "$49", label: "Starting price /mo", sub: "No per-booking fees" },
             ].map(s => (
               <div key={s.val} style={{
                 textAlign: "center", padding: "1.8rem 1.4rem", borderRadius: 16,
@@ -278,7 +350,8 @@ export default function HomePageContent() {
                 backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box",
                 boxShadow: "0 2px 14px rgba(10,15,30,0.04)",
               }}>
-                <div style={{ fontSize: "2.8rem", fontWeight: 700, color: light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
+                <div style={{ fontSize: "1.5rem", marginBottom: "0.6rem" }}>{s.icon}</div>
+                <div style={{ fontSize: "3rem", fontWeight: 700, color: light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
                   {s.val}
                 </div>
                 <div style={{ fontSize: "0.92rem", color: light.bullet, fontWeight: 600, marginTop: "0.5rem" }}>{s.label}</div>
@@ -311,7 +384,7 @@ export default function HomePageContent() {
 
       {/* ── BOOKINGS & CALENDAR (white, overlapping screenshots) ── */}
       <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
-        <div className="bd-feature-grid" style={{
+        <div className="bd-feature-grid bd-reveal" style={{
           maxWidth: 1320, margin: "0 auto",
           display: "grid", gridTemplateColumns: "7fr 4fr",
           gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
@@ -363,29 +436,36 @@ export default function HomePageContent() {
       {/* ── TESTIMONIAL ── */}
       <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 8rem) 2rem", position: "relative", overflow: "hidden" }}>
         <Grain />
-        <div style={{ maxWidth: 820, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", justifyContent: "center", gap: 4, marginBottom: "2.2rem" }}>
-            {"★★★★★".split("").map((s, i) => (
-              <span key={i} style={{ color: "#eab308", fontSize: "1.7rem" }}>{s}</span>
-            ))}
-          </div>
-          <blockquote style={{
-            fontSize: "clamp(1.5rem, 3vw, 2.1rem)", fontWeight: 600,
-            color: dark.headline, lineHeight: 1.4, letterSpacing: "-0.4px",
-            marginBottom: "2.8rem",
-          }}>
-            "BookdIn's AI Agent tells us exactly what to chase every morning — it's like having an ops manager who never sleeps. It replaced three separate tools we were using."
-          </blockquote>
-          <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", justifyContent: "center" }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: "50%",
-              background: `linear-gradient(135deg, ${BLUE}, ${PURPLE})`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "1.4rem", border: "2px solid rgba(124,58,237,0.3)",
-            }}>🧽</div>
-            <div style={{ textAlign: "left" }}>
-              <div style={{ fontWeight: 700, color: dark.headline, fontSize: "1.05rem" }}>Cleaning business owner</div>
-              <div style={{ color: dark.body, fontSize: "0.9rem" }}>Melbourne, Australia</div>
+        <div className="bd-reveal" style={{ maxWidth: 820, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
+          <div style={{
+            position: "absolute", top: "-3rem", left: "50%", transform: "translateX(-50%)",
+            fontSize: "14rem", fontWeight: 800, lineHeight: 1, fontFamily: "Georgia, serif",
+            color: "rgba(124,58,237,0.1)", pointerEvents: "none", userSelect: "none", zIndex: 0,
+          }} aria-hidden>"</div>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div style={{ display: "flex", justifyContent: "center", gap: 4, marginBottom: "2.2rem" }}>
+              {"★★★★★".split("").map((s, i) => (
+                <span key={i} style={{ color: "#eab308", fontSize: "1.7rem" }}>{s}</span>
+              ))}
+            </div>
+            <blockquote style={{
+              fontSize: "clamp(1.5rem, 3.2vw, 2.25rem)", fontWeight: 600,
+              color: dark.headline, lineHeight: 1.4, letterSpacing: "-0.4px",
+              marginBottom: "2.8rem",
+            }}>
+              "BookdIn's AI Agent tells us exactly what to chase every morning — it's like having an ops manager who never sleeps. It replaced three separate tools we were using."
+            </blockquote>
+            <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", justifyContent: "center" }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${BLUE}, ${PURPLE})`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "1.4rem", border: "2px solid rgba(124,58,237,0.3)",
+              }}>🧽</div>
+              <div style={{ textAlign: "left" }}>
+                <div style={{ fontWeight: 700, color: dark.headline, fontSize: "1.05rem" }}>Cleaning business owner</div>
+                <div style={{ color: dark.body, fontSize: "0.9rem" }}>Melbourne, Australia</div>
+              </div>
             </div>
           </div>
         </div>
@@ -393,7 +473,7 @@ export default function HomePageContent() {
 
       {/* ── FINANCIAL REPORTS (white) ── */}
       <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
-        <div className="bd-feature-grid" style={{
+        <div className="bd-feature-grid bd-reveal" style={{
           maxWidth: 1320, margin: "0 auto",
           display: "grid", gridTemplateColumns: "4fr 7fr",
           gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
@@ -417,7 +497,7 @@ export default function HomePageContent() {
 
       {/* ── ALSO BUILT IN — lightweight callout row ── */}
       <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 8rem)" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
+        <div className="bd-reveal" style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
           <p style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: light.faint, marginBottom: "2rem" }}>
             Also built in
           </p>
@@ -440,7 +520,7 @@ export default function HomePageContent() {
       {/* ── MOBILE APP — live (dark) ── */}
       <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem", position: "relative", overflow: "hidden" }}>
         <Grain />
-        <div className="bd-feature-grid" style={{
+        <div className="bd-feature-grid bd-reveal" style={{
           maxWidth: 1320, margin: "0 auto", position: "relative", zIndex: 1,
           display: "grid", gridTemplateColumns: "5fr 6fr",
           gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
@@ -483,29 +563,29 @@ export default function HomePageContent() {
             </div>
           </div>
 
-          {/* Large phone mockup */}
+          {/* Large, imposing phone mockup */}
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <PhoneFrame width={360} glow>
-              <div style={{ padding: "3.4rem 1.2rem 1.2rem", display: "flex", flexDirection: "column", gap: "0.8rem", height: "100%" }}>
-                <div style={{ fontSize: "0.9rem", fontWeight: 700, color: BLUE_LIGHT, marginBottom: "0.3rem" }}>
+            <PhoneFrame width={440} glow>
+              <div style={{ padding: "4rem 1.4rem 1.4rem", display: "flex", flexDirection: "column", gap: "0.9rem", height: "100%" }}>
+                <div style={{ fontSize: "1rem", fontWeight: 700, color: BLUE_LIGHT, marginBottom: "0.3rem" }}>
                   My Jobs Today
                 </div>
                 {[["Sarah M.", "General Clean", "9:00 AM", "#22c55e"],
                   ["James T.", "Deep Clean", "12:00 PM", "#eab308"],
                   ["Kim R.", "Move In", "3:00 PM", BLUE_LIGHT]].map(([n, s, t, c]) => (
-                  <div key={n} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: "1rem", border: `1px solid ${c}33` }}>
-                    <div style={{ fontSize: "0.88rem", fontWeight: 600, color: dark.headline }}>{n}</div>
-                    <div style={{ fontSize: "0.78rem", color: dark.body }}>{s}</div>
-                    <div style={{ fontSize: "0.78rem", color: c, marginTop: 3 }}>{t}</div>
+                  <div key={n} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 14, padding: "1.2rem", border: `1px solid ${c}33` }}>
+                    <div style={{ fontSize: "0.98rem", fontWeight: 600, color: dark.headline }}>{n}</div>
+                    <div style={{ fontSize: "0.85rem", color: dark.body }}>{s}</div>
+                    <div style={{ fontSize: "0.85rem", color: c, marginTop: 3 }}>{t}</div>
                   </div>
                 ))}
                 <div style={{
-                  marginTop: "auto", background: "rgba(37,99,255,0.12)", borderRadius: 12,
-                  padding: "1.1rem", border: "1px solid rgba(37,99,255,0.25)",
+                  marginTop: "auto", background: "rgba(37,99,255,0.12)", borderRadius: 14,
+                  padding: "1.3rem", border: "1px solid rgba(37,99,255,0.25)",
                 }}>
-                  <div style={{ fontSize: "0.75rem", color: dark.body }}>Revenue today</div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: dark.headline }}>$1,840</div>
-                  <div style={{ fontSize: "0.75rem", color: "#4ade80" }}>↑ 12% vs yesterday</div>
+                  <div style={{ fontSize: "0.82rem", color: dark.body }}>Revenue today</div>
+                  <div style={{ fontSize: "1.6rem", fontWeight: 700, color: dark.headline }}>$1,840</div>
+                  <div style={{ fontSize: "0.82rem", color: "#4ade80" }}>↑ 12% vs yesterday</div>
                 </div>
               </div>
             </PhoneFrame>
@@ -516,10 +596,10 @@ export default function HomePageContent() {
 
       {/* ── FEATURE COMPARISON (white) ── */}
       <section id="compare" style={{ background: light.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem" }}>
-        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div className="bd-reveal" style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "clamp(2.5rem, 5vw, 4rem)" }}>
             <div style={eyebrowPill("blue")}>The highlights</div>
-            <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Everything you need, nothing you don't</h2>
+            <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Built different. Priced fairly.</h2>
             <p style={{ color: light.body, fontSize: "1.05rem", marginTop: "0.6rem" }}>The differences that actually matter when you compare booking tools</p>
           </div>
           <div style={{ overflowX: "auto", background: light.cardBg, borderRadius: 18, border: `1px solid ${light.cardBorder}`, boxShadow: "0 4px 24px rgba(10,15,30,0.04)" }}>
@@ -544,16 +624,16 @@ export default function HomePageContent() {
                   { label: "Free trial", biVal: "14 days", oVal: "7 days" },
                   { label: "Starting price", biVal: "$49/mo", oVal: "$67/mo" },
                 ].map((row, i) => (
-                  <tr key={i} style={{ background: row.ex ? "rgba(37,99,255,0.035)" : "transparent" }}>
-                    <td style={{ padding: "1rem 1.4rem", borderBottom: `1px solid ${light.divider}` }}>
+                  <tr key={i} style={{ background: row.ex ? "rgba(37,99,255,0.035)" : (i % 2 === 0 ? "rgba(10,15,30,0.015)" : "transparent") }}>
+                    <td style={{ padding: "1.35rem 1.4rem", borderBottom: `1px solid ${light.divider}` }}>
                       <span style={{ fontWeight: 500, color: light.headline }}>{row.label}</span>
                       {row.ex && <span style={{ background: "rgba(37,99,255,0.12)", color: "#1d4ed8", fontSize: "0.63rem", fontWeight: 700, padding: "1px 7px", borderRadius: 100, marginLeft: "0.5rem" }}>BookdIn only</span>}
                       {row.note && <span style={{ display: "block", fontSize: "0.78rem", color: light.faint, marginTop: "0.25rem" }}>{row.note}</span>}
                     </td>
-                    <td style={{ textAlign: "center", padding: "1rem 1.4rem", borderBottom: `1px solid ${light.divider}`, background: "rgba(37,99,255,0.03)" }}>
+                    <td style={{ textAlign: "center", padding: "1.35rem 1.4rem", borderBottom: `1px solid ${light.divider}`, background: "rgba(37,99,255,0.03)" }}>
                       {row.biVal ? <span style={{ color: "#16a34a", fontWeight: 700 }}>{row.biVal}</span> : row.bi ? <span style={{ color: "#16a34a", fontSize: "1.1rem" }}>✓</span> : <span style={{ color: "#dc2626" }}>✗</span>}
                     </td>
-                    <td style={{ textAlign: "center", padding: "1rem 1.4rem", borderBottom: `1px solid ${light.divider}` }}>
+                    <td style={{ textAlign: "center", padding: "1.35rem 1.4rem", borderBottom: `1px solid ${light.divider}` }}>
                       {row.oVal ? <span style={{ color: light.faint }}>{row.oVal}</span> : row.o ? <span style={{ color: "#16a34a", fontSize: "1.1rem" }}>✓</span> : <span style={{ color: "#dc2626" }}>✗</span>}
                     </td>
                   </tr>
@@ -566,7 +646,7 @@ export default function HomePageContent() {
 
       {/* ── PRICING (white) ── */}
       <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
-        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div className="bd-reveal" style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={eyebrowPill("blue")}>Pricing</div>
           <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Simple, transparent pricing</h2>
           <p style={{ fontSize: "1.05rem", color: light.body, marginBottom: "3.5rem" }}>
@@ -577,35 +657,7 @@ export default function HomePageContent() {
               { name: "Starter", price: "$49", period: "/mo", desc: "Up to 3 staff, unlimited bookings, invoicing, public booking page, room-based pricing", featured: false },
               { name: "Growth", price: "$99", period: "/mo", desc: "Everything in Starter, plus the AI Business Agent, CRM pipeline, profit reports, payroll & recurring automation", featured: true },
               { name: "Enterprise", price: "Custom", period: "", desc: "Multi-location, custom integrations, dedicated onboarding & support", featured: false },
-            ].map(p => (
-              <div key={p.name} className={p.featured ? "bd-shimmer" : undefined} style={{
-                background: p.featured
-                  ? "linear-gradient(#0A0F1E,#0A0F1E), linear-gradient(115deg, rgba(124,58,237,0.9), rgba(37,99,255,0.6) 35%, rgba(124,58,237,0.25) 60%, rgba(124,58,237,0.9) 100%)"
-                  : light.cardBg,
-                backgroundOrigin: p.featured ? "border-box" : undefined,
-                backgroundClip: p.featured ? "padding-box, border-box" : undefined,
-                backgroundSize: p.featured ? "100% 100%, 300% 300%" : undefined,
-                border: p.featured ? "1px solid transparent" : `1px solid ${light.cardBorder}`,
-                borderRadius: 18, padding: "2.2rem", position: "relative",
-                boxShadow: p.featured ? "0 24px 60px rgba(37,99,255,0.22)" : "0 2px 10px rgba(10,15,30,0.03)",
-              }}>
-                {p.featured && <div style={{ position: "absolute", top: "1.4rem", right: "1.4rem", background: BLUE, color: "#fff", fontSize: "0.68rem", fontWeight: 700, padding: "3px 10px", borderRadius: 100 }}>Most popular</div>}
-                <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: p.featured ? dark.faint : light.faint, marginBottom: "0.8rem" }}>{p.name}</div>
-                <div style={{ fontSize: "3rem", fontWeight: 700, color: p.featured ? "#fff" : light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
-                  {p.price}<span style={{ fontSize: "0.95rem", fontWeight: 400, color: p.featured ? dark.faint : light.faint }}>{p.period}</span>
-                </div>
-                <p style={{ fontSize: "0.9rem", color: p.featured ? dark.body : light.body, margin: "0.9rem 0 1.7rem", lineHeight: 1.65 }}>{p.desc}</p>
-                <Link href="/auth/signup" style={{
-                  display: "block", textAlign: "center", padding: "0.85rem",
-                  borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: "0.95rem",
-                  background: p.featured ? BLUE : "transparent",
-                  color: p.featured ? "#fff" : light.headline,
-                  border: p.featured ? "none" : `1px solid ${light.cardBorder}`,
-                }}>
-                  {p.price === "Custom" ? "Contact us" : "Start 14-day trial"}
-                </Link>
-              </div>
-            ))}
+            ].map(p => <PricingCard key={p.name} p={p} />)}
           </div>
           <p style={{ fontSize: "0.85rem", color: light.faint }}>
             No credit card required · 14-day free trial on all plans · Cancel anytime
@@ -615,7 +667,7 @@ export default function HomePageContent() {
 
       {/* ── FINAL CTA (dark gradient) ── */}
       <section style={{ background: dark.bg, padding: "0 2rem clamp(5rem, 9vw, 8rem)" }}>
-        <div style={{
+        <div className="bd-reveal" style={{
           maxWidth: 1100, margin: "0 auto", borderRadius: 28,
           background: "linear-gradient(135deg, rgba(124,58,237,0.22), rgba(37,99,255,0.08))",
           border: "1px solid rgba(124,58,237,0.32)",

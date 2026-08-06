@@ -9,11 +9,16 @@ export function GradientOrb({
   top?: number | string; left?: number | string; right?: number | string; bottom?: number | string;
   opacity?: number; blur?: number;
 }) {
+  // Deterministic per-orb variation so multiple orbs don't float in lockstep.
+  const duration = 6 + (size % 5) * 0.4;
+  const delay = -((size % 7) * 0.5);
+
   return (
-    <div style={{
+    <div className="bd-orb-float" style={{
       position: "absolute", width: size, height: size, borderRadius: "50%",
       background: color, opacity, filter: `blur(${blur}px)`,
       top, left, right, bottom, pointerEvents: "none", zIndex: 0,
+      animationDuration: `${duration}s`, animationDelay: `${delay}s`,
     }} />
   );
 }

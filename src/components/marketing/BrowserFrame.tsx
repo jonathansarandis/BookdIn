@@ -1,8 +1,13 @@
+"use client";
+import { useTilt } from "@/hooks/useTilt";
+
 export default function BrowserFrame({
-  src, alt, glow = false, tilt = false, animatedBorder = false, url = "bookdin.co",
+  src, alt, glow = false, animatedBorder = false, url = "bookdin.co",
 }: {
-  src: string; alt: string; glow?: boolean; tilt?: boolean; animatedBorder?: boolean; url?: string;
+  src: string; alt: string; glow?: boolean; animatedBorder?: boolean; url?: string;
 }) {
+  const { ref, rotateX, rotateY, scale } = useTilt<HTMLDivElement>(8, 1.02);
+
   return (
     <div style={{ position: "relative", width: "100%" }}>
       {glow && (
@@ -12,22 +17,26 @@ export default function BrowserFrame({
           filter: "blur(50px)", zIndex: 0, pointerEvents: "none",
         }} />
       )}
-      <div className={animatedBorder ? "bd-shimmer" : undefined} style={{
-        position: "relative", zIndex: 1,
-        borderRadius: 16, overflow: "hidden",
-        border: "1px solid transparent",
-        backgroundImage: animatedBorder
-          ? "linear-gradient(#0d1424, #0d1424), linear-gradient(115deg, rgba(124,58,237,0.9), rgba(37,99,255,0.5) 35%, rgba(124,58,237,0.1) 60%, rgba(124,58,237,0.9) 100%)"
-          : "linear-gradient(#0d1424, #0d1424), linear-gradient(135deg, rgba(124,58,237,0.5), rgba(37,99,255,0.2) 45%, rgba(124,58,237,0) 75%)",
-        backgroundOrigin: "border-box",
-        backgroundClip: "padding-box, border-box",
-        backgroundSize: animatedBorder ? "100% 100%, 300% 300%" : undefined,
-        boxShadow: glow
-          ? "0 50px 120px rgba(0,0,0,0.55), 0 0 100px rgba(124,58,237,0.18), inset 0 1px 0 rgba(255,255,255,0.06)"
-          : "0 40px 100px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05)",
-        transform: tilt ? "perspective(2200px) rotateX(3.5deg)" : undefined,
-        transformOrigin: "center bottom",
-      }}>
+      <div
+        ref={ref}
+        className={animatedBorder ? "bd-shimmer" : undefined}
+        style={{
+          position: "relative", zIndex: 1,
+          borderRadius: 16, overflow: "hidden",
+          border: "1px solid transparent",
+          backgroundImage: animatedBorder
+            ? "linear-gradient(#0d1424, #0d1424), linear-gradient(115deg, rgba(124,58,237,0.9), rgba(37,99,255,0.5) 35%, rgba(124,58,237,0.1) 60%, rgba(124,58,237,0.9) 100%)"
+            : "linear-gradient(#0d1424, #0d1424), linear-gradient(135deg, rgba(124,58,237,0.5), rgba(37,99,255,0.2) 45%, rgba(124,58,237,0) 75%)",
+          backgroundOrigin: "border-box",
+          backgroundClip: "padding-box, border-box",
+          backgroundSize: animatedBorder ? "100% 100%, 300% 300%" : undefined,
+          boxShadow: glow
+            ? "0 50px 120px rgba(0,0,0,0.55), 0 0 100px rgba(124,58,237,0.18), inset 0 1px 0 rgba(255,255,255,0.06)"
+            : "0 40px 100px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05)",
+          transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(${scale})`,
+          transformOrigin: "center",
+          willChange: "transform",
+        }}>
         <div style={{
           padding: "0.7rem 1rem", display: "flex", alignItems: "center", gap: "0.5rem",
           borderBottom: "1px solid rgba(255,255,255,0.05)", background: "#0d1424",
