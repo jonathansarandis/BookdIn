@@ -6,7 +6,7 @@ import DemoWrapper from '@/components/demo/DemoWrapper'
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
-  weight: ['300', '400', '500'],
+  weight: ['300', '400', '500', '700'],
 })
 
 export const metadata: Metadata = {
