@@ -25,7 +25,7 @@ const PRIORITY_COLORS = {
 const TASK_ICONS: Record<string, any> = { chase_payment: CreditCard, assign_provider: UserX, follow_up_lead: PhoneCall, fill_calendar: Calendar }
 const CRM_STAGE_LABELS: Record<string, string> = { lead: 'Lead', contacted: 'Contacted', quoted: 'Quoted', won: 'Won', lost: 'Lost' }
 const CRM_STAGE_COLORS: Record<string, string> = { lead: 'bg-gray-100 text-gray-600', contacted: 'bg-blue-50 text-blue-700', quoted: 'bg-purple-50 text-purple-700', won: 'bg-green-50 text-green-700', lost: 'bg-red-50 text-red-700' }
-function formatCurrency(dollars: number) { return `$${dollars.toLocaleString('en-AU', { minimumFractionDigits: 0 })}` }
+function formatCurrency(cents: number) { return `$${(cents / 100).toLocaleString('en-AU', { minimumFractionDigits: 0 })}` }
 function getGreeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' }
 
 const MARKDOWN_COMPONENTS = {
