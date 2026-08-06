@@ -10,7 +10,7 @@ import { GradientOrb, Grain, CurveDivider } from "@/components/marketing/Atmosph
 import { useTilt } from "@/hooks/useTilt";
 
 const dark = {
-  bg: "linear-gradient(150deg, #0A0F1E 0%, #0D0B20 55%, #0A0F1E 100%)",
+  bg: "linear-gradient(180deg, #0A0F1E 0%, #0D0B20 55%, #0A0F1E 100%)",
   base: "#0A0F1E",
   headline: "#F5F6FB",
   body: "#93A0B4",
@@ -93,6 +93,21 @@ function BulletList({ items, theme, accent = BLUE }: { items: string[]; theme: t
         </div>
       ))}
     </div>
+  );
+}
+
+const STAT_ICON_PATHS: Record<string, React.ReactNode> = {
+  sparkle: <path d="M12 3c.9 4.2 1.9 5.2 6 6-4.1.8-5.1 1.8-6 6-.9-4.2-1.9-5.2-6-6 4.1-.8 5.1-1.8 6-6Z" />,
+  shieldCheck: <><path d="M12 3l7 3v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3Z" /><path d="M9 12l2 2 4-4" /></>,
+  clock: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
+  tag: <><path d="M12.5 3H5a2 2 0 0 0-2 2v7.5a1 1 0 0 0 .29.71l9.5 9.5a1 1 0 0 0 1.42 0l7.5-7.5a1 1 0 0 0 0-1.42l-9.5-9.5A1 1 0 0 0 12.5 3Z" /><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none" /></>,
+};
+
+function StatIcon({ type }: { type: keyof typeof STAT_ICON_PATHS }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+      {STAT_ICON_PATHS[type]}
+    </svg>
   );
 }
 
@@ -309,7 +324,7 @@ export default function HomePageContent() {
       </section>
 
       {/* == TRUST + STATS (light breathing band) == */}
-      <section style={{ background: light.bg, padding: "clamp(3rem, 6vw, 5rem) 2rem clamp(4rem, 7vw, 6rem)" }}>
+      <section style={{ background: light.bg, position: "relative", padding: "clamp(3rem, 6vw, 5rem) 2rem clamp(4rem, 7vw, 6rem)" }}>
         <div className="bd-reveal" style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -341,10 +356,10 @@ export default function HomePageContent() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "1.2rem" }}>
             {[
-              { icon: "🧠", val: "AI", label: "Daily business coaching", sub: "No competitor has this" },
-              { icon: "🛡️", val: "99.9%", label: "Uptime guaranteed", sub: "Enterprise infrastructure" },
-              { icon: "⏳", val: "14", label: "Day free trial", sub: "No credit card needed" },
-              { icon: "💰", val: "$49", label: "Starting price /mo", sub: "No per-booking fees" },
+              { icon: "sparkle" as const, val: "AI", label: "Daily business coaching", sub: "No competitor has this" },
+              { icon: "shieldCheck" as const, val: "99.9%", label: "Uptime guaranteed", sub: "Enterprise infrastructure" },
+              { icon: "clock" as const, val: "14", label: "Day free trial", sub: "No credit card needed" },
+              { icon: "tag" as const, val: "$49", label: "Starting price /mo", sub: "No per-booking fees" },
             ].map(s => (
               <div key={s.val} style={{
                 textAlign: "center", padding: "1.8rem 1.4rem", borderRadius: 16,
@@ -353,7 +368,13 @@ export default function HomePageContent() {
                 backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box",
                 boxShadow: "0 2px 14px rgba(10,15,30,0.04)",
               }}>
-                <div style={{ fontSize: "1.5rem", marginBottom: "0.6rem" }}>{s.icon}</div>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 12, background: "rgba(37,99,255,0.08)",
+                  color: BLUE, display: "flex", alignItems: "center", justifyContent: "center",
+                  margin: "0 auto 1rem",
+                }}>
+                  <StatIcon type={s.icon} />
+                </div>
                 <div style={{ fontSize: "3rem", fontWeight: 700, color: light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
                   {s.val}
                 </div>

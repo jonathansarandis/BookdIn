@@ -33,10 +33,16 @@ export function Grain({ opacity = 0.05 }: { opacity?: number }) {
   );
 }
 
-/** Gentle wave divider that overlaps the bottom of a section, painted in the color of the section below it. */
+/**
+ * Gentle wave divider painted in the color of the section below it. Pinned
+ * with position:absolute to the true bottom edge of its parent section
+ * (which must be position:relative) so it sits flush regardless of the
+ * parent's own padding, instead of floating inside that padding as a
+ * disconnected shape.
+ */
 export function CurveDivider({ fill }: { fill: string }) {
   return (
-    <div style={{ position: "relative", lineHeight: 0, marginBottom: -1 }} aria-hidden>
+    <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, lineHeight: 0, pointerEvents: "none" }} aria-hidden>
       <svg viewBox="0 0 1440 90" preserveAspectRatio="none" style={{ width: "100%", height: 70, display: "block" }}>
         <path d="M0,45 C360,95 1080,-15 1440,45 L1440,90 L0,90 Z" fill={fill} />
       </svg>
