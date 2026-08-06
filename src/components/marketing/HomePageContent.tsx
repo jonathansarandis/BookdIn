@@ -214,11 +214,12 @@ export default function HomePageContent() {
         @media (max-width: 640px) {
           .bd-hero-h1 { font-size: 2.75rem !important; letter-spacing: -1px !important; }
         }
+        .bd-container { max-width: 1200px; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; width: 100%; box-sizing: border-box; }
       `}</style>
 
       <MarketingNav />
 
-      {/* ── HERO ── */}
+      {/* == HERO == */}
       <section style={{
         background: dark.bg, position: "relative", overflow: "hidden",
         paddingTop: "11rem", paddingBottom: "clamp(5rem, 9vw, 8rem)",
@@ -232,7 +233,7 @@ export default function HomePageContent() {
           top: -220, left: "50%", transform: "translateX(-50%)", pointerEvents: "none",
         }} />
 
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 2rem", textAlign: "center", position: "relative", zIndex: 1 }}>
+        <div className="bd-container" style={{ textAlign: "center", position: "relative", zIndex: 1 }}>
           <div className="bd-anim" style={{
             display: "inline-flex", alignItems: "center", gap: "0.5rem",
             fontSize: "0.73rem", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase",
@@ -249,11 +250,13 @@ export default function HomePageContent() {
 
           <h1 className="bd-anim bd-hero-h1" style={{
             fontSize: "clamp(4.5rem, 6vw, 5.5rem)", fontWeight: 700,
-            letterSpacing: "-3px", lineHeight: 1.02, marginBottom: "1.8rem",
+            letterSpacing: "-3px", lineHeight: 1.08, marginBottom: "1.8rem",
             color: dark.headline, animationDelay: "70ms",
           }}>
-            The booking platform with a built-in{" "}
+            <span style={{ display: "block" }}>The booking platform</span>
+            <span style={{ display: "block" }}>with a built-in</span>
             <span style={{
+              display: "block",
               backgroundImage: `linear-gradient(90deg, ${PURPLE}, #4f46e5, ${BLUE})`,
               WebkitBackgroundClip: "text", backgroundClip: "text",
               color: "transparent", WebkitTextFillColor: "transparent",
@@ -264,7 +267,7 @@ export default function HomePageContent() {
             fontSize: "1.35rem", color: dark.body, lineHeight: 1.6,
             maxWidth: 640, margin: "0 auto 2.8rem", animationDelay: "140ms",
           }}>
-            Bookings, CRM, payroll, and an AI Agent that tells you exactly what to do — all in one platform built for service businesses.
+            Bookings, CRM, payroll, and an AI Agent that tells you exactly what to do, all in one platform built for service businesses.
           </p>
 
           <div className="bd-anim" style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap", marginBottom: "1.2rem", animationDelay: "200ms" }}>
@@ -305,7 +308,7 @@ export default function HomePageContent() {
         </div>
       </section>
 
-      {/* ── TRUST + STATS (light breathing band) ── */}
+      {/* == TRUST + STATS (light breathing band) == */}
       <section style={{ background: light.bg, padding: "clamp(3rem, 6vw, 5rem) 2rem clamp(4rem, 7vw, 6rem)" }}>
         <div className="bd-reveal" style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{
@@ -363,18 +366,18 @@ export default function HomePageContent() {
         <CurveDivider fill={dark.base} />
       </section>
 
-      {/* ── AI AGENT — hero feature ── */}
+      {/* == AI AGENT, hero feature == */}
       <FeatureSection
         theme={dark}
         variant="purple"
         badge="BookdIn exclusive"
         tag="AI Business Agent"
         title="The only booking platform with a built-in AI Agent"
-        body={<>Every morning, your agent reads your live bookings, payments, leads and ad spend, and tells you exactly what needs attention today.{" "}<strong style={{ color: dark.headline }}>Powered by Claude</strong> — not a chatbot bolted on after the fact.</>}
+        body={<>Every morning, your agent reads your live bookings, payments, leads and ad spend, and tells you exactly what needs attention today.{" "}<strong style={{ color: dark.headline }}>Powered by Claude</strong>, not a chatbot bolted on after the fact.</>}
         bullets={[
           "Daily AI-generated morning brief, in plain English",
           "Surfaces unpaid invoices, unassigned jobs & stale leads",
-          "Ask it anything — \"how busy are we next week?\"",
+          "Ask it anything: \"how busy are we next week?\"",
           "Drafts payment chases and follow-ups for you to approve",
         ]}
         imageSide="right"
@@ -382,7 +385,7 @@ export default function HomePageContent() {
         visual={<BrowserFrame src="/screenshots/agent.png" alt="BookdIn AI Agent daily brief and task list" glow />}
       />
 
-      {/* ── BOOKINGS & CALENDAR (white, overlapping screenshots) ── */}
+      {/* == BOOKINGS & CALENDAR (white, overlapping screenshots) == */}
       <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
         <div className="bd-feature-grid bd-reveal" style={{
           maxWidth: 1320, margin: "0 auto",
@@ -405,8 +408,8 @@ export default function HomePageContent() {
               Every booking and every day in one place. Filter by status, assign providers, track payments, and see your whole month at a glance.
             </p>
             <BulletList theme={light} items={[
-              "Full calendar — day, week & month views",
-              "Recurring bookings — set once, run forever",
+              "Full calendar: day, week & month views",
+              "Recurring bookings: set once, run forever",
               "Assign providers with one click",
               "Auto credit card holds on every job",
             ]} />
@@ -414,7 +417,7 @@ export default function HomePageContent() {
         </div>
       </section>
 
-      {/* ── CRM ── */}
+      {/* == CRM == */}
       <FeatureSection
         theme={dark}
         variant="blue"
@@ -433,7 +436,7 @@ export default function HomePageContent() {
         visual={<BrowserFrame src="/screenshots/crm.png" alt="BookdIn CRM lead pipeline board" />}
       />
 
-      {/* ── TESTIMONIAL ── */}
+      {/* == TESTIMONIAL == */}
       <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 8rem) 2rem", position: "relative", overflow: "hidden" }}>
         <Grain />
         <div className="bd-reveal" style={{ maxWidth: 820, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
@@ -453,7 +456,7 @@ export default function HomePageContent() {
               color: dark.headline, lineHeight: 1.4, letterSpacing: "-0.4px",
               marginBottom: "2.8rem",
             }}>
-              "BookdIn's AI Agent tells us exactly what to chase every morning — it's like having an ops manager who never sleeps. It replaced three separate tools we were using."
+              "BookdIn's AI Agent tells us exactly what to chase every morning: it's like having an ops manager who never sleeps. It replaced three separate tools we were using."
             </blockquote>
             <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", justifyContent: "center" }}>
               <div style={{
@@ -471,7 +474,7 @@ export default function HomePageContent() {
         </div>
       </section>
 
-      {/* ── FINANCIAL REPORTS (white) ── */}
+      {/* == FINANCIAL REPORTS (white) == */}
       <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
         <div className="bd-feature-grid bd-reveal" style={{
           maxWidth: 1320, margin: "0 auto",
@@ -482,10 +485,10 @@ export default function HomePageContent() {
             <div style={eyebrowPill("blue")}>Financial Reports</div>
             <h2 style={h2(light)}>Know your profit down to the location</h2>
             <p style={bodyText(light)}>
-              Real profit, not just revenue — subcontractor pay, GST, and every cost line already subtracted, broken down per location every week.
+              Real profit, not just revenue: subcontractor pay, GST, and every cost line already subtracted, broken down per location every week.
             </p>
             <BulletList theme={light} items={[
-              "Weekly profit by location — revenue minus subcontractor pay, GST & costs",
+              "Weekly profit by location: revenue minus subcontractor pay, GST & costs",
               "Google Ads spend & cost-per-conversion, synced automatically",
               "Track admin pay, subscriptions, refunds & ad spend in one place",
               "The same numbers your AI Agent uses to coach you",
@@ -495,29 +498,37 @@ export default function HomePageContent() {
         </div>
       </section>
 
-      {/* ── ALSO BUILT IN — lightweight callout row ── */}
-      <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 8rem)" }}>
-        <div className="bd-reveal" style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
-          <p style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: light.faint, marginBottom: "2rem" }}>
-            Also built in
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "1rem 3rem" }}>
+      {/* == ALSO BUILT IN, tight 4-column card row == */}
+      <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)" }}>
+        <div className="bd-reveal" style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "2.2rem" }}>
+            <div style={eyebrowPill("blue")}>Also built in</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.2rem" }}>
             {[
-              { icon: "💷", label: "Automated payroll" },
-              { icon: "💸", label: "Room-based pricing" },
-              { icon: "🔁", label: "Recurring automation" },
-              { icon: "🎁", label: "Gift cards & referrals" },
+              { icon: "💷", label: "Automated payroll", desc: "Subcontractor pay calculated per job, ready to export." },
+              { icon: "💸", label: "Room-based pricing", desc: "Quotes calculated instantly from bedrooms and extras." },
+              { icon: "🔁", label: "Recurring automation", desc: "Jobs and payments run themselves, week after week." },
+              { icon: "🎁", label: "Gift cards & referrals", desc: "Sell gift cards and reward customers who refer you." },
             ].map(c => (
-              <div key={c.label} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                <span style={{ fontSize: "1.4rem" }}>{c.icon}</span>
-                <span style={{ fontSize: "1.02rem", fontWeight: 600, color: light.headline }}>{c.label}</span>
+              <div key={c.label} style={{
+                background: light.cardBg, border: `1px solid ${light.cardBorder}`, borderRadius: 16,
+                padding: "1.6rem", boxShadow: "0 2px 10px rgba(10,15,30,0.03)",
+              }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: 11, background: "rgba(37,99,255,0.08)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "1.25rem", marginBottom: "1rem",
+                }}>{c.icon}</div>
+                <div style={{ fontSize: "0.98rem", fontWeight: 700, color: light.headline, marginBottom: "0.4rem" }}>{c.label}</div>
+                <div style={{ fontSize: "0.85rem", color: light.body, lineHeight: 1.55 }}>{c.desc}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── MOBILE APP — live (dark) ── */}
+      {/* == MOBILE APP, live (dark) == */}
       <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem", position: "relative", overflow: "hidden" }}>
         <Grain />
         <div className="bd-feature-grid bd-reveal" style={{
@@ -539,7 +550,7 @@ export default function HomePageContent() {
               <BulletList theme={dark} items={[
                 "Providers see and manage their assigned jobs",
                 "Real-time push notifications for new bookings",
-                "Dashboard snapshot — revenue & bookings today",
+                "Dashboard snapshot: revenue & bookings today",
                 "Update job status from the field",
               ]} />
             </div>
@@ -594,7 +605,7 @@ export default function HomePageContent() {
         <CurveDivider fill={light.base} />
       </section>
 
-      {/* ── FEATURE COMPARISON (white) ── */}
+      {/* == FEATURE COMPARISON (white) == */}
       <section id="compare" style={{ background: light.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem" }}>
         <div className="bd-reveal" style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "clamp(2.5rem, 5vw, 4rem)" }}>
@@ -644,7 +655,7 @@ export default function HomePageContent() {
         </div>
       </section>
 
-      {/* ── PRICING (white) ── */}
+      {/* == PRICING (white) == */}
       <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
         <div className="bd-reveal" style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={eyebrowPill("blue")}>Pricing</div>
@@ -665,7 +676,7 @@ export default function HomePageContent() {
         </div>
       </section>
 
-      {/* ── FINAL CTA (dark gradient) ── */}
+      {/* == FINAL CTA (dark gradient) == */}
       <section style={{ background: dark.bg, padding: "0 2rem clamp(5rem, 9vw, 8rem)" }}>
         <div className="bd-reveal" style={{
           maxWidth: 1100, margin: "0 auto", borderRadius: 28,
@@ -692,7 +703,7 @@ export default function HomePageContent() {
               borderRadius: 12, textDecoration: "none", fontWeight: 700, fontSize: "1.05rem",
               boxShadow: "0 0 48px rgba(37,99,255,0.4)", display: "inline-block",
             }}>
-              Start free trial — no card needed
+              Start free trial, no card needed
             </Link>
             <Link href="/api/demo/login" style={{
               background: "transparent", color: dark.headline, padding: "1rem 2.3rem",
@@ -705,7 +716,7 @@ export default function HomePageContent() {
           <p style={{ fontSize: "0.82rem", color: dark.faint, marginTop: "1.6rem", position: "relative" }}>
             Or explore the{" "}
             <Link href="/api/demo/login" style={{ color: BLUE_LIGHT, textDecoration: "none" }}>live demo</Link>
-            {" "}— no sign-up needed
+            {", no sign-up needed"}
           </p>
         </div>
       </section>

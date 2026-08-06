@@ -29,7 +29,7 @@ export default function MarketingNav() {
       }}>
         <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block", flexShrink: 0 }} />
-          Explore BookdIn in real-time — no sign-up needed
+          Explore BookdIn in real-time, no sign-up needed
         </span>
         <a href="/api/demo/login" style={{
           background: "#fff", color: "#1d4ed8", padding: "0.2rem 0.85rem",
@@ -42,49 +42,51 @@ export default function MarketingNav() {
 
       {/* Nav */}
       <nav style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0.85rem 2.5rem",
         background: scrolled ? "rgba(10,15,30,0.97)" : "rgba(10,15,30,0.88)",
         backdropFilter: "blur(16px)",
         borderBottom: "1px solid rgba(255,255,255,0.07)",
         transition: "background 0.3s",
         boxShadow: scrolled ? "0 4px 24px rgba(0,0,0,0.3)" : "none",
-        gap: "1rem",
       }}>
-        <Link href="/" style={{
-          fontSize: "1.35rem", fontWeight: 700, letterSpacing: "-0.5px",
-          color: "#F0F2FF", textDecoration: "none", flexShrink: 0,
+        <div className="bd-container" style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          paddingTop: "0.85rem", paddingBottom: "0.85rem", gap: "1rem",
         }}>
-          Bookd<span style={{ color: "#2563FF" }}>I</span>n
-        </Link>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexShrink: 0 }}>
-          <Link href="/#compare" style={navLink}>Features</Link>
-          <Link href="/#revenue" style={navLink}>Revenue</Link>
-          <Link href="/pricing" style={navLink}>Pricing</Link>
-          <Link href="/about" style={navLink}>About</Link>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
-          <a href="/api/demo/login" style={{
-            background: "transparent", color: "#F0F2FF",
-            padding: "0.45rem 1rem", borderRadius: "8px",
-            textDecoration: "none", fontSize: "0.85rem", fontWeight: 600,
-            border: "1px solid rgba(255,255,255,0.18)",
-            display: "flex", alignItems: "center", gap: "0.4rem",
-            whiteSpace: "nowrap",
+          <Link href="/" style={{
+            fontSize: "1.35rem", fontWeight: 700, letterSpacing: "-0.5px",
+            color: "#F0F2FF", textDecoration: "none", flexShrink: 0,
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block", flexShrink: 0 }} />
-            Live demo
-          </a>
-          <Link href="/auth/signup" style={{
-            background: "#2563FF", color: "#fff",
-            padding: "0.45rem 1.1rem", borderRadius: "8px",
-            textDecoration: "none", fontSize: "0.85rem", fontWeight: 600,
-            whiteSpace: "nowrap",
-          }}>
-            Start free trial
+            Bookd<span style={{ color: "#2563FF" }}>I</span>n
           </Link>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexShrink: 0 }}>
+            <Link href="/#compare" style={navLink}>Features</Link>
+            <Link href="/#revenue" style={navLink}>Revenue</Link>
+            <Link href="/pricing" style={navLink}>Pricing</Link>
+            <Link href="/about" style={navLink}>About</Link>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+            <a href="/api/demo/login" style={{
+              background: "transparent", color: "#F0F2FF",
+              padding: "0.45rem 1rem", borderRadius: "8px",
+              textDecoration: "none", fontSize: "0.85rem", fontWeight: 600,
+              border: "1px solid rgba(255,255,255,0.18)",
+              display: "flex", alignItems: "center", gap: "0.4rem",
+              whiteSpace: "nowrap",
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block", flexShrink: 0 }} />
+              Live demo
+            </a>
+            <Link href="/auth/signup" style={{
+              background: "#2563FF", color: "#fff",
+              padding: "0.45rem 1.1rem", borderRadius: "8px",
+              textDecoration: "none", fontSize: "0.85rem", fontWeight: 600,
+              whiteSpace: "nowrap",
+            }}>
+              Start free trial
+            </Link>
+          </div>
         </div>
       </nav>
     </div>
