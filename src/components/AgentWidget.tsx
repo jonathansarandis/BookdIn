@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Bot, X, CreditCard, UserX, PhoneCall, Calendar, ChevronRight, AlertCircle, Send, Loader2, CheckCircle2 } from 'lucide-react'
+import { X, CreditCard, UserX, PhoneCall, Calendar, ChevronRight, AlertCircle, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import AgentMessageModal from './AgentMessageModal'
+import AgentIcon from './AgentIcon'
 
 const TASK_ICONS: Record<string, any> = { chase_payment: CreditCard, assign_provider: UserX, follow_up_lead: PhoneCall, fill_calendar: Calendar }
 const PRIORITY_DOT: Record<string, string> = { urgent: 'bg-red-500', high: 'bg-amber-500', medium: 'bg-blue-400' }
@@ -168,7 +169,7 @@ export default function AgentWidget() {
         <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.3)' }}>
-              <Bot className="w-4 h-4 text-indigo-300" />
+              <AgentIcon className="w-4 h-4 text-indigo-300" />
             </div>
             <div>
               <p className="text-sm font-semibold text-white">AI Agent</p>
@@ -264,7 +265,7 @@ export default function AgentWidget() {
         ) : (
           <div className="divide-y divide-gray-50">
             {tasks.map((task: any) => {
-              const Icon = TASK_ICONS[task.type] || Bot
+              const Icon = TASK_ICONS[task.type] || AlertCircle
               return (
                 <div key={task.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_DOT[task.priority]}`} />
