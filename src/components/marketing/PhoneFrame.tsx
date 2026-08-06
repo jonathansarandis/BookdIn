@@ -1,5 +1,5 @@
 export default function PhoneFrame({
-  children, width = 300, glow = false,
+  children, width = 340, glow = false,
 }: {
   children: React.ReactNode; width?: number; glow?: boolean;
 }) {

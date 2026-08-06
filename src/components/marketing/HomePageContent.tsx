@@ -5,9 +5,11 @@ import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import BrowserFrame from "@/components/marketing/BrowserFrame";
 import PhoneFrame from "@/components/marketing/PhoneFrame";
+import { GradientOrb, Grain, CurveDivider } from "@/components/marketing/Atmosphere";
 
 const dark = {
-  bg: "#0A0F1E",
+  bg: "linear-gradient(150deg, #0A0F1E 0%, #0D0B20 55%, #0A0F1E 100%)",
+  base: "#0A0F1E",
   headline: "#F5F6FB",
   body: "#93A0B4",
   bullet: "#D3DAE6",
@@ -19,7 +21,8 @@ const dark = {
   chipBorder: "rgba(255,255,255,0.1)",
 };
 const light = {
-  bg: "#F8F9FA",
+  bg: "linear-gradient(180deg, #FAFBFF 0%, #F4F5FA 100%)",
+  base: "#FAFBFF",
   headline: "#0A0F1E",
   body: "#57616F",
   bullet: "#33394A",
@@ -35,6 +38,14 @@ const BLUE = "#2563FF";
 const BLUE_LIGHT = "#4D8CFF";
 const PURPLE = "#7c3aed";
 const PURPLE_LIGHT = "#a78bfa";
+const GREEN = "#22c55e";
+const GREEN_LIGHT = "#4ade80";
+
+const VARIANTS = {
+  blue: { accent: BLUE_LIGHT, tint: "rgba(37,99,255,0.1)", border: "rgba(37,99,255,0.25)", orb: BLUE },
+  purple: { accent: PURPLE_LIGHT, tint: "rgba(124,58,237,0.12)", border: "rgba(124,58,237,0.28)", orb: PURPLE },
+  green: { accent: GREEN_LIGHT, tint: "rgba(34,197,94,0.1)", border: "rgba(34,197,94,0.28)", orb: GREEN },
+} as const;
 
 function h2(theme: typeof dark, extra: React.CSSProperties = {}): React.CSSProperties {
   return {
@@ -46,13 +57,17 @@ function h2(theme: typeof dark, extra: React.CSSProperties = {}): React.CSSPrope
 function bodyText(theme: typeof dark, extra: React.CSSProperties = {}): React.CSSProperties {
   return { fontSize: "1.125rem", color: theme.body, lineHeight: 1.75, marginBottom: "2rem", ...extra };
 }
-function eyebrow(color: string): React.CSSProperties {
+function eyebrowPill(variant: keyof typeof VARIANTS): React.CSSProperties {
+  const v = VARIANTS[variant];
   return {
-    fontSize: "0.78rem", fontWeight: 700, letterSpacing: "1.4px",
-    textTransform: "uppercase", color, marginBottom: "0.9rem", display: "block",
+    display: "inline-flex", alignItems: "center",
+    fontSize: "0.75rem", fontWeight: 700, letterSpacing: "1px",
+    textTransform: "uppercase", color: v.accent, background: v.tint,
+    border: `1px solid ${v.border}`, borderRadius: 100,
+    padding: "0.35rem 0.9rem", marginBottom: "1.1rem",
   };
 }
-function pill(theme: typeof dark, color: string, bg: string, border: string): React.CSSProperties {
+function pill(color: string, bg: string, border: string): React.CSSProperties {
   return {
     display: "inline-flex", alignItems: "center", gap: "0.4rem",
     background: bg, color, border: `1px solid ${border}`,
@@ -63,9 +78,9 @@ function pill(theme: typeof dark, color: string, bg: string, border: string): Re
 
 function BulletList({ items, theme, accent = BLUE }: { items: string[]; theme: typeof dark; accent?: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
       {items.map(f => (
-        <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: "0.8rem" }}>
+        <div key={f} className="bd-bullet-row" style={{ display: "flex", alignItems: "flex-start", gap: "0.8rem", padding: "0.5rem 0.6rem", margin: "0 -0.6rem", borderRadius: 10 }}>
           <span style={{
             color: accent, fontWeight: 700, fontSize: "0.85rem", lineHeight: "1.6rem",
             width: 20, height: 20, borderRadius: "50%",
@@ -79,32 +94,38 @@ function BulletList({ items, theme, accent = BLUE }: { items: string[]; theme: t
   );
 }
 
-/** Shared two-column feature layout: copy ~44%, screenshot ~56%, generous gap. */
+/** Shared two-column feature layout: screenshot dominates (~64%), copy ~36%, generous gap. */
 function FeatureSection({
-  theme, eyebrowColor = BLUE, badge, tag, title, body, bullets, visual, imageSide = "right",
+  theme, variant = "blue", badge, tag, title, body, bullets, visual, imageSide = "right", orb,
 }: {
-  theme: typeof dark; eyebrowColor?: string; badge?: string;
+  theme: typeof dark; variant?: keyof typeof VARIANTS; badge?: string;
   tag: string; title: string; body: React.ReactNode; bullets: string[];
   visual: React.ReactNode; imageSide?: "left" | "right";
+  orb?: { top?: any; left?: any; right?: any; bottom?: any; color?: string; size?: number; opacity?: number };
 }) {
+  const v = VARIANTS[variant];
   const copy = (
     <div>
-      {badge && <div style={pill(theme, eyebrowColor === PURPLE ? PURPLE_LIGHT : BLUE_LIGHT, theme === dark ? "rgba(124,58,237,0.12)" : "rgba(124,58,237,0.08)", theme === dark ? "rgba(124,58,237,0.3)" : "rgba(124,58,237,0.2)")}>{badge}</div>}
-      <div style={eyebrow(eyebrowColor)}>{tag}</div>
+      {badge && <div style={pill(v.accent, v.tint, v.border)}>{badge}</div>}
+      <div style={eyebrowPill(variant)}>{tag}</div>
       <h2 style={h2(theme)}>{title}</h2>
       <div style={bodyText(theme)}>{body}</div>
-      <BulletList items={bullets} theme={theme} accent={eyebrowColor} />
+      <BulletList items={bullets} theme={theme} accent={v.accent} />
     </div>
   );
-  const visualCol = <div>{visual}</div>;
+  const visualCol = (
+    <div style={{ position: "relative" }}>
+      {orb && <GradientOrb color={orb.color ?? v.orb} size={orb.size ?? 420} opacity={orb.opacity ?? 0.28} blur={110} top={orb.top} left={orb.left} right={orb.right} bottom={orb.bottom} />}
+      <div style={{ position: "relative", zIndex: 1 }}>{visual}</div>
+    </div>
+  );
   return (
-    <section style={{
-      background: theme.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem",
-    }}>
+    <section style={{ background: theme.bg, position: "relative", overflow: "hidden", padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
+      {theme === dark && <Grain />}
       <div className="bd-feature-grid" style={{
-        maxWidth: 1240, margin: "0 auto",
-        display: "grid", gridTemplateColumns: imageSide === "right" ? "5fr 6fr" : "6fr 5fr",
-        gap: "clamp(2.5rem, 6vw, 5.5rem)", alignItems: "center",
+        maxWidth: 1320, margin: "0 auto", position: "relative", zIndex: 1,
+        display: "grid", gridTemplateColumns: imageSide === "right" ? "4fr 7fr" : "7fr 4fr",
+        gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
       }}>
         {imageSide === "right" ? <>{copy}{visualCol}</> : <>{visualCol}{copy}</>}
       </div>
@@ -114,15 +135,23 @@ function FeatureSection({
 
 export default function HomePageContent() {
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif", overflowX: "hidden", background: dark.bg }}>
+    <div style={{ fontFamily: "'DM Sans', sans-serif", overflowX: "hidden", background: dark.base }}>
       <style>{`
         @keyframes bdFadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .bd-anim { animation: bdFadeUp 0.8s cubic-bezier(0.16,1,0.3,1) both; }
+        @keyframes bdShimmer { 0% { background-position: 0 0, 0% 50%; } 100% { background-position: 0 0, 300% 50%; } }
+        .bd-shimmer { animation: bdShimmer 7s linear infinite; }
+        .bd-bullet-row { transition: background 0.2s ease, transform 0.2s ease; }
+        .bd-bullet-row:hover { background: rgba(124,58,237,0.07); transform: translateX(4px); }
         @media (prefers-reduced-motion: reduce) {
           .bd-anim { animation: none; opacity: 1; transform: none; }
+          .bd-shimmer { animation: none; }
         }
         @media (max-width: 900px) {
           .bd-feature-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 640px) {
+          .bd-hero-h1 { font-size: 2.75rem !important; letter-spacing: -1px !important; }
         }
       `}</style>
 
@@ -133,6 +162,9 @@ export default function HomePageContent() {
         background: dark.bg, position: "relative", overflow: "hidden",
         paddingTop: "10rem", paddingBottom: "clamp(4rem, 8vw, 7rem)",
       }}>
+        <Grain />
+        <GradientOrb color={PURPLE} size={560} top={-200} left={-180} opacity={0.3} blur={130} />
+        <GradientOrb color={BLUE} size={520} bottom={-220} right={-160} opacity={0.24} blur={130} />
         <div style={{
           position: "absolute", width: 900, height: 900, borderRadius: "50%",
           background: "radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 65%)",
@@ -140,14 +172,23 @@ export default function HomePageContent() {
         }} />
 
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 2rem", textAlign: "center", position: "relative", zIndex: 1 }}>
-          <div className="bd-anim" style={{ ...pill(dark, "#86efac", "rgba(34,197,94,0.08)", "rgba(34,197,94,0.25)"), animationDelay: "0ms" }}>
+          <div className="bd-anim" style={{
+            display: "inline-flex", alignItems: "center", gap: "0.5rem",
+            fontSize: "0.73rem", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase",
+            color: "#86efac", padding: "0.5rem 1.2rem", borderRadius: 100,
+            backdropFilter: "blur(14px)",
+            border: "1px solid transparent",
+            backgroundImage: "linear-gradient(rgba(10,15,30,0.55),rgba(10,15,30,0.55)), linear-gradient(120deg, rgba(34,197,94,0.55), rgba(124,58,237,0.35))",
+            backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box",
+            marginBottom: "1.8rem", animationDelay: "0ms",
+          }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "block" }} />
             Built for cleaning, gardening, pest control & trades
           </div>
 
-          <h1 className="bd-anim" style={{
-            fontSize: "clamp(3rem, 6.4vw, 5rem)", fontWeight: 700,
-            letterSpacing: "-2.5px", lineHeight: 1.04, marginBottom: "1.6rem",
+          <h1 className="bd-anim bd-hero-h1" style={{
+            fontSize: "clamp(4.5rem, 6vw, 5.5rem)", fontWeight: 700,
+            letterSpacing: "-3px", lineHeight: 1.02, marginBottom: "1.8rem",
             color: dark.headline, animationDelay: "70ms",
           }}>
             The booking platform with a built-in{" "}
@@ -155,8 +196,8 @@ export default function HomePageContent() {
           </h1>
 
           <p className="bd-anim" style={{
-            fontSize: "1.3rem", color: dark.body, lineHeight: 1.6,
-            maxWidth: 620, margin: "0 auto 2.6rem", animationDelay: "140ms",
+            fontSize: "1.35rem", color: dark.body, lineHeight: 1.6,
+            maxWidth: 640, margin: "0 auto 2.8rem", animationDelay: "140ms",
           }}>
             Bookings, CRM, payroll, and an AI Agent that tells you exactly what to do — all in one platform built for service businesses.
           </p>
@@ -185,8 +226,9 @@ export default function HomePageContent() {
 
         {/* Massive hero screenshot */}
         <div className="bd-anim" style={{ marginTop: "clamp(3.5rem, 7vw, 5.5rem)", padding: "0 2rem", position: "relative", zIndex: 1, animationDelay: "340ms" }}>
-          <div style={{ width: "80vw", maxWidth: 1320, margin: "0 auto" }}>
-            <BrowserFrame src="/screenshots/dashboard.png" alt="BookdIn dashboard with AI Agent brief, revenue, and today's schedule" glow tilt />
+          <div style={{ position: "relative", width: "90vw", maxWidth: 1200, margin: "0 auto" }}>
+            <GradientOrb color={PURPLE} size={900} top="12%" left="calc(50% - 450px)" opacity={0.22} blur={140} />
+            <BrowserFrame src="/screenshots/dashboard.png" alt="BookdIn dashboard with AI Agent brief, revenue, and today's schedule" glow tilt animatedBorder />
           </div>
         </div>
       </section>
@@ -222,30 +264,37 @@ export default function HomePageContent() {
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "center", gap: "clamp(2.5rem, 6vw, 6rem)", flexWrap: "wrap" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "1.2rem" }}>
             {[
               { val: "AI", label: "Daily business coaching", sub: "No competitor has this" },
               { val: "99.9%", label: "Uptime guaranteed", sub: "Enterprise infrastructure" },
               { val: "14", label: "Day free trial", sub: "No credit card needed" },
               { val: "$49", label: "Starting price /mo", sub: "No per-booking fees" },
             ].map(s => (
-              <div key={s.val} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "3rem", fontWeight: 700, color: light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
+              <div key={s.val} style={{
+                textAlign: "center", padding: "1.8rem 1.4rem", borderRadius: 16,
+                border: "1px solid transparent",
+                backgroundImage: "linear-gradient(#fff,#fff), linear-gradient(135deg, rgba(37,99,255,0.35), rgba(124,58,237,0.15) 60%, transparent 90%)",
+                backgroundOrigin: "border-box", backgroundClip: "padding-box, border-box",
+                boxShadow: "0 2px 14px rgba(10,15,30,0.04)",
+              }}>
+                <div style={{ fontSize: "2.8rem", fontWeight: 700, color: light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
                   {s.val}
                 </div>
-                <div style={{ fontSize: "0.95rem", color: light.bullet, fontWeight: 600, marginTop: "0.5rem" }}>{s.label}</div>
-                <div style={{ fontSize: "0.82rem", color: light.faint, marginTop: "0.2rem" }}>{s.sub}</div>
+                <div style={{ fontSize: "0.92rem", color: light.bullet, fontWeight: 600, marginTop: "0.5rem" }}>{s.label}</div>
+                <div style={{ fontSize: "0.8rem", color: light.faint, marginTop: "0.2rem" }}>{s.sub}</div>
               </div>
             ))}
           </div>
         </div>
+        <CurveDivider fill={dark.base} />
       </section>
 
       {/* ── AI AGENT — hero feature ── */}
       <FeatureSection
         theme={dark}
+        variant="purple"
         badge="BookdIn exclusive"
-        eyebrowColor={PURPLE_LIGHT}
         tag="AI Business Agent"
         title="The only booking platform with a built-in AI Agent"
         body={<>Every morning, your agent reads your live bookings, payments, leads and ad spend, and tells you exactly what needs attention today.{" "}<strong style={{ color: dark.headline }}>Powered by Claude</strong> — not a chatbot bolted on after the fact.</>}
@@ -256,15 +305,16 @@ export default function HomePageContent() {
           "Drafts payment chases and follow-ups for you to approve",
         ]}
         imageSide="right"
+        orb={{ top: "-15%", right: "-12%", size: 420, opacity: 0.3 }}
         visual={<BrowserFrame src="/screenshots/agent.png" alt="BookdIn AI Agent daily brief and task list" glow />}
       />
 
       {/* ── BOOKINGS & CALENDAR (white, overlapping screenshots) ── */}
-      <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem" }}>
+      <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
         <div className="bd-feature-grid" style={{
-          maxWidth: 1240, margin: "0 auto",
-          display: "grid", gridTemplateColumns: "6fr 5fr",
-          gap: "clamp(2.5rem, 6vw, 5.5rem)", alignItems: "center",
+          maxWidth: 1320, margin: "0 auto",
+          display: "grid", gridTemplateColumns: "7fr 4fr",
+          gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
         }}>
           <div style={{ position: "relative", paddingBottom: "4rem" }}>
             <BrowserFrame src="/screenshots/bookings.png" alt="BookdIn bookings list" />
@@ -276,7 +326,7 @@ export default function HomePageContent() {
             </div>
           </div>
           <div>
-            <div style={eyebrow(BLUE)}>Bookings & Calendar</div>
+            <div style={eyebrowPill("blue")}>Bookings & Calendar</div>
             <h2 style={h2(light)}>Run your whole schedule from one screen</h2>
             <p style={bodyText(light)}>
               Every booking and every day in one place. Filter by status, assign providers, track payments, and see your whole month at a glance.
@@ -294,8 +344,8 @@ export default function HomePageContent() {
       {/* ── CRM ── */}
       <FeatureSection
         theme={dark}
+        variant="blue"
         badge="BookdIn exclusive"
-        eyebrowColor={BLUE_LIGHT}
         tag="CRM & Pipeline"
         title="Stop losing leads to poor follow-up"
         body={<>Most booking tools only manage existing customers. BookdIn's CRM tracks every lead from first enquiry to won job.{" "}<strong style={{ color: dark.headline }}>Most businesses lose 30–40% of leads just from poor follow-up.</strong>{" "}BookdIn fixes that.</>}
@@ -306,12 +356,14 @@ export default function HomePageContent() {
           "Convert quotes directly to bookings",
         ]}
         imageSide="left"
+        orb={{ color: GREEN, top: "8%", left: "-10%", size: 380, opacity: 0.22 }}
         visual={<BrowserFrame src="/screenshots/crm.png" alt="BookdIn CRM lead pipeline board" />}
       />
 
       {/* ── TESTIMONIAL ── */}
-      <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 8rem) 2rem" }}>
-        <div style={{ maxWidth: 820, margin: "0 auto", textAlign: "center" }}>
+      <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 8rem) 2rem", position: "relative", overflow: "hidden" }}>
+        <Grain />
+        <div style={{ maxWidth: 820, margin: "0 auto", textAlign: "center", position: "relative", zIndex: 1 }}>
           <div style={{ display: "flex", justifyContent: "center", gap: 4, marginBottom: "2.2rem" }}>
             {"★★★★★".split("").map((s, i) => (
               <span key={i} style={{ color: "#eab308", fontSize: "1.7rem" }}>{s}</span>
@@ -340,14 +392,14 @@ export default function HomePageContent() {
       </section>
 
       {/* ── FINANCIAL REPORTS (white) ── */}
-      <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem" }}>
+      <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
         <div className="bd-feature-grid" style={{
-          maxWidth: 1240, margin: "0 auto",
-          display: "grid", gridTemplateColumns: "5fr 6fr",
-          gap: "clamp(2.5rem, 6vw, 5.5rem)", alignItems: "center",
+          maxWidth: 1320, margin: "0 auto",
+          display: "grid", gridTemplateColumns: "4fr 7fr",
+          gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
         }}>
           <div>
-            <div style={eyebrow(BLUE)}>Financial Reports</div>
+            <div style={eyebrowPill("blue")}>Financial Reports</div>
             <h2 style={h2(light)}>Know your profit down to the location</h2>
             <p style={bodyText(light)}>
               Real profit, not just revenue — subcontractor pay, GST, and every cost line already subtracted, broken down per location every week.
@@ -363,35 +415,22 @@ export default function HomePageContent() {
         </div>
       </section>
 
-      {/* ── MORE FEATURES (incl. Payroll, white) ── */}
-      <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: "clamp(2.5rem, 5vw, 4rem)" }}>
-            <div style={eyebrow(BLUE)}>And everything else</div>
-            <h2 style={h2(light, { fontSize: "clamp(2rem, 4vw, 2.8rem)", maxWidth: 640, margin: "0 auto 1rem" })}>
-              More than a booking tool —{" "}
-              <span style={{ color: BLUE }}>a growth engine</span>
-            </h2>
-            <p style={{ fontSize: "1.1rem", color: light.body, maxWidth: 480, margin: "0 auto" }}>
-              The operational details that keep a service business running, all built in.
-            </p>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1.4rem" }}>
+      {/* ── ALSO BUILT IN — lightweight callout row ── */}
+      <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 8rem)" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
+          <p style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "1.4px", textTransform: "uppercase", color: light.faint, marginBottom: "2rem" }}>
+            Also built in
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "1rem 3rem" }}>
             {[
-              { icon: "💷", title: "Payroll, done automatically", desc: "Subcontractor pay is calculated per job from each provider's payout rate, tracked weekly and ready to export.", highlight: true },
-              { icon: "💸", title: "Charge what you're worth", desc: "Room-based dynamic pricing calculates quotes instantly as customers configure bedrooms, bathrooms, and extras." },
-              { icon: "🔁", title: "Recurring revenue on autopilot", desc: "Automated recurring job creation and daily payment capture run in the background. Set once, get paid forever.", highlight: true },
-              { icon: "🎁", title: "Gift cards & referrals", desc: "Sell gift cards, run discount codes, and track referrals back to the customer who sent them." },
+              { icon: "💷", label: "Automated payroll" },
+              { icon: "💸", label: "Room-based pricing" },
+              { icon: "🔁", label: "Recurring automation" },
+              { icon: "🎁", label: "Gift cards & referrals" },
             ].map(c => (
-              <div key={c.title} style={{
-                background: c.highlight ? "rgba(37,99,255,0.05)" : light.cardBg,
-                border: c.highlight ? "1px solid rgba(37,99,255,0.18)" : `1px solid ${light.cardBorder}`,
-                borderRadius: 16, padding: "2rem",
-                boxShadow: "0 2px 10px rgba(10,15,30,0.03)",
-              }}>
-                <div style={{ fontSize: "1.7rem", marginBottom: "1rem" }}>{c.icon}</div>
-                <h3 style={{ fontSize: "1.08rem", fontWeight: 700, color: light.headline, marginBottom: "0.6rem" }}>{c.title}</h3>
-                <p style={{ fontSize: "0.94rem", color: light.body, lineHeight: 1.7 }}>{c.desc}</p>
+              <div key={c.label} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <span style={{ fontSize: "1.4rem" }}>{c.icon}</span>
+                <span style={{ fontSize: "1.02rem", fontWeight: 600, color: light.headline }}>{c.label}</span>
               </div>
             ))}
           </div>
@@ -399,18 +438,19 @@ export default function HomePageContent() {
       </section>
 
       {/* ── MOBILE APP — live (dark) ── */}
-      <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem" }}>
+      <section style={{ background: dark.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem", position: "relative", overflow: "hidden" }}>
+        <Grain />
         <div className="bd-feature-grid" style={{
-          maxWidth: 1240, margin: "0 auto",
+          maxWidth: 1320, margin: "0 auto", position: "relative", zIndex: 1,
           display: "grid", gridTemplateColumns: "5fr 6fr",
-          gap: "clamp(2.5rem, 6vw, 5.5rem)", alignItems: "center",
+          gap: "clamp(2rem, 5vw, 4rem)", alignItems: "center",
         }}>
           <div>
-            <div style={pill(dark, "#86efac", "rgba(34,197,94,0.1)", "rgba(34,197,94,0.28)")}>
+            <div style={pill("#86efac", "rgba(34,197,94,0.1)", "rgba(34,197,94,0.28)")}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "block" }} />
               Live now
             </div>
-            <div style={eyebrow(BLUE_LIGHT)}>Mobile app</div>
+            <div style={eyebrowPill("blue")}>Mobile app</div>
             <h2 style={h2(dark)}>Manage your business from anywhere</h2>
             <p style={bodyText(dark)}>
               The BookdIn mobile app is live for iOS and Android. Your team sees their assigned jobs, updates status from the field, and you get real-time notifications on every new booking.
@@ -445,41 +485,42 @@ export default function HomePageContent() {
 
           {/* Large phone mockup */}
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <PhoneFrame width={320} glow>
-              <div style={{ padding: "3.2rem 1.1rem 1.1rem", display: "flex", flexDirection: "column", gap: "0.7rem", height: "100%" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: BLUE_LIGHT, marginBottom: "0.3rem" }}>
+            <PhoneFrame width={360} glow>
+              <div style={{ padding: "3.4rem 1.2rem 1.2rem", display: "flex", flexDirection: "column", gap: "0.8rem", height: "100%" }}>
+                <div style={{ fontSize: "0.9rem", fontWeight: 700, color: BLUE_LIGHT, marginBottom: "0.3rem" }}>
                   My Jobs Today
                 </div>
                 {[["Sarah M.", "General Clean", "9:00 AM", "#22c55e"],
                   ["James T.", "Deep Clean", "12:00 PM", "#eab308"],
                   ["Kim R.", "Move In", "3:00 PM", BLUE_LIGHT]].map(([n, s, t, c]) => (
-                  <div key={n} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: "0.9rem", border: `1px solid ${c}33` }}>
-                    <div style={{ fontSize: "0.82rem", fontWeight: 600, color: dark.headline }}>{n}</div>
-                    <div style={{ fontSize: "0.75rem", color: dark.body }}>{s}</div>
-                    <div style={{ fontSize: "0.75rem", color: c, marginTop: 3 }}>{t}</div>
+                  <div key={n} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: "1rem", border: `1px solid ${c}33` }}>
+                    <div style={{ fontSize: "0.88rem", fontWeight: 600, color: dark.headline }}>{n}</div>
+                    <div style={{ fontSize: "0.78rem", color: dark.body }}>{s}</div>
+                    <div style={{ fontSize: "0.78rem", color: c, marginTop: 3 }}>{t}</div>
                   </div>
                 ))}
                 <div style={{
                   marginTop: "auto", background: "rgba(37,99,255,0.12)", borderRadius: 12,
-                  padding: "1rem", border: "1px solid rgba(37,99,255,0.25)",
+                  padding: "1.1rem", border: "1px solid rgba(37,99,255,0.25)",
                 }}>
-                  <div style={{ fontSize: "0.72rem", color: dark.body }}>Revenue today</div>
-                  <div style={{ fontSize: "1.3rem", fontWeight: 700, color: dark.headline }}>$1,840</div>
-                  <div style={{ fontSize: "0.72rem", color: "#4ade80" }}>↑ 12% vs yesterday</div>
+                  <div style={{ fontSize: "0.75rem", color: dark.body }}>Revenue today</div>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: dark.headline }}>$1,840</div>
+                  <div style={{ fontSize: "0.75rem", color: "#4ade80" }}>↑ 12% vs yesterday</div>
                 </div>
               </div>
             </PhoneFrame>
           </div>
         </div>
+        <CurveDivider fill={light.base} />
       </section>
 
       {/* ── FEATURE COMPARISON (white) ── */}
       <section id="compare" style={{ background: light.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "clamp(2.5rem, 5vw, 4rem)" }}>
-            <div style={eyebrow(BLUE)}>Full feature breakdown</div>
+            <div style={eyebrowPill("blue")}>The highlights</div>
             <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Everything you need, nothing you don't</h2>
-            <p style={{ color: light.body, fontSize: "1.05rem", marginTop: "0.6rem" }}>See exactly how BookdIn compares to other booking tools</p>
+            <p style={{ color: light.body, fontSize: "1.05rem", marginTop: "0.6rem" }}>The differences that actually matter when you compare booking tools</p>
           </div>
           <div style={{ overflowX: "auto", background: light.cardBg, borderRadius: 18, border: `1px solid ${light.cardBorder}`, boxShadow: "0 4px 24px rgba(10,15,30,0.04)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.94rem" }}>
@@ -494,12 +535,6 @@ export default function HomePageContent() {
                 {[
                   { label: "Online booking & scheduling", bi: true, o: true },
                   { label: "Stripe payments & card holds", bi: true, o: true },
-                  { label: "Invoicing & quotes", bi: true, o: true },
-                  { label: "Staff / provider portal", bi: true, o: true },
-                  { label: "Recurring bookings", bi: true, o: true },
-                  { label: "Gift cards & discount codes", bi: true, o: true },
-                  { label: "Referral tracking", bi: true, o: true },
-                  { label: "99.9% uptime guarantee", bi: true, o: true },
                   { label: "AI Business Agent", note: "Daily briefings, task surfacing & Q&A powered by Claude", bi: true, o: false, ex: true },
                   { label: "CRM lead pipeline", note: "Track leads from first enquiry to won job", bi: true, o: false, ex: true },
                   { label: "Revenue & profit analytics", note: "Weekly profit by location, Google Ads CPA tracking", bi: true, o: false, ex: true },
@@ -532,7 +567,7 @@ export default function HomePageContent() {
       {/* ── PRICING (white) ── */}
       <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div style={eyebrow(BLUE)}>Pricing</div>
+          <div style={eyebrowPill("blue")}>Pricing</div>
           <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Simple, transparent pricing</h2>
           <p style={{ fontSize: "1.05rem", color: light.body, marginBottom: "3.5rem" }}>
             No per-booking fees. No hidden charges. Start free for 14 days.
@@ -543,11 +578,16 @@ export default function HomePageContent() {
               { name: "Growth", price: "$99", period: "/mo", desc: "Everything in Starter, plus the AI Business Agent, CRM pipeline, profit reports, payroll & recurring automation", featured: true },
               { name: "Enterprise", price: "Custom", period: "", desc: "Multi-location, custom integrations, dedicated onboarding & support", featured: false },
             ].map(p => (
-              <div key={p.name} style={{
-                background: p.featured ? "#0A0F1E" : light.cardBg,
-                border: p.featured ? "1px solid rgba(124,58,237,0.4)" : `1px solid ${light.cardBorder}`,
+              <div key={p.name} className={p.featured ? "bd-shimmer" : undefined} style={{
+                background: p.featured
+                  ? "linear-gradient(#0A0F1E,#0A0F1E), linear-gradient(115deg, rgba(124,58,237,0.9), rgba(37,99,255,0.6) 35%, rgba(124,58,237,0.25) 60%, rgba(124,58,237,0.9) 100%)"
+                  : light.cardBg,
+                backgroundOrigin: p.featured ? "border-box" : undefined,
+                backgroundClip: p.featured ? "padding-box, border-box" : undefined,
+                backgroundSize: p.featured ? "100% 100%, 300% 300%" : undefined,
+                border: p.featured ? "1px solid transparent" : `1px solid ${light.cardBorder}`,
                 borderRadius: 18, padding: "2.2rem", position: "relative",
-                boxShadow: p.featured ? "0 24px 60px rgba(37,99,255,0.18)" : "0 2px 10px rgba(10,15,30,0.03)",
+                boxShadow: p.featured ? "0 24px 60px rgba(37,99,255,0.22)" : "0 2px 10px rgba(10,15,30,0.03)",
               }}>
                 {p.featured && <div style={{ position: "absolute", top: "1.4rem", right: "1.4rem", background: BLUE, color: "#fff", fontSize: "0.68rem", fontWeight: 700, padding: "3px 10px", borderRadius: 100 }}>Most popular</div>}
                 <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: p.featured ? dark.faint : light.faint, marginBottom: "0.8rem" }}>{p.name}</div>

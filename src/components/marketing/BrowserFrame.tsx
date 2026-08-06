@@ -1,7 +1,7 @@
 export default function BrowserFrame({
-  src, alt, glow = false, tilt = false, url = "bookdin.co",
+  src, alt, glow = false, tilt = false, animatedBorder = false, url = "bookdin.co",
 }: {
-  src: string; alt: string; glow?: boolean; tilt?: boolean; url?: string;
+  src: string; alt: string; glow?: boolean; tilt?: boolean; animatedBorder?: boolean; url?: string;
 }) {
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -12,14 +12,19 @@ export default function BrowserFrame({
           filter: "blur(50px)", zIndex: 0, pointerEvents: "none",
         }} />
       )}
-      <div style={{
+      <div className={animatedBorder ? "bd-shimmer" : undefined} style={{
         position: "relative", zIndex: 1,
         borderRadius: 16, overflow: "hidden",
-        border: "1px solid rgba(255,255,255,0.09)",
+        border: "1px solid transparent",
+        backgroundImage: animatedBorder
+          ? "linear-gradient(#0d1424, #0d1424), linear-gradient(115deg, rgba(124,58,237,0.9), rgba(37,99,255,0.5) 35%, rgba(124,58,237,0.1) 60%, rgba(124,58,237,0.9) 100%)"
+          : "linear-gradient(#0d1424, #0d1424), linear-gradient(135deg, rgba(124,58,237,0.5), rgba(37,99,255,0.2) 45%, rgba(124,58,237,0) 75%)",
+        backgroundOrigin: "border-box",
+        backgroundClip: "padding-box, border-box",
+        backgroundSize: animatedBorder ? "100% 100%, 300% 300%" : undefined,
         boxShadow: glow
-          ? "0 50px 120px rgba(0,0,0,0.55), 0 0 100px rgba(124,58,237,0.18)"
-          : "0 40px 100px rgba(0,0,0,0.45)",
-        background: "#0d1424",
+          ? "0 50px 120px rgba(0,0,0,0.55), 0 0 100px rgba(124,58,237,0.18), inset 0 1px 0 rgba(255,255,255,0.06)"
+          : "0 40px 100px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05)",
         transform: tilt ? "perspective(2200px) rotateX(3.5deg)" : undefined,
         transformOrigin: "center bottom",
       }}>
@@ -48,7 +53,14 @@ export default function BrowserFrame({
           </div>
           <div style={{ width: 34, flex: "0 0 auto" }} />
         </div>
-        <img src={src} alt={alt} style={{ width: "100%", display: "block" }} />
+        <div style={{ position: "relative" }}>
+          <img src={src} alt={alt} style={{ width: "100%", display: "block" }} />
+          <div style={{
+            position: "absolute", left: 0, right: 0, bottom: 0, height: "16%",
+            background: "linear-gradient(to bottom, transparent, #0d1424)",
+            pointerEvents: "none",
+          }} />
+        </div>
       </div>
     </div>
   );
