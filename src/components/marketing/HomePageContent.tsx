@@ -1,40 +1,12 @@
 // @ts-nocheck
 "use client";
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 
-// ── Animated counter hook ──
-function useCounter(target: number, duration = 1500, start = false) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!start) return;
-    let startTime: number;
-    const step = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      setCount(Math.floor(progress * target));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [target, duration, start]);
-  return count;
-}
-
 export default function HomePageContent() {
   const [email, setEmail] = useState("");
-  const [statsVisible, setStatsVisible] = useState(false);
-  const statsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setStatsVisible(true); },
-      { threshold: 0.3 }
-    );
-    if (statsRef.current) observer.observe(statsRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", overflowX: "hidden", background: "#0A0F1E" }}>
@@ -49,7 +21,7 @@ export default function HomePageContent() {
       }}>
         <div style={{
           position: "absolute", width: 700, height: 700, borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(37,99,255,0.13) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(124,58,237,0.14) 0%, transparent 70%)",
           top: "50%", left: "30%", transform: "translate(-50%,-50%)",
           pointerEvents: "none",
         }} />
@@ -59,13 +31,13 @@ export default function HomePageContent() {
           {/* Badge */}
           <div style={{
             display: "inline-flex", alignItems: "center", gap: "0.5rem",
-            background: "rgba(37,99,255,0.1)", border: "1px solid rgba(37,99,255,0.25)",
-            color: "#4D8CFF", padding: "0.35rem 1rem", borderRadius: 100,
+            background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.3)",
+            color: "#a78bfa", padding: "0.35rem 1rem", borderRadius: 100,
             fontSize: "0.73rem", fontWeight: 600, marginBottom: "1.4rem",
             textTransform: "uppercase", letterSpacing: "0.5px",
           }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "block" }} />
-            Built for cleaning & service businesses
+            Built for cleaning, gardening, pest control & trades
           </div>
 
           <h1 style={{
@@ -73,15 +45,15 @@ export default function HomePageContent() {
             letterSpacing: "-2px", lineHeight: 1.05, marginBottom: "1.2rem",
             color: "#F0F2FF",
           }}>
-            The booking platform that{" "}
-            <em style={{ fontStyle: "normal", color: "#2563FF" }}>actually grows your revenue</em>
+            The booking platform with a built-in{" "}
+            <em style={{ fontStyle: "normal", color: "#a78bfa" }}>AI business manager</em>
           </h1>
 
           {/* 3 scannable bullets */}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "2rem" }}>
             {[
+              "Your AI Agent tells you exactly what to do, every morning",
               "Bookings, CRM & payments — all in one place",
-              "Turn enquiries into jobs with a built-in lead pipeline",
               "Automated follow-ups & recurring jobs on autopilot",
             ].map(b => (
               <div key={b} style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
@@ -130,7 +102,7 @@ export default function HomePageContent() {
           {/* Social proof avatars */}
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
             <div style={{ display: "flex" }}>
-              {["CF","JM","SR","AL"].map((initials, i) => (
+              {["JM","AL","RK","TS"].map((initials, i) => (
                 <div key={i} style={{
                   width: 34, height: 34, borderRadius: "50%",
                   background: ["#2563FF","#7c3aed","#059669","#d97706"][i],
@@ -156,12 +128,12 @@ export default function HomePageContent() {
           </div>
         </div>
 
-        {/* RIGHT — dashboard screenshot */}
+        {/* RIGHT — AI Agent screenshot, the hero feature */}
         <div style={{ flex: 1, position: "relative", zIndex: 1, minWidth: 0 }}>
           <div style={{
             borderRadius: 14, overflow: "hidden",
             border: "1px solid rgba(255,255,255,0.07)",
-            boxShadow: "0 48px 140px rgba(0,0,0,0.6), 0 0 80px rgba(37,99,255,0.07)",
+            boxShadow: "0 48px 140px rgba(0,0,0,0.6), 0 0 80px rgba(124,58,237,0.1)",
           }}>
             <div style={{
               background: "#0d1424", padding: "0.65rem 1rem",
@@ -177,12 +149,12 @@ export default function HomePageContent() {
               }} />
             </div>
             <img
-              src="/screenshots/dashboard.png"
-              alt="BookdIn dashboard showing bookings, revenue and CRM"
+              src="/screenshots/agent.png"
+              alt="BookdIn AI Agent giving a daily morning brief with tasks that need attention"
               style={{ width: "100%", display: "block" }}
             />
           </div>
-          {/* Floating revenue badge */}
+          {/* Floating badge — agent activity */}
           <div style={{
             position: "absolute", bottom: -20, left: -24,
             background: "#0d1424", border: "1px solid rgba(255,255,255,0.1)",
@@ -190,13 +162,13 @@ export default function HomePageContent() {
             boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
             display: "flex", alignItems: "center", gap: "0.8rem",
           }}>
-            <div style={{ fontSize: "1.4rem" }}>📈</div>
+            <div style={{ fontSize: "1.4rem" }}>🧠</div>
             <div>
-              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#F0F2FF" }}>$54,448 this month</div>
-              <div style={{ fontSize: "0.7rem", color: "#22c55e", marginTop: 1 }}>↑ 23% vs last month</div>
+              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#F0F2FF" }}>Powered by Claude</div>
+              <div style={{ fontSize: "0.7rem", color: "#a78bfa", marginTop: 1 }}>Reads your live data, daily</div>
             </div>
           </div>
-          {/* Floating booking badge */}
+          {/* Floating badge — task surfaced */}
           <div style={{
             position: "absolute", top: 40, right: -20,
             background: "#0d1424", border: "1px solid rgba(255,255,255,0.1)",
@@ -205,7 +177,7 @@ export default function HomePageContent() {
             display: "flex", alignItems: "center", gap: "0.7rem",
           }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
-            <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#F0F2FF" }}>New booking · $394</div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#F0F2FF" }}>4 payments flagged to chase</div>
           </div>
         </div>
       </section>
@@ -229,7 +201,7 @@ export default function HomePageContent() {
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "2.5rem", flexWrap: "wrap" }}>
-            {["Stripe", "Supabase", "Vercel", "Resend"].map(name => (
+            {["Stripe", "Supabase", "Vercel", "Resend", "Claude"].map(name => (
               <span key={name} style={{ fontSize: "0.85rem", color: "#4a5568", fontWeight: 700, letterSpacing: "0.5px" }}>
                 {name}
               </span>
@@ -245,16 +217,16 @@ export default function HomePageContent() {
         </div>
       </div>
 
-      {/* ── ANIMATED STATS ── */}
-      <div ref={statsRef} style={{ padding: "5rem 3rem", textAlign: "center" }}>
+      {/* ── STATS ── */}
+      <div style={{ padding: "5rem 3rem", textAlign: "center" }}>
         <p style={{ fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "1px", color: "#4a5568", marginBottom: "3rem", fontWeight: 600 }}>
           Why service businesses choose BookdIn
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: "6rem", flexWrap: "wrap", maxWidth: 900, margin: "0 auto" }}>
           {[
+            { val: "AI", label: "Daily business coaching", sub: "No competitor has this" },
             { val: "99.9%", label: "Uptime guaranteed", sub: "Enterprise infrastructure" },
             { val: "14", label: "Day free trial", sub: "No credit card needed" },
-            { val: "CRM", label: "Built-in lead pipeline", sub: "Not available elsewhere" },
             { val: "$49", label: "Starting price /mo", sub: "No per-booking fees" },
           ].map(s => (
             <div key={s.val} style={{ textAlign: "center" }}>
@@ -270,20 +242,78 @@ export default function HomePageContent() {
 
       <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
 
-      {/* ── BOOKINGS FEATURE ── */}
+      {/* ── AI AGENT — hero feature ── */}
       <section style={{ maxWidth: 1100, margin: "0 auto", padding: "7rem 3rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6rem", alignItems: "center" }}>
         <div>
-          <div style={tag}>Bookings</div>
-          <h2 style={h2}>Manage bookings like a pro</h2>
+          <div style={{
+            display: "inline-block", background: "rgba(124,58,237,0.14)", color: "#a78bfa",
+            fontSize: "0.68rem", fontWeight: 700, padding: "2px 10px", borderRadius: 100,
+            marginBottom: "0.8rem", textTransform: "uppercase", letterSpacing: "0.3px",
+          }}>
+            BookdIn exclusive
+          </div>
+          <div style={tag}>AI Business Agent</div>
+          <h2 style={h2}>The only booking platform with a built-in AI Agent</h2>
           <p style={{ fontSize: "1rem", color: "#8892A4", lineHeight: 1.75, marginBottom: "1.8rem" }}>
-            Every booking in one place. Filter by status, assign providers, track payments, and manage your whole schedule from a single screen.
+            Every morning, your agent reads your live bookings, payments, leads and ad spend, and tells you exactly what needs attention today.{" "}
+            <strong style={{ color: "#F0F2FF" }}>Powered by Claude</strong> — not a chatbot bolted on after the fact.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
             {[
+              "Daily AI-generated morning brief, in plain English",
+              "Surfaces unpaid invoices, unassigned jobs & stale leads",
+              "Ask it anything — \"how busy are we next week?\"",
+              "Drafts payment chases and follow-ups for you to approve",
+            ].map(f => (
+              <div key={f} style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
+                <span style={{ color: "#a78bfa", fontWeight: 700, fontSize: "0.9rem" }}>✓</span>
+                <span style={{ fontSize: "0.93rem", color: "#c8d4e8" }}>{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{
+          borderRadius: 14, overflow: "hidden",
+          border: "1px solid rgba(124,58,237,0.2)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.4), 0 0 60px rgba(124,58,237,0.08)",
+        }}>
+          <img src="/screenshots/agent.png" alt="BookdIn AI Agent daily brief and task list" style={{ width: "100%", display: "block" }} />
+        </div>
+      </section>
+
+      <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+
+      {/* ── BOOKINGS & CALENDAR ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "7rem 3rem 9rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6rem", alignItems: "center" }}>
+        <div style={{ position: "relative" }}>
+          <div style={{
+            borderRadius: 14, overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.07)",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.4)",
+          }}>
+            <img src="/screenshots/bookings.png" alt="BookdIn bookings list" style={{ width: "100%", display: "block" }} />
+          </div>
+          <div style={{
+            position: "absolute", bottom: -48, right: -32, width: "62%",
+            borderRadius: 12, overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.1)",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+          }}>
+            <img src="/screenshots/calendar.png" alt="BookdIn calendar view" style={{ width: "100%", display: "block" }} />
+          </div>
+        </div>
+        <div>
+          <div style={tag}>Bookings & Calendar</div>
+          <h2 style={h2}>Run your whole schedule from one screen</h2>
+          <p style={{ fontSize: "1rem", color: "#8892A4", lineHeight: 1.75, marginBottom: "1.8rem" }}>
+            Every booking and every day in one place. Filter by status, assign providers, track payments, and see your whole month at a glance.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+            {[
+              "Full calendar — day, week & month views",
               "Recurring bookings — set once, run forever",
-              "Auto credit card holds on every job",
               "Assign providers with one click",
-              "Filter by today, this week, or unassigned",
+              "Auto credit card holds on every job",
             ].map(f => (
               <div key={f} style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
                 <span style={{ color: "#2563FF", fontWeight: 700, fontSize: "0.9rem" }}>✓</span>
@@ -292,50 +322,18 @@ export default function HomePageContent() {
             ))}
           </div>
         </div>
-        <div style={{
-          borderRadius: 14, overflow: "hidden",
-          border: "1px solid rgba(255,255,255,0.07)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.4)",
-        }}>
-          <img src="/screenshots/bookings.png" alt="BookdIn bookings list" style={{ width: "100%", display: "block" }} />
-        </div>
       </section>
 
       <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
 
       {/* ── CRM SECTION ── */}
       <section style={{ maxWidth: 1100, margin: "0 auto", padding: "7rem 3rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6rem", alignItems: "center" }}>
-        {/* CRM pipeline visual */}
         <div style={{
-          background: "rgba(37,99,255,0.04)", border: "1px solid rgba(37,99,255,0.15)",
-          borderRadius: 16, padding: "2rem",
+          borderRadius: 14, overflow: "hidden",
+          border: "1px solid rgba(255,255,255,0.07)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.4)",
         }}>
-          <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#4D8CFF", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1.5rem" }}>
-            Lead Pipeline
-          </div>
-          {[
-            { stage: "New Lead", count: 4, value: "$4,200", color: "#8892A4", pct: 33 },
-            { stage: "Contacted", count: 7, value: "$9,800", color: "#eab308", pct: 58 },
-            { stage: "Quoted", count: 5, value: "$14,500", color: "#4D8CFF", pct: 42 },
-            { stage: "Won", count: 12, value: "$31,200", color: "#22c55e", pct: 100 },
-          ].map(col => (
-            <div key={col.stage} style={{ marginBottom: "1rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "0.8rem", color: col.color, fontWeight: 600 }}>{col.stage}</span>
-                  <span style={{ fontSize: "0.72rem", color: "#4a5568", background: "rgba(255,255,255,0.05)", padding: "1px 6px", borderRadius: 4 }}>{col.count}</span>
-                </div>
-                <span style={{ fontSize: "0.78rem", color: "#4a5568" }}>{col.value}</span>
-              </div>
-              <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${col.pct}%`, background: col.color, borderRadius: 3, opacity: 0.7, transition: "width 1s ease" }} />
-              </div>
-            </div>
-          ))}
-          <div style={{ marginTop: "1.5rem", padding: "0.9rem", background: "rgba(34,197,94,0.08)", borderRadius: 10, border: "1px solid rgba(34,197,94,0.15)" }}>
-            <div style={{ fontSize: "0.8rem", color: "#22c55e", fontWeight: 700 }}>12 leads won this month</div>
-            <div style={{ fontSize: "0.73rem", color: "#4a5568", marginTop: "0.2rem" }}>$31,200 pipeline value closed</div>
-          </div>
+          <img src="/screenshots/crm.png" alt="BookdIn CRM lead pipeline board" style={{ width: "100%", display: "block" }} />
         </div>
 
         <div>
@@ -384,43 +382,76 @@ export default function HomePageContent() {
           marginBottom: "2.5rem", fontStyle: "normal",
           maxWidth: 720, margin: "0 auto 2.5rem",
         }}>
-          "BookdIn replaced three separate tools we were using. The CRM alone has helped us convert enquiries we used to just lose track of."
+          "BookdIn's AI Agent tells us exactly what to chase every morning — it's like having an ops manager who never sleeps. It replaced three separate tools we were using."
         </blockquote>
         <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", justifyContent: "center" }}>
           <div style={{
             width: 54, height: 54, borderRadius: "50%",
-            background: "linear-gradient(135deg, #2563FF, #4D8CFF)",
+            background: "linear-gradient(135deg, #2563FF, #7c3aed)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "1rem", fontWeight: 700, color: "#fff",
+            fontSize: "1.3rem",
             border: "2px solid rgba(37,99,255,0.3)",
-          }}>CF</div>
+          }}>🧽</div>
           <div style={{ textAlign: "left" }}>
-            <div style={{ fontWeight: 700, color: "#F0F2FF", fontSize: "1rem" }}>Clean Freaks</div>
-            <div style={{ color: "#8892A4", fontSize: "0.85rem" }}>Cleaning company · Australia</div>
+            <div style={{ fontWeight: 700, color: "#F0F2FF", fontSize: "1rem" }}>Cleaning business owner</div>
+            <div style={{ color: "#8892A4", fontSize: "0.85rem" }}>Melbourne, Australia</div>
           </div>
         </div>
       </section>
 
       <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
 
-      {/* ── REVENUE GROWTH ── */}
+      {/* ── FINANCIAL REPORTS ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "7rem 3rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6rem", alignItems: "center" }}>
+        <div>
+          <div style={tag}>Financial Reports</div>
+          <h2 style={h2}>Know your profit down to the location</h2>
+          <p style={{ fontSize: "1rem", color: "#8892A4", lineHeight: 1.75, marginBottom: "1.8rem" }}>
+            Real profit, not just revenue — subcontractor pay, GST, and every cost line already subtracted, broken down per location every week.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+            {[
+              "Weekly profit by location — revenue minus subcontractor pay, GST & costs",
+              "Google Ads spend & cost-per-conversion, synced automatically",
+              "Track admin pay, subscriptions, refunds & ad spend in one place",
+              "The same numbers your AI Agent uses to coach you",
+            ].map(f => (
+              <div key={f} style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
+                <span style={{ color: "#2563FF", fontWeight: 700, fontSize: "0.9rem" }}>✓</span>
+                <span style={{ fontSize: "0.93rem", color: "#c8d4e8" }}>{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{
+          borderRadius: 14, overflow: "hidden",
+          border: "1px solid rgba(255,255,255,0.07)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.4)",
+        }}>
+          <img src="/screenshots/profit.png" alt="BookdIn weekly profit report by location" style={{ width: "100%", display: "block" }} />
+        </div>
+      </section>
+
+      <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+
+      {/* ── MORE FEATURES (incl. Payroll) ── */}
       <section style={{ maxWidth: 1100, margin: "0 auto", padding: "7rem 3rem" }}>
         <div style={{ textAlign: "center", marginBottom: "4rem" }}>
-          <div style={tag}>Revenue growth</div>
+          <div style={tag}>And everything else</div>
           <h2 style={{ ...h2, fontSize: "clamp(2rem, 4vw, 3.2rem)", maxWidth: 640, margin: "0 auto 1rem" }}>
             More than a booking tool —{" "}
             <em style={{ fontStyle: "normal", color: "#2563FF" }}>a growth engine</em>
           </h2>
           <p style={{ fontSize: "1rem", color: "#8892A4", maxWidth: 480, margin: "0 auto" }}>
-            Most booking platforms keep your operation running. BookdIn helps you win more jobs, convert more leads, and keep customers longer.
+            The operational details that keep a service business running, all built in.
           </p>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.2rem" }}>
           {[
-            { icon: "🧲", title: "Never lose a lead again", desc: "CRM pipeline tracks every enquiry from first contact to booked job. Stop losing 30–40% of revenue to poor follow-up.", highlight: true },
-            { icon: "📊", title: "Know exactly what's working", desc: "Revenue charts, booking trends, and provider performance — make data-driven decisions every week." },
-            { icon: "🔁", title: "Recurring revenue on autopilot", desc: "Automated recurring job creation, follow-up emails, and payment capture run daily. Set once, get paid forever.", highlight: true },
+            { icon: "💷", title: "Payroll, done automatically", desc: "Subcontractor pay is calculated per job from each provider's payout rate, tracked weekly and ready to export.", highlight: true },
             { icon: "💸", title: "Charge what you're worth", desc: "Room-based dynamic pricing calculates quotes instantly as customers configure bedrooms, bathrooms, and extras." },
+            { icon: "🔁", title: "Recurring revenue on autopilot", desc: "Automated recurring job creation and daily payment capture run in the background. Set once, get paid forever.", highlight: true },
+            { icon: "🎁", title: "Gift cards & referrals", desc: "Sell gift cards, run discount codes, and track referrals back to the customer who sent them." },
           ].map(c => (
             <div key={c.title} style={{
               background: c.highlight ? "rgba(37,99,255,0.06)" : "rgba(255,255,255,0.03)",
@@ -438,20 +469,22 @@ export default function HomePageContent() {
 
       <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
 
-      {/* ── MOBILE APP COMING SOON ── */}
+      {/* ── MOBILE APP — live ── */}
       <section style={{ maxWidth: 1100, margin: "0 auto", padding: "7rem 3rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5rem", alignItems: "center" }}>
         <div>
           <div style={{
-            display: "inline-block", background: "rgba(37,99,255,0.1)", color: "#4D8CFF",
+            display: "inline-flex", alignItems: "center", gap: "0.4rem",
+            background: "rgba(34,197,94,0.1)", color: "#22c55e",
             fontSize: "0.7rem", fontWeight: 700, padding: "3px 10px", borderRadius: 100,
             marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "0.5px",
           }}>
-            Coming soon
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "block" }} />
+            Live now
           </div>
           <div style={tag}>Mobile app</div>
           <h2 style={h2}>Manage your business from anywhere</h2>
           <p style={{ fontSize: "1rem", color: "#8892A4", lineHeight: 1.75, marginBottom: "1.8rem" }}>
-            The BookdIn mobile app is coming for iOS and Android. Your staff will see their assigned jobs, update status from the field, and you'll get real-time notifications on every new booking.
+            The BookdIn mobile app is live for iOS and Android. Your team sees their assigned jobs, updates status from the field, and you get real-time notifications on every new booking.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", marginBottom: "2rem" }}>
             {[
@@ -467,17 +500,19 @@ export default function HomePageContent() {
             ))}
           </div>
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            {["App Store", "Google Play"].map(store => (
-              <div key={store} style={{
+            {[
+              { icon: "🍎", label: "TestFlight (iOS beta)" },
+              { icon: "▶", label: "Google Play" },
+            ].map(store => (
+              <div key={store.label} style={{
                 background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
                 borderRadius: 10, padding: "0.6rem 1.2rem",
                 display: "flex", alignItems: "center", gap: "0.5rem",
-                opacity: 0.5,
               }}>
-                <span style={{ fontSize: "1.1rem" }}>{store === "App Store" ? "🍎" : "▶"}</span>
+                <span style={{ fontSize: "1.1rem" }}>{store.icon}</span>
                 <div>
-                  <div style={{ fontSize: "0.62rem", color: "#8892A4" }}>Coming soon on</div>
-                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#F0F2FF" }}>{store}</div>
+                  <div style={{ fontSize: "0.62rem", color: "#22c55e" }}>Live now on</div>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#F0F2FF" }}>{store.label}</div>
                 </div>
               </div>
             ))}
@@ -562,8 +597,10 @@ export default function HomePageContent() {
                 { label: "Gift cards & discount codes", bi: true, o: true },
                 { label: "Referral tracking", bi: true, o: true },
                 { label: "99.9% uptime guarantee", bi: true, o: true },
+                { label: "AI Business Agent", note: "Daily briefings, task surfacing & Q&A powered by Claude", bi: true, o: false, ex: true },
                 { label: "CRM lead pipeline", note: "Track leads from first enquiry to won job", bi: true, o: false, ex: true },
-                { label: "Revenue analytics & reporting", note: "Weekly/monthly trends, provider performance, LTV", bi: true, o: false, ex: true },
+                { label: "Revenue & profit analytics", note: "Weekly profit by location, Google Ads CPA tracking", bi: true, o: false, ex: true },
+                { label: "Payroll & subcontractor pay", note: "Calculated automatically per job", bi: true, o: false, ex: true },
                 { label: "Automated follow-ups", note: "Daily automated payment capture & follow-ups", bi: true, o: false, ex: true },
                 { label: "Room-based dynamic pricing", note: "Auto-calculate quotes by bedrooms & extras", bi: true, o: false, ex: true },
                 { label: "Free trial", biVal: "14 days", oVal: "7 days" },
@@ -599,8 +636,8 @@ export default function HomePageContent() {
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.2rem", maxWidth: 820, margin: "0 auto 2rem", textAlign: "left" }}>
           {[
-            { name: "Starter", price: "$49", period: "/mo", desc: "Up to 3 staff, unlimited bookings, invoicing, public booking page, room pricing", featured: false },
-            { name: "Growth", price: "$99", period: "/mo", desc: "Unlimited staff, CRM pipeline, revenue analytics, recurring automation, gift cards", featured: true },
+            { name: "Starter", price: "$49", period: "/mo", desc: "Up to 3 staff, unlimited bookings, invoicing, public booking page, room-based pricing", featured: false },
+            { name: "Growth", price: "$99", period: "/mo", desc: "Everything in Starter, plus the AI Business Agent, CRM pipeline, profit reports, payroll & recurring automation", featured: true },
             { name: "Enterprise", price: "Custom", period: "", desc: "Multi-location, custom integrations, dedicated onboarding & support", featured: false },
           ].map(p => (
             <div key={p.name} style={{
@@ -636,14 +673,14 @@ export default function HomePageContent() {
       <div style={{ padding: "0 2rem 6rem", maxWidth: 1040, margin: "0 auto" }}>
         <div style={{
           borderRadius: 24,
-          background: "linear-gradient(135deg, rgba(37,99,255,0.2), rgba(37,99,255,0.05))",
-          border: "1px solid rgba(37,99,255,0.3)",
+          background: "linear-gradient(135deg, rgba(124,58,237,0.2), rgba(37,99,255,0.08))",
+          border: "1px solid rgba(124,58,237,0.3)",
           padding: "6rem 2rem", textAlign: "center",
           position: "relative", overflow: "hidden",
         }}>
           <div style={{
             position: "absolute", width: 500, height: 500, borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(37,99,255,0.12) 0%, transparent 70%)",
+            background: "radial-gradient(circle, rgba(124,58,237,0.14) 0%, transparent 70%)",
             top: "50%", left: "50%", transform: "translate(-50%,-50%)",
             pointerEvents: "none",
           }} />
@@ -652,7 +689,7 @@ export default function HomePageContent() {
             <em style={{ fontStyle: "normal", color: "#2563FF" }}>booked in</em>?
           </h2>
           <p style={{ color: "#8892A4", marginBottom: "2.5rem", fontSize: "1.05rem", position: "relative" }}>
-            14-day free trial. No credit card. Up and running in under 24 hours.
+            14-day free trial. No credit card. Your AI Agent is live from day one.
           </p>
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap", position: "relative" }}>
             <Link href="/auth/signup" style={{

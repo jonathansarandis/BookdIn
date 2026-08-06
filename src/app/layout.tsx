@@ -11,7 +11,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: "BookdIn — Run your business. We'll handle the bookings.",
-  description: 'Booking, scheduling and CRM software for service businesses.',
+  description: 'Booking, scheduling, CRM and a built-in AI business manager for cleaning, gardening, pest control and trades businesses.',
   icons: {
     icon: '/favicon.png',
     shortcut: '/favicon.png',
