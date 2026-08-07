@@ -2,7 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, CheckCircle2, Phone, Bot } from 'lucide-react'
+import { Loader2, CheckCircle2, Phone, Bot, Eye, EyeOff } from 'lucide-react'
 
 const CHARLOTTE_VOICE_ID = 'XB0fDUnXU5powFXDhCwa'
 
@@ -28,6 +28,16 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
+  const [sipUsername, setSipUsername] = useState('')
+  const [sipPassword, setSipPassword] = useState('')       // plaintext, only used when saving
+  const [hasSipPassword, setHasSipPassword] = useState(false)
+  const [showSipPassword, setShowSipPassword] = useState(false)
+  const [sipDomain, setSipDomain] = useState('')
+  const [sipPort, setSipPort] = useState('5060')
+  const [vapiSipPhoneNumberId, setVapiSipPhoneNumberId] = useState<string | null>(null)
+  const [connectingSip, setConnectingSip] = useState(false)
+  const [sipConnectStatus, setSipConnectStatus] = useState<{ ok: boolean; message: string } | null>(null)
+
   const supabase = createClient()
 
   useEffect(() => {
@@ -35,7 +45,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
     setLoading(true)
     supabase
       .from('businesses')
-      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_provider, voice_id, vapi_assistant_id')
+      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_provider, voice_id, vapi_assistant_id, voice_sip_username, voice_sip_domain, voice_sip_port, voice_sip_password_encrypted, vapi_sip_phone_number_id')
       .eq('id', businessId)
       .single()
       .then(({ data }) => {
@@ -51,6 +61,11 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
           } else {
             setVoicePreset('charlotte')
           }
+          setSipUsername(data.voice_sip_username || '')
+          setSipDomain(data.voice_sip_domain || '')
+          setSipPort(String(data.voice_sip_port || 5060))
+          setHasSipPassword(!!data.voice_sip_password_encrypted)
+          setVapiSipPhoneNumberId(data.vapi_sip_phone_number_id || null)
         }
         setLoading(false)
       })
@@ -64,18 +79,25 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
     setSaved(false)
     setSaveError(null)
 
+    const payload: any = {
+      business_id: businessId,
+      voice_enabled: enabled,
+      voice_phone_number: phoneNumber || null,
+      voice_agent_name: agentName || 'Aria',
+      voice_agent_personality: personality || null,
+      voice_provider: 'elevenlabs',
+      voice_id: effectiveVoiceId || CHARLOTTE_VOICE_ID,
+      voice_sip_username: sipUsername || null,
+      voice_sip_domain: sipDomain || null,
+      voice_sip_port: sipPort || 5060,
+    }
+    // Only include the SIP password if the user typed something — else preserve existing
+    if (sipPassword) payload.voice_sip_password = sipPassword
+
     const res = await fetch('/api/settings/voice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        business_id: businessId,
-        voice_enabled: enabled,
-        voice_phone_number: phoneNumber || null,
-        voice_agent_name: agentName || 'Aria',
-        voice_agent_personality: personality || null,
-        voice_provider: 'elevenlabs',
-        voice_id: effectiveVoiceId || CHARLOTTE_VOICE_ID,
-      }),
+      body: JSON.stringify(payload),
     })
     const data = await res.json().catch(() => null)
     setSaving(false)
@@ -84,7 +106,28 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
       return
     }
     setSaved(true)
+    setSipPassword('')      // clear plaintext from form after save
+    if (payload.voice_sip_password) setHasSipPassword(true)
     setTimeout(() => setSaved(false), 3000)
+  }
+
+  async function handleConnectSip() {
+    if (!businessId) return
+    setConnectingSip(true)
+    setSipConnectStatus(null)
+    const res = await fetch('/api/voice/vapi/create-sip-trunk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_id: businessId }),
+    })
+    const data = await res.json().catch(() => null)
+    setConnectingSip(false)
+    if (!res.ok) {
+      setSipConnectStatus({ ok: false, message: data?.error || `Connect failed (${res.status})` })
+      return
+    }
+    setVapiSipPhoneNumberId(data.phone_number_id)
+    setSipConnectStatus({ ok: true, message: 'Connected — Aria will answer calls to this number.' })
   }
 
   async function handleCreateAssistant() {
@@ -256,6 +299,98 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
         )}
       </div>
 
+      {/* SIP trunk (Dialpad) */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div>
+          <h4 className="text-xs font-semibold text-gray-700">Connect via Dialpad SIP trunk</h4>
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            Route your existing Dialpad number to Aria after hours, without porting it to Twilio.
+          </p>
+        </div>
+
+        <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+          <p className="text-[11px] font-medium text-gray-600 mb-1">Where to find your SIP credentials in Dialpad</p>
+          <ol className="text-[11px] text-gray-500 space-y-0.5 list-decimal list-inside">
+            <li>Log in to Dialpad and go to <strong>Settings → Office → Desk phones</strong></li>
+            <li>Click <strong>Add desk phone → Generic SIP phone</strong></li>
+            <li>Dialpad will show the SIP username, password, and server (domain) — copy them into the fields below</li>
+          </ol>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">SIP username</label>
+            <input
+              type="text"
+              value={sipUsername}
+              onChange={e => setSipUsername(e.target.value)}
+              placeholder="e.g. 5657954197127168"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">
+              SIP password {hasSipPassword && <span className="text-green-600">(saved)</span>}
+            </label>
+            <div className="relative">
+              <input
+                type={showSipPassword ? 'text' : 'password'}
+                value={sipPassword}
+                onChange={e => setSipPassword(e.target.value)}
+                placeholder={hasSipPassword ? '•••••••• (leave blank to keep)' : 'Paste SIP password'}
+                className="w-full px-3 py-2 pr-9 border border-gray-200 rounded-lg text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSipPassword(!showSipPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                tabIndex={-1}
+              >
+                {showSipPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">Encrypted at rest. Once saved, it's never displayed again.</p>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">SIP domain / server</label>
+            <input
+              type="text"
+              value={sipDomain}
+              onChange={e => setSipDomain(e.target.value)}
+              placeholder="e.g. sip.dialpad.com"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">SIP port</label>
+            <input
+              type="text"
+              value={sipPort}
+              onChange={e => setSipPort(e.target.value)}
+              placeholder="5060"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleConnectSip}
+            disabled={connectingSip || !vapiAssistantId || !sipUsername || (!hasSipPassword && !sipPassword) || !sipDomain}
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+          >
+            {connectingSip && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {vapiSipPhoneNumberId ? 'Reconnect via SIP' : 'Connect via SIP'}
+          </button>
+          {sipConnectStatus && (
+            <span className={`text-xs ${sipConnectStatus.ok ? 'text-green-600' : 'text-red-600'}`}>{sipConnectStatus.message}</span>
+          )}
+        </div>
+        {!vapiAssistantId && (
+          <p className="text-[10px] text-gray-400">Create the assistant above first, then save your SIP credentials to connect.</p>
+        )}
+      </div>
+
       {/* Test call */}
       <div className="border-t border-gray-100 pt-4">
         <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
@@ -286,9 +421,10 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
         )}
       </div>
 
-      {/* Twilio instructions */}
+      {/* Twilio instructions (alternative to Dialpad SIP trunk above) */}
       <div className="border-t border-gray-100 pt-4">
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">Connect your phone number</h4>
+        <h4 className="text-xs font-semibold text-gray-700 mb-2">Alternative: connect via Twilio</h4>
+        <p className="text-[10px] text-gray-400 mb-1">Already using Dialpad? Use "Connect via SIP" above instead — no need for the steps below.</p>
         <ol className="text-[11px] text-gray-500 space-y-1 list-decimal list-inside">
           <li>Buy or port a number in your Twilio account.</li>
           <li>In the Vapi dashboard, go to Phone Numbers → Import → Twilio, and paste your Account SID, Auth Token, and the number.</li>

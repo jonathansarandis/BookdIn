@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { encrypt } from '@/lib/crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,10 @@ export async function POST(req: Request) {
     voice_agent_personality,
     voice_provider,
     voice_id,
+    voice_sip_username,
+    voice_sip_password,   // optional plaintext
+    voice_sip_domain,
+    voice_sip_port,
   } = body
 
   const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
@@ -32,6 +37,20 @@ export async function POST(req: Request) {
     voice_agent_personality: voice_agent_personality || null,
     voice_provider: voice_provider || 'elevenlabs',
     voice_id: voice_id || 'XB0fDUnXU5powFXDhCwa',
+    voice_sip_username: voice_sip_username || null,
+    voice_sip_domain: voice_sip_domain || null,
+    voice_sip_port: voice_sip_port ? Number(voice_sip_port) : 5060,
+  }
+
+  // Only encrypt + persist the SIP password if a new one was sent
+  if (voice_sip_password) {
+    try {
+      const { ciphertext, iv } = encrypt(voice_sip_password)
+      updates.voice_sip_password_encrypted = ciphertext
+      updates.voice_sip_password_iv = iv
+    } catch (err: any) {
+      return NextResponse.json({ error: `encryption failed: ${err.message}` }, { status: 500 })
+    }
   }
 
   const { error } = await supabase.from('businesses').update(updates).eq('id', business_id)
