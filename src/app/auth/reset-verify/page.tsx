@@ -25,15 +25,16 @@ function ResetVerifyInner() {
     e.preventDefault()
     setError(null)
 
-    if (!/^\d{6}$/.test(code)) {
-      setError('Enter the 6-digit code from your email.')
+    const token = code.trim()
+    if (!token) {
+      setError('Enter the code from your email.')
       return
     }
 
     setLoading(true)
     const { error: verifyError } = await supabase.auth.verifyOtp({
       email,
-      token: code,
+      token,
       type: 'recovery',
     })
     setLoading(false)
@@ -79,7 +80,7 @@ function ResetVerifyInner() {
             {stage === 'password' ? 'Set new password' : 'Enter your code'}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {stage === 'code' && 'Enter the 6-digit code we emailed you.'}
+            {stage === 'code' && 'Paste the code we emailed you.'}
             {stage === 'password' && 'Choose a new password for your account.'}
             {stage === 'success' && 'BookdIn account recovery'}
           </p>
@@ -114,22 +115,19 @@ function ResetVerifyInner() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5" htmlFor="code">
-                  6-digit code
+                  Recovery code
                 </label>
                 <input
                   id="code"
                   type="text"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  maxLength={6}
                   autoComplete="one-time-code"
                   value={code}
-                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={e => setCode(e.target.value)}
                   required
-                  placeholder="123456"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm tracking-[0.5em] text-center
+                  placeholder="Paste the code from your email"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm font-mono break-all
                              focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
-                             placeholder:text-gray-400 placeholder:tracking-normal"
+                             placeholder:text-gray-400 placeholder:font-sans"
                   disabled={loading}
                 />
               </div>

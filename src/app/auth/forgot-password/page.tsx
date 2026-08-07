@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     const supabase = createClient()
-    // Sends a 6-digit OTP by email (redeemed on /auth/reset-verify). A
+    // Sends a recovery code by email (redeemed on /auth/reset-verify). A
     // clickable link was used previously, but email security scanners
     // (Gmail/Outlook link-prefetch) were visiting and burning the
     // single-use link before the owner could click it.
@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-semibold text-gray-900">Reset your password</h1>
-          <p className="text-sm text-gray-500 mt-1">We&apos;ll email you a 6-digit code to get back in.</p>
+          <p className="text-sm text-gray-500 mt-1">We&apos;ll email you a code to get back in.</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
