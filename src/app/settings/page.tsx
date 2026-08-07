@@ -10,6 +10,7 @@ import EmailTemplateCard from '@/app/settings/EmailTemplateCard'
 import BusinessDetailsCard from '@/app/settings/BusinessDetailsCard'
 import SmsConfigCard from '@/app/settings/SmsConfigCard'
 import GoogleAdsConfigCard from '@/app/settings/GoogleAdsConfigCard'
+import VoiceAgentConfigCard from '@/app/settings/VoiceAgentConfigCard'
 
 const TIMEZONES = [
   { label: 'Melbourne / Sydney (AEST)', value: 'Australia/Melbourne' },
@@ -259,6 +260,9 @@ export default function SettingsPage() {
 
             {/* Google Ads */}
             <GoogleAdsConfigCard businessId={business?.id} />
+
+            {/* Voice agent */}
+            <VoiceAgentConfigCard businessId={business?.id} />
 
             {/* Business info */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">

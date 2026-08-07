@@ -1,0 +1,228 @@
+// @ts-nocheck
+// src/app/api/voice/vapi/create-assistant/route.ts
+//
+// Creates (or updates, if businesses.vapi_assistant_id already exists) the
+// Vapi assistant for a business, built from its services/pricing/location/
+// voice settings. Triggered from the Voice Agent settings card.
+//
+// NOTE ON VAPI CONFIG SHAPE: written without a live Vapi API key to verify
+// field names against, so the turn-taking options (backchannelingEnabled,
+// fillerInjectionEnabled, responseDelaySeconds, startSpeakingPlan.waitSeconds)
+// reflect the most commonly documented Vapi assistant schema. If Vapi rejects
+// any of these fields, the fix is isolated to buildVapiAssistantPayload() below.
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { formatCents } from '@/lib/voice/shared'
+
+const admin = createServiceClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+const SYSTEM_PROMPT_TEMPLATE = `You are {{agent_name}}, the booking assistant for {{business_name}}. You help customers book cleaning services quickly and professionally.
+
+Your job:
+1. Greet the caller warmly
+2. Find out what service they need and when
+3. Check availability and offer them a time slot
+4. Collect their name, address, email, and confirm the price
+5. Book them in and confirm the details
+6. Tell them they will receive a confirmation SMS
+
+Keep responses short and natural — this is a phone call, not a chat. Never read out long lists. Always confirm before creating a booking.
+
+Business details: {{business_details}}
+Services and pricing: {{services_pricing}}
+Business hours: {{business_hours}}
+
+If the caller is angry, confused, or asks for something you cannot handle, say: 'Let me connect you with a team member who can help' and transfer the call.
+
+{{custom_personality}}`
+
+function buildToolDefinitions(serverUrl: string) {
+  const server = { url: serverUrl }
+  return [
+    {
+      type: 'function',
+      server,
+      function: {
+        name: 'check_availability',
+        description: 'Check available booking slots for a given service and date.',
+        parameters: {
+          type: 'object',
+          properties: {
+            date: { type: 'string', description: 'Date to check, formatted YYYY-MM-DD.' },
+            service_type: { type: 'string', description: 'The service the caller wants, e.g. "standard clean", "end of lease clean", "deep clean".' },
+            location: { type: 'string', description: 'Suburb or city the caller is in, only needed if the business serves multiple areas.' },
+          },
+          required: ['date', 'service_type'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      server,
+      function: {
+        name: 'get_pricing',
+        description: 'Get the price for a service, optionally by property size.',
+        parameters: {
+          type: 'object',
+          properties: {
+            service_type: { type: 'string', description: 'The service to price, e.g. "standard clean".' },
+            bedrooms: { type: 'number', description: 'Number of bedrooms, if the service is priced by room count.' },
+            bathrooms: { type: 'number', description: 'Number of bathrooms, if the service is priced by room count.' },
+            location: { type: 'string', description: 'Suburb or city, only needed if the business serves multiple areas.' },
+          },
+          required: ['service_type'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      server,
+      function: {
+        name: 'create_booking',
+        description: 'Create a confirmed booking once the caller has agreed on a service, date, time, and price. Always confirm all details with the caller before calling this.',
+        parameters: {
+          type: 'object',
+          properties: {
+            full_name: { type: 'string', description: "Caller's full name." },
+            phone: { type: 'string', description: "Caller's phone number, if different from the number they're calling from." },
+            email: { type: 'string', description: "Caller's email address, for the booking confirmation." },
+            address_line1: { type: 'string', description: 'Street address of the property to be cleaned.' },
+            suburb: { type: 'string', description: 'Suburb or city.' },
+            state: { type: 'string', description: 'State abbreviation, e.g. VIC, NSW, WA.' },
+            postcode: { type: 'string', description: 'Postcode.' },
+            service_type: { type: 'string', description: 'The service being booked.' },
+            date: { type: 'string', description: 'Booking date, formatted YYYY-MM-DD.' },
+            time: { type: 'string', description: 'Booking time, e.g. "9am" or "14:00".' },
+            bedrooms: { type: 'number', description: 'Number of bedrooms, if relevant to pricing.' },
+            bathrooms: { type: 'number', description: 'Number of bathrooms, if relevant to pricing.' },
+            frequency: { type: 'string', description: 'One of one_time, weekly, fortnightly, monthly. Defaults to one_time.' },
+            location: { type: 'string', description: 'Suburb or city, only needed if the business serves multiple areas.' },
+          },
+          required: ['full_name', 'address_line1', 'suburb', 'state', 'service_type', 'date', 'time'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      server,
+      function: {
+        name: 'transfer_to_human',
+        description: 'Transfer the call to a team member. Use this when the caller explicitly asks for a human, or when the request is something you cannot handle (complaints, custom quotes, anything outside normal booking).',
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string', description: 'Brief reason for the transfer.' },
+          },
+        },
+      },
+    },
+  ]
+}
+
+function buildVapiAssistantPayload(business: any, services: any[], locations: any[], appUrl: string) {
+  const agentName = business.voice_agent_name || 'Aria'
+
+  const businessDetails = [
+    business.name,
+    locations.length ? `Serving: ${locations.map((l: any) => l.name).join(', ')}` : null,
+    business.phone ? `Phone: ${business.phone}` : null,
+  ].filter(Boolean).join('. ')
+
+  const servicesPricing = services.length
+    ? services.map((s: any) => `${s.name} — from ${formatCents(s.base_price, business.currency || 'AUD')}`).join('; ')
+    : 'No services configured yet.'
+
+  // No business_hours field exists in the schema yet — using a sensible default
+  // until a real settings field is added.
+  const businessHours = business.voice_business_hours || 'Monday to Saturday, 8am–6pm'
+
+  const systemPrompt = SYSTEM_PROMPT_TEMPLATE
+    .replaceAll('{{agent_name}}', agentName)
+    .replaceAll('{{business_name}}', business.name)
+    .replaceAll('{{business_details}}', businessDetails)
+    .replaceAll('{{services_pricing}}', servicesPricing)
+    .replaceAll('{{business_hours}}', businessHours)
+    .replaceAll('{{custom_personality}}', business.voice_agent_personality || '')
+
+  const serverUrl = `${appUrl}/api/voice/vapi`
+
+  return {
+    name: `${business.name} — ${agentName}`,
+    firstMessage: `Hi, thanks for calling ${business.name}, this is ${agentName}. How can I help you today?`,
+    model: {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'system', content: systemPrompt }],
+      tools: buildToolDefinitions(serverUrl),
+    },
+    voice: {
+      provider: '11labs',
+      voiceId: business.voice_id || 'XB0fDUnXU5powFXDhCwa',
+    },
+    serverUrl: `${appUrl}/api/voice/vapi/call-events`,
+    backchannelingEnabled: true,
+    fillerInjectionEnabled: true,
+    responseDelaySeconds: 0.4,
+    startSpeakingPlan: { waitSeconds: 0.5 },
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json().catch(() => ({}))
+  const { business_id } = body
+  if (!business_id) return NextResponse.json({ error: 'business_id is required' }, { status: 400 })
+
+  const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
+  if (!profile || profile.business_id !== business_id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!process.env.VAPI_API_KEY) {
+    return NextResponse.json({ error: 'VAPI_API_KEY is not configured on the server' }, { status: 500 })
+  }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bookd-in.vercel.app'
+
+  const { data: business, error: bizErr } = await admin.from('businesses').select('*').eq('id', business_id).single()
+  if (bizErr || !business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+
+  const [{ data: services }, { data: locations }] = await Promise.all([
+    admin.from('services').select('id, name, base_price, pricing_type').eq('business_id', business_id),
+    admin.from('locations').select('id, name').eq('business_id', business_id).eq('is_active', true),
+  ])
+
+  const payload = buildVapiAssistantPayload(business, services || [], locations || [], appUrl)
+
+  const isUpdate = !!business.vapi_assistant_id
+  const vapiRes = await fetch(
+    isUpdate ? `https://api.vapi.ai/assistant/${business.vapi_assistant_id}` : 'https://api.vapi.ai/assistant',
+    {
+      method: isUpdate ? 'PATCH' : 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  const vapiData = await vapiRes.json().catch(() => null)
+  if (!vapiRes.ok) {
+    console.error('[create-assistant] Vapi API error:', vapiRes.status, vapiData)
+    return NextResponse.json({ error: vapiData?.message || `Vapi API error (${vapiRes.status})` }, { status: 502 })
+  }
+
+  const assistantId = vapiData?.id || business.vapi_assistant_id
+  if (assistantId && assistantId !== business.vapi_assistant_id) {
+    await admin.from('businesses').update({ vapi_assistant_id: assistantId }).eq('id', business_id)
+  }
+
+  return NextResponse.json({ success: true, assistant_id: assistantId })
+}

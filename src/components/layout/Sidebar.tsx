@@ -10,7 +10,7 @@ import type { Profile, Business } from '@/types/database'
 import {
   LayoutDashboard, Bot, Calendar, ClipboardList, Users,
   DollarSign, FileText, BarChart2, Settings, Zap,
-  Tag, Gift, Share2, ChevronUp, MessageSquare, Briefcase, UserCog, RefreshCw, Upload, Target, LogOut, Wallet
+  Tag, Gift, Share2, ChevronUp, MessageSquare, Briefcase, UserCog, RefreshCw, Upload, Target, LogOut, Wallet, Phone
 } from 'lucide-react'
 
 const NAV = [
@@ -18,6 +18,7 @@ const NAV = [
   { href: "/agent",       label: "AI Agent",     icon: Bot },
   { href: '/calendar',     label: 'Calendar',     icon: Calendar },
   { href: '/jobs',         label: 'Bookings',     icon: ClipboardList },
+  { href: '/voice',        label: 'Voice Agent',  icon: Phone },
   { href: '/customers',    label: 'Customers',    icon: Users },
   { href: '/crm',          label: 'CRM',          icon: MessageSquare },
   { href: '/providers',    label: 'Providers',    icon: UserCog },
