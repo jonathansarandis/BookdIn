@@ -7,9 +7,11 @@
 //
 // NOTE ON VAPI CONFIG SHAPE: written without a live Vapi API key to verify
 // field names against, so the turn-taking options (backchannelingEnabled,
-// fillerInjectionEnabled, responseDelaySeconds, startSpeakingPlan.waitSeconds)
-// reflect the most commonly documented Vapi assistant schema. If Vapi rejects
-// any of these fields, the fix is isolated to buildVapiAssistantPayload() below.
+// responseDelaySeconds, startSpeakingPlan.waitSeconds) reflect the most
+// commonly documented Vapi assistant schema. If Vapi rejects any of these
+// fields, the fix is isolated to buildVapiAssistantPayload() below.
+// (fillerInjectionEnabled was removed here — Vapi dropped it from voice
+// provider configs in their Nov 2024 update.)
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -165,7 +167,6 @@ function buildVapiAssistantPayload(business: any, services: any[], locations: an
     },
     serverUrl: `${appUrl}/api/voice/vapi/call-events`,
     backchannelingEnabled: true,
-    fillerInjectionEnabled: true,
     responseDelaySeconds: 0.4,
     startSpeakingPlan: { waitSeconds: 0.5 },
   }
