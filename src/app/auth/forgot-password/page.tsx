@@ -2,14 +2,15 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2 } from 'lucide-react'
 
 export default function ForgotPasswordPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sent, setSent] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -17,19 +18,23 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     const supabase = createClient()
+    // Sends a 6-digit OTP by email (redeemed on /auth/reset-verify). A
+    // clickable link was used previously, but email security scanners
+    // (Gmail/Outlook link-prefetch) were visiting and burning the
+    // single-use link before the owner could click it.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/reset-password`,
     })
 
     setLoading(false)
 
-    // Always show the same success state, regardless of whether the email
-    // exists — avoids leaking which addresses have accounts.
+    // Always continue to the same next step, regardless of whether the
+    // email exists — avoids leaking which addresses have accounts.
     if (error) {
       setError('Something went wrong. Please try again in a moment.')
       return
     }
-    setSent(true)
+    router.push(`/auth/reset-verify?email=${encodeURIComponent(email)}`)
   }
 
   return (
@@ -43,59 +48,45 @@ export default function ForgotPasswordPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-semibold text-gray-900">Reset your password</h1>
-          <p className="text-sm text-gray-500 mt-1">We&apos;ll email you a link to get back in.</p>
+          <p className="text-sm text-gray-500 mt-1">We&apos;ll email you a 6-digit code to get back in.</p>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-          {sent ? (
-            <div className="space-y-4">
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                If an account exists for <span className="font-medium">{email}</span>, a reset link is on its way. Check your inbox (and spam folder).
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {error}
               </div>
-              <Link
-                href="/auth/login"
-                className="block w-full text-center px-4 py-2.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Back to sign in
-              </Link>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5" htmlFor="email">
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                placeholder="you@example.com"
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm
+                           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
+                           placeholder:text-gray-400"
+              />
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  {error}
-                </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5" htmlFor="email">
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  placeholder="you@example.com"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm
-                             focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
-                             placeholder:text-gray-400"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5
-                           bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium
-                           rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {loading ? 'Sending…' : 'Send reset link'}
-              </button>
-            </form>
-          )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5
+                         bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium
+                         rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Sending…' : 'Send code'}
+            </button>
+          </form>
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-4">

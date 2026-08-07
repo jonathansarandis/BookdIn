@@ -29,6 +29,7 @@ export async function middleware(request: NextRequest) {
     '/auth/login',
     '/auth/signup',
     '/auth/reset-password',
+    '/auth/reset-verify',
     '/auth/forgot-password',
     '/book',
     '/booking-confirmed',
