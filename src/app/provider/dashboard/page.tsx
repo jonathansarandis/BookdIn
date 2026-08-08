@@ -47,7 +47,9 @@ export default function ProviderDashboard() {
 
     const res = await fetch('/api/provider/jobs')
     if (res.status === 401) { router.push('/provider/login'); return }
-    if (res.status === 403) { router.push('/dashboard'); return }
+    // Never bounce a provider into the admin dashboard — if their own jobs API
+    // rejects them, send them back to provider login rather than a dead end.
+    if (res.status === 403) { router.push('/provider/login'); return }
     if (!res.ok) { setLoading(false); return }
 
     const data = await res.json()

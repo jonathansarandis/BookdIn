@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createServiceRoleClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
@@ -69,10 +70,40 @@ export async function middleware(request: NextRequest) {
   }
 
   const isDemoUser = user?.email === 'demo@bookdin.co'
-  if (user && !isDemoUser && (pathname === '/auth/login' || pathname === '/auth/signup')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+  const isAuthPage = pathname === '/auth/login' || pathname === '/auth/signup'
+
+  // Role-aware routing: cleaners (rows in `providers`, no row in `profiles`) share
+  // the same auth.users table as admin/staff, so any link that lands them on an
+  // admin-facing page — the generic /auth/login page, a stale job/notification
+  // link, etc. — must bounce them to their own portal instead of a dead-end admin
+  // page. Only resolved when it can actually change the outcome (an /auth/* page,
+  // or a protected non-provider page) to avoid a DB round trip on every request.
+  if (user && !isDemoUser && (isAuthPage || (!isPublic && !pathname.startsWith('/provider')))) {
+    const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
+
+    if (profile) {
+      if (isAuthPage) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard'
+        return NextResponse.redirect(url)
+      }
+    } else {
+      // No admin/staff profile. Providers can't read their own `providers` row via
+      // the anon/cookie client — get_my_business_id() resolves to NULL for them,
+      // so the RLS policy (business_id = get_my_business_id()) never matches —
+      // hence the service-role client here.
+      const admin = createServiceRoleClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const { data: provider } = await admin.from('providers').select('id').eq('user_id', user.id).maybeSingle()
+      if (provider) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/provider/dashboard'
+        url.search = ''
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   return supabaseResponse

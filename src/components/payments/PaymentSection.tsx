@@ -1,10 +1,10 @@
 // @ts-nocheck
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from '@stripe/react-stripe-js'
-import { CreditCard, Banknote, Lock } from 'lucide-react'
+import { CreditCard, Banknote, Lock, CheckCircle2 } from 'lucide-react'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
@@ -70,13 +70,30 @@ function CardForm({ onReady }: { onReady: (fn: () => Promise<string | null>) => 
   )
 }
 
-interface PaymentSectionProps {
-  paymentMethod: 'card' | 'other'
-  onPaymentMethodChange: (method: 'card' | 'other') => void
-  onCardReady: (fn: () => Promise<string | null>) => void
+interface SavedCard {
+  stripe_payment_method_id: string
+  card_brand?: string | null
+  card_last4?: string | null
+  card_exp_month?: number | null
+  card_exp_year?: number | null
 }
 
-export default function PaymentSection({ paymentMethod, onPaymentMethodChange, onCardReady }: PaymentSectionProps) {
+interface PaymentSectionProps {
+  paymentMethod: 'card' | 'saved' | 'other'
+  onPaymentMethodChange: (method: 'card' | 'saved' | 'other') => void
+  onCardReady: (fn: () => Promise<string | null>) => void
+  savedCard?: SavedCard | null
+}
+
+export default function PaymentSection({ paymentMethod, onPaymentMethodChange, onCardReady, savedCard }: PaymentSectionProps) {
+  // "Saved card" skips Stripe Elements entirely — the getter just resolves to
+  // the customer's stored payment method ID.
+  useEffect(() => {
+    if (paymentMethod === 'saved' && savedCard) {
+      onCardReady(async () => savedCard.stripe_payment_method_id)
+    }
+  }, [paymentMethod, savedCard])
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2">
@@ -85,6 +102,28 @@ export default function PaymentSection({ paymentMethod, onPaymentMethodChange, o
       </div>
 
       <div className="flex gap-3">
+        {savedCard && (
+          <button
+            type="button"
+            onClick={() => onPaymentMethodChange('saved')}
+            className={`flex-1 flex items-center gap-2 px-4 py-3 rounded-lg border-2 text-sm font-medium transition-colors ${
+              paymentMethod === 'saved'
+                ? 'border-brand-500 bg-brand-50 text-brand-700'
+                : 'border-gray-200 text-gray-600 hover:border-gray-300'
+            }`}
+          >
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+              paymentMethod === 'saved' ? 'border-brand-500' : 'border-gray-300'
+            }`}>
+              {paymentMethod === 'saved' && <div className="w-2 h-2 rounded-full bg-brand-500" />}
+            </div>
+            <CreditCard className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">
+              {savedCard.card_brand ? `${savedCard.card_brand} •••• ${savedCard.card_last4}` : 'Saved card'}
+            </span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => onPaymentMethodChange('card')}
@@ -100,7 +139,7 @@ export default function PaymentSection({ paymentMethod, onPaymentMethodChange, o
             {paymentMethod === 'card' && <div className="w-2 h-2 rounded-full bg-brand-500" />}
           </div>
           <CreditCard className="w-4 h-4" />
-          Credit card
+          {savedCard ? 'New card' : 'Credit card'}
         </button>
 
         <button
@@ -121,6 +160,16 @@ export default function PaymentSection({ paymentMethod, onPaymentMethodChange, o
           Other (cash/invoice)
         </button>
       </div>
+
+      {paymentMethod === 'saved' && savedCard && (
+        <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+          <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+          <span>
+            Using the card on file{savedCard.card_last4 ? ` ending in ${savedCard.card_last4}` : ''}
+            {savedCard.card_exp_month && savedCard.card_exp_year ? ` (exp ${String(savedCard.card_exp_month).padStart(2, '0')}/${String(savedCard.card_exp_year).slice(-2)})` : ''} — no need to re-enter details.
+          </span>
+        </div>
+      )}
 
       {paymentMethod === 'card' && (
         <Elements stripe={stripePromise}>

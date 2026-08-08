@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Phone, Mail, Clock, Plus, Loader2, FileText, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Clock, Plus, Loader2, FileText, CheckCircle2, Trash2 } from 'lucide-react'
 import LostReasonModal, { LOST_REASONS } from '@/components/crm/LostReasonModal'
+import ConfirmDeleteModal from '@/components/crm/ConfirmDeleteModal'
 import { formatSourceLabel } from '@/lib/crm/sourceLabels'
 
 const STAGES = [
@@ -55,6 +56,7 @@ export default function CRMContactPage() {
   const [showActivityForm, setShowActivityForm] = useState(false)
   const [showFollowupForm, setShowFollowupForm] = useState(false)
   const [showLostModal, setShowLostModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const [activityForm, setActivityForm] = useState({
     type: 'note',
@@ -151,6 +153,13 @@ export default function CRMContactPage() {
     await fetchData()
   }
 
+  async function handleDelete() {
+    // Only the CRM record — the linked customer row (if any) is untouched.
+    await supabase.from('crm_activities').delete().eq('contact_id', params.id)
+    await supabase.from('crm_contacts').delete().eq('id', params.id)
+    router.push('/crm')
+  }
+
   if (loading) return <div className="text-sm text-gray-400 py-8 text-center">Loading...</div>
   if (!contact) return <div className="text-sm text-gray-400 py-8 text-center">Contact not found</div>
 
@@ -167,9 +176,18 @@ export default function CRMContactPage() {
             {contact.source && <p className="text-sm text-gray-500">{formatSourceLabel(contact.source)}</p>}
           </div>
         </div>
-        <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${STAGE_COLORS[contact.stage]}`}>
-          {contact.stage}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${STAGE_COLORS[contact.stage]}`}>
+            {contact.stage}
+          </span>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-600 transition-colors"
+            title="Delete contact"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -366,6 +384,15 @@ export default function CRMContactPage() {
             await handleStageChange('lost', reason, notes)
             setShowLostModal(false)
           }}
+        />
+      )}
+
+      {showDeleteModal && (
+        <ConfirmDeleteModal
+          title="Delete contact?"
+          message={`This permanently deletes ${contact.full_name} and their activity history from the CRM. This does not affect any linked customer record.`}
+          onCancel={() => setShowDeleteModal(false)}
+          onConfirm={handleDelete}
         />
       )}
     </div>

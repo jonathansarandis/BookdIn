@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     // Get job details
     const { data: job } = await supabase
       .from('jobs')
-      .select('*, customer:customers(full_name, email)')
+      .select('*, customer:customers(id, full_name, email)')
       .eq('id', jobId)
       .single()
 
@@ -46,6 +46,27 @@ export async function POST(request: Request) {
         payment_method: 'card',
       })
       .eq('id', jobId)
+
+    // Successful auth on a fresh card (not one already reused from customer_payment_methods) —
+    // save it so it's offered as "saved card" next time this customer is booked.
+    if (paymentIntent.status === 'requires_capture' && job.customer?.id && job.business_id) {
+      try {
+        const pmDetails = await stripe.paymentMethods.retrieve(paymentMethodId)
+        await supabase.from('customer_payment_methods').upsert({
+          customer_id:              job.customer.id,
+          business_id:              job.business_id,
+          stripe_payment_method_id: paymentMethodId,
+          card_brand:               pmDetails.card?.brand ?? null,
+          card_last4:               pmDetails.card?.last4 ?? null,
+          card_exp_month:           pmDetails.card?.exp_month ?? null,
+          card_exp_year:            pmDetails.card?.exp_year ?? null,
+          updated_at:               new Date().toISOString(),
+        }, { onConflict: 'customer_id,business_id' })
+      } catch (cpmErr: any) {
+        // Non-blocking — the charge/authorization already succeeded either way
+        console.error('[stripe/intent] customer_payment_methods upsert failed (non-blocking):', cpmErr.message)
+      }
+    }
 
     return NextResponse.json({
       paymentIntentId: paymentIntent.id,

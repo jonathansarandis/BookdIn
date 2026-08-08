@@ -69,9 +69,11 @@ export default function BookingPage() {
   const [customItemPrice, setCustomItemPrice] = useState('')
   const [junctions, setJunctions] = useState<any[]>([])
   const [locServiceMap, setLocServiceMap] = useState<Record<string, number>>({})
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'other'>('card')
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'saved' | 'other'>('card')
   const [overrideCents, setOverrideCents] = useState<number | null>(null)
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
+  const [businessId, setBusinessId] = useState('')
+  const [savedCard, setSavedCard] = useState<any>(null)
 
   const [editAddressId, setEditAddressId] = useState('')
   const [rebookCustomerName, setRebookCustomerName] = useState('')
@@ -97,6 +99,7 @@ export default function BookingPage() {
       const { data: { user } } = await supabase.auth.getUser()
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single() as { data: { business_id: string } | null }
       const bid = profile!.business_id!
+      setBusinessId(bid)
 
       const [{ data: svcs }, { data: cxs }, { data: prvs }, { data: campaigns }, { data: biz }, { data: fdData }, { data: locs }] = await Promise.all([
         supabase.from('services').select('*, room_pricing(*)').eq('business_id', bid).eq('is_active', true).order('sort_order'),
@@ -145,6 +148,25 @@ export default function BookingPage() {
     }
     load()
   }, [])
+
+  // Look up a saved card for the selected returning customer, so the admin
+  // doesn't have to re-enter card details for every booking.
+  useEffect(() => {
+    setSavedCard(null)
+    if (!businessId || !form.customer_id || form.new_customer) return
+    const supabase = createClient()
+    supabase
+      .from('customer_payment_methods')
+      .select('stripe_payment_method_id, card_brand, card_last4, card_exp_month, card_exp_year')
+      .eq('customer_id', form.customer_id)
+      .eq('business_id', businessId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setSavedCard(data || null)
+        // Default to the saved card when one exists — least friction for the common case.
+        if (data) setPaymentMethod('saved')
+      })
+  }, [form.customer_id, form.new_customer, businessId])
 
   // Re-fetch location-specific base prices whenever the selected location changes
   useEffect(() => {
@@ -451,7 +473,7 @@ export default function BookingPage() {
           provider_id: form.provider_id || null,
           notes: form.notes || null,
           booking_source: 'admin',
-          payment_method: paymentMethod,
+          payment_method: paymentMethod === 'saved' ? 'card' : paymentMethod,
           rebook_source_job_id: rebookJobId || null,
           lead_source: leadSource || null,
         }),
@@ -494,7 +516,9 @@ export default function BookingPage() {
       }
 
       // Handle card payment - create payment intent with manual capture
-      if (paymentMethod === 'card' && getCardPaymentMethod) {
+      // ('saved' reuses the customer's stored payment method — same intent flow,
+      // no fresh Stripe Elements entry needed)
+      if ((paymentMethod === 'card' || paymentMethod === 'saved') && getCardPaymentMethod) {
         const paymentMethodId = await getCardPaymentMethod()
         if (!paymentMethodId) throw new Error('Please enter valid card details')
         const intentRes = await fetch('/api/stripe/intent', {
@@ -927,6 +951,7 @@ export default function BookingPage() {
               paymentMethod={paymentMethod}
               onPaymentMethodChange={setPaymentMethod}
               onCardReady={(fn) => setGetCardPaymentMethod(() => fn)}
+              savedCard={savedCard}
             />
           )}
 
