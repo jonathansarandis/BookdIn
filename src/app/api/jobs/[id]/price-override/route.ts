@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resendBookingConfirmation } from '@/lib/email/resend'
 
 export async function POST(
   req: Request,
@@ -37,10 +38,12 @@ export async function POST(
 
   const admin = createAdminClient()
 
-  // Ownership check — only fetch if job belongs to operator's business
+  // Ownership check — only fetch if job belongs to operator's business.
+  // Also grab confirmation_email_sent_at so we know whether the customer
+  // already has a (now stale) confirmation in their inbox to correct.
   const { data: job, error: jobError } = await admin
     .from('jobs')
-    .select('id')
+    .select('id, confirmation_email_sent_at')
     .eq('id', params.id)
     .eq('business_id', profile.business_id)
     .single()
@@ -61,5 +64,22 @@ export async function POST(
   }
 
   console.log(`[price-override] job ${params.id} → price_override=${price_override}`)
-  return NextResponse.json({ success: true, price_override })
+
+  // The confirmation email was already sent with the old price — resend it now
+  // so the customer actually sees the corrected amount, instead of relying on
+  // staff to remember to hit "Resend confirmation email" separately.
+  let confirmation_resent = false
+  if (job.confirmation_email_sent_at) {
+    try {
+      const result = await resendBookingConfirmation(params.id, profile.business_id)
+      confirmation_resent = result.success
+      if (!result.success) {
+        console.error(`[price-override] confirmation resend failed for job ${params.id}:`, result.error)
+      }
+    } catch (err: any) {
+      console.error(`[price-override] confirmation resend threw for job ${params.id}:`, err.message)
+    }
+  }
+
+  return NextResponse.json({ success: true, price_override, confirmation_resent })
 }
