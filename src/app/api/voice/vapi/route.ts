@@ -371,6 +371,7 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
           time: formatTimeForSms(scheduledAtIso, tz, false),
           business_name: business.name,
           business_phone: business.phone || '',
+          total: formatCents(taxSplit.total, business.currency),
         },
       })
     } catch (e) {

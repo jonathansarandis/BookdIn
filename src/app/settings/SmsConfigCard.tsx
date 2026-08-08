@@ -13,6 +13,7 @@ const AVAILABLE_VARS = [
   { key: '{{time}}', desc: 'Booking time (e.g. 10:30 am)' },
   { key: '{{business_name}}', desc: 'Your business name' },
   { key: '{{business_phone}}', desc: 'Your business phone' },
+  { key: '{{total}}', desc: 'Booking total (reflects manual price overrides)' },
 ]
 
 export default function SmsConfigCard({ businessId }: { businessId?: string }) {

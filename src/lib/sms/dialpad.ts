@@ -17,6 +17,7 @@ export interface SmsTemplateVars {
   time: string         // pre-formatted, e.g. "10:30 AM" or "Flexible time"
   business_name: string
   business_phone: string
+  total?: string        // pre-formatted, e.g. "$120.00" — caller must resolve price_override ?? total_price
   // NEW (for contact upsert; optional)
   customer_id?: string
   customer_first_name?: string
@@ -106,6 +107,7 @@ export function renderTemplate(template: string, vars: SmsTemplateVars): string 
     .replace(/\{\{time\}\}/g, vars.time)
     .replace(/\{\{business_name\}\}/g, vars.business_name)
     .replace(/\{\{business_phone\}\}/g, vars.business_phone)
+    .replace(/\{\{total\}\}/g, vars.total ?? '')
 }
 
 export interface SendDialpadSmsParams {

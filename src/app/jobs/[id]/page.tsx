@@ -18,6 +18,7 @@ import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 import FollowUpChargeButton from '@/app/jobs/[id]/FollowUpChargeButton'
 import AddCustomAddon from '@/app/jobs/[id]/AddCustomAddon'
 import PriceOverrideEditor from '@/app/jobs/[id]/PriceOverrideEditor'
+import ResendConfirmationButton from '@/app/jobs/[id]/ResendConfirmationButton'
 import ProviderFeeEditor from '@/app/jobs/[id]/ProviderFeeEditor'
 import RefundButton from '@/app/jobs/[id]/RefundButton'
 import { getChargeableAmount, getProviderPayout } from '@/lib/pricing'
@@ -364,6 +365,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               derivedTotal={derivedTotalCents}
               showBorder={showTaxBreakdown}
             />
+            {job.customer?.email && (
+              <ResendConfirmationButton jobId={job.id} />
+            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Status</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${paymentPillStyle}`}>

@@ -13,7 +13,6 @@ interface ProfileCheck {
 
 interface JobAuthCheck {
   business_id: string
-  confirmation_email_sent_at: string | null
 }
 
 interface JobEmailRow {
@@ -58,10 +57,9 @@ export async function POST(
   const profile = rawProfile as unknown as ProfileCheck | null
 
   // 3. Verify job belongs to caller's business (404 avoids leaking job existence)
-  //    and check idempotency in the same query
   const { data: rawJobCheck } = await supabase
     .from('jobs')
-    .select('business_id, confirmation_email_sent_at')
+    .select('business_id')
     .eq('id', params.id)
     .single()
   const jobCheck = rawJobCheck as unknown as JobAuthCheck | null
@@ -70,12 +68,13 @@ export async function POST(
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // 4. Idempotency: already sent — skip silently
-  if (jobCheck.confirmation_email_sent_at) {
-    return NextResponse.json({ success: true, alreadySent: true })
-  }
+  // Note: this endpoint is intentionally NOT idempotent-guarded — it's the
+  // "Resend confirmation email" action on the job page, used e.g. after a
+  // staff member applies a price_override so the customer gets a corrected
+  // email reflecting the new price. confirmation_email_sent_at below is kept
+  // purely as an audit timestamp of the most recent send.
 
-  // 5. Fetch full job data via admin client for email assembly
+  // 4. Fetch full job data via admin client for email assembly
   const admin = createAdminClient()
   const { data: rawJob } = await admin
     .from('jobs')
@@ -117,7 +116,7 @@ export async function POST(
     business_id: profile?.business_id ?? undefined,
   })
 
-  // 6. Mark sent — prevents duplicate sends if caller retries
+  // 5. Record last-sent timestamp (audit only — see note above)
   if (result.success) {
     // Supabase's Update generic resolves to `never` for columns outside the snapshot;
     // casting the table ref to any is the minimal escape hatch — only this call is affected.

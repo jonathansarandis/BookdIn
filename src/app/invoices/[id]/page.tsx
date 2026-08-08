@@ -3,9 +3,10 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { ArrowLeft, User, Calendar, FileText } from 'lucide-react'
+import { ArrowLeft, User, Calendar, FileText, Download } from 'lucide-react'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import PayButton from '@/components/payments/PayButton'
+import EmailInvoiceButton from './EmailInvoiceButton'
 
 const STATUS_STYLES: Record<string, string> = {
   draft:   'bg-gray-100 text-gray-600 border-gray-200',
@@ -175,9 +176,20 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           {/* Actions */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
             <h2 className="font-semibold text-gray-900 mb-3">Actions</h2>
+            <a
+              href={`/api/invoices/${invoice.id}/pdf`}
+              className="w-full py-2 px-4 text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+              style={{ textDecoration: 'none' }}
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download PDF
+            </a>
+            {invoice.customer?.email && (
+              <EmailInvoiceButton invoiceId={invoice.id} />
+            )}
             {invoice.status === 'draft' && (
               <form action={`/api/invoices/${invoice.id}/send`} method="POST">
-                <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-brand-500 hover:bg-brand-600 rounded-lg transition-colors">
+                <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors">
                   Mark as sent
                 </button>
               </form>

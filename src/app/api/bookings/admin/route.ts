@@ -601,6 +601,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           time: formatTimeForSms(scheduled_at, smsTz, smsIsFlexible),
           business_name: business.name,
           business_phone: business.phone || '',
+          total: `$${((jobForEmail?.price_override ?? taxSplit.total) / 100).toFixed(2)}`,
           customer_id: resolvedCustomerId || undefined,
           customer_first_name: smsCustomer?.full_name?.split(' ')[0] || smsCustomer?.full_name || '',
           customer_last_name: smsCustomer?.full_name?.split(' ').slice(1).join(' ') || undefined,

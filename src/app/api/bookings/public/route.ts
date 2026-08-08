@@ -568,6 +568,7 @@ export async function POST(request: NextRequest) {
               time: formatTimeForSms(scheduledAtIso, tz, isFlexible),
               business_name: business.name,
               business_phone: business.phone || '',
+              total: `$${(taxSplit.total / 100).toFixed(2)}`,
               customer_id: customer.id || customerId || undefined,
               customer_first_name: customer.full_name?.split(' ')[0] || customer.full_name || '',
               customer_last_name: customer.full_name?.split(' ').slice(1).join(' ') || undefined,
