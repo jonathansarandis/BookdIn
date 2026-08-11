@@ -17,7 +17,17 @@ export default function ProviderAcceptPage() {
 
   useEffect(() => {
     async function handleAccept() {
-      const { data: { user }, error } = await supabase.auth.getUser()
+      const params = new URLSearchParams(window.location.search)
+      const token = params.get('token')
+      const type = params.get('type')
+
+      if (!token || (type !== 'invite' && type !== 'magiclink')) {
+        setStatus('error')
+        setMessage('Invalid or expired invite link.')
+        return
+      }
+
+      const { data: { user, session }, error } = await supabase.auth.verifyOtp({ token_hash: token, type })
 
       if (error || !user) {
         setStatus('error')
@@ -29,7 +39,6 @@ export default function ProviderAcceptPage() {
       const providerId = user.user_metadata?.provider_id
 
       if (providerId) {
-        const { data: { session } } = await supabase.auth.getSession()
         const res = await fetch('/api/providers/accept', {
           method: 'POST',
           headers: {

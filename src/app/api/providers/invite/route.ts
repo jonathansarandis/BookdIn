@@ -87,8 +87,14 @@ export async function POST(request: NextRequest) {
     is_provider: true,
   }
 
-  // First attempt: an invite link (also creates the auth user if new).
-  let actionLink: string | null = null
+  // We hand out our own /provider/accept link built from the raw hashed_token
+  // rather than Supabase's action_link: the action_link's GET /auth/v1/verify
+  // redirect only honours `redirectTo` when it's on the project's Redirect
+  // URLs allowlist, and silently falls back to the Site URL otherwise (this
+  // is what was bouncing invites to the admin login). Verifying the token
+  // ourselves via verifyOtp() on /provider/accept sidesteps that allowlist
+  // entirely — the browser never leaves bookdin.co.
+  let hashedToken: string | null = null
   let mode: 'invite' | 'magiclink' = 'invite'
 
   const { data: inviteData, error: inviteError } = await serviceClient.auth.admin.generateLink({
@@ -108,11 +114,17 @@ export async function POST(request: NextRequest) {
     if (magicError) {
       return NextResponse.json({ error: magicError.message }, { status: 500 })
     }
-    actionLink = magicData?.properties?.action_link ?? null
+    hashedToken = magicData?.properties?.hashed_token ?? null
     mode = 'magiclink'
   } else {
-    actionLink = inviteData?.properties?.action_link ?? null
+    hashedToken = inviteData?.properties?.hashed_token ?? null
   }
+
+  if (!hashedToken) {
+    return NextResponse.json({ error: 'Failed to generate invite link' }, { status: 500 })
+  }
+
+  const actionLink = `${origin}/provider/accept?token=${hashedToken}&type=${mode}`
 
   await serviceClient
     .from('providers')
