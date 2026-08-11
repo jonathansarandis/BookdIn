@@ -57,7 +57,13 @@ export async function middleware(request: NextRequest) {
   ]
   const isPublic = publicPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
 
-  if (!user && !isPublic) {
+  // Never applies to /api/* — an API caller expects JSON/status codes, not an
+  // HTML redirect, and every API route already does its own auth check. Without
+  // this exclusion, "/api/provider/jobs".startsWith('/provider') is false, so an
+  // anonymous or session-expired request fell through to the generic redirect
+  // below and got HTML back instead of a 401 — the same res.json() crash class
+  // fixed for the logged-in-no-profile case further down.
+  if (!user && !isPublic && !pathname.startsWith('/api/')) {
     if (pathname.startsWith('/provider')) {
       const url = request.nextUrl.clone()
       url.pathname = '/provider/login'
