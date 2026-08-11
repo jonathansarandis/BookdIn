@@ -38,23 +38,13 @@ const CURRENCIES = [
   { label: 'SGD — Singapore Dollar', value: 'SGD' },
 ]
 
-// Section header: bold title, left accent bar + icon, subtle divider underneath.
-// Colocated here since it's only used on this page.
-function SectionHeader({ icon: Icon, title, description, accent }: { icon: any; title: string; description?: string; accent: string }) {
-  return (
-    <div className="mb-4">
-      <div className="flex items-center gap-3">
-        <span className={`w-1 h-6 rounded-full flex-shrink-0 ${accent}`} />
-        <Icon className="w-5 h-5 text-gray-400 flex-shrink-0" />
-        <div>
-          <h2 className="text-base font-bold text-gray-900 tracking-tight">{title}</h2>
-          {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
-        </div>
-      </div>
-      <div className="border-b border-gray-200 mt-3" />
-    </div>
-  )
-}
+const TABS = [
+  { key: 'business', label: 'Business Profile', icon: Building2, description: 'Your business identity, branding, and locations' },
+  { key: 'communications', label: 'Communications', icon: MessageCircle, description: 'Email and SMS notifications sent to your customers' },
+  { key: 'payments', label: 'Payments', icon: CreditCard, description: 'Online payments, tax, and pricing discounts' },
+  { key: 'integrations', label: 'Integrations', icon: Plug, description: 'Third-party connections — advertising and the voice agent' },
+  { key: 'team', label: 'Team and Security', icon: ShieldCheck, description: 'Your account and login security' },
+] as const
 
 function SettingsSection({ children }: { children: React.ReactNode }) {
   return <div className="space-y-5">{children}</div>
@@ -84,6 +74,7 @@ export default function SettingsPage() {
   const [freqSaving, setFreqSaving] = useState(false)
   const [freqSaved, setFreqSaved] = useState(false)
   const [freqError, setFreqError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<typeof TABS[number]['key']>('business')
   const supabase = createClient()
 
   useEffect(() => {
@@ -237,7 +228,7 @@ export default function SettingsPage() {
       <div className="flex flex-col flex-1 overflow-hidden">
         <Topbar profile={profile} business={business} />
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-2xl mx-auto space-y-10 animate-fade-in">
+          <div className="max-w-4xl mx-auto space-y-10 animate-fade-in">
             <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
 
             {flashMessage && (
@@ -268,14 +259,34 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Tab bar — sticky, horizontally scrollable on mobile */}
+            <div className="sticky top-0 z-10 -mt-6 bg-gray-50 pt-4 pb-3">
+              <div className="flex gap-1.5 overflow-x-auto">
+                {TABS.map(tab => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap flex-shrink-0 transition-colors ${
+                      activeTab === tab.key
+                        ? 'bg-brand-600 text-white'
+                        : 'text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                  >
+                    <tab.icon className="w-4 h-4 flex-shrink-0" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div className="border-b border-gray-200 mt-3" />
+            </div>
+
+            <p className="text-xs text-gray-500 -mt-6">
+              {TABS.find(t => t.key === activeTab)?.description}
+            </p>
+
             {/* ── 1. Business profile ─────────────────────────────────── */}
-            <section>
-              <SectionHeader
-                icon={Building2}
-                title="Business profile"
-                description="Your business identity, branding, and locations"
-                accent="bg-brand-500"
-              />
+            {activeTab === 'business' && (
               <SettingsSection>
                 {/* Business info */}
                 <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
@@ -384,30 +395,18 @@ export default function SettingsPage() {
                   </a>
                 </div>
               </SettingsSection>
-            </section>
+            )}
 
             {/* ── 2. Communications ───────────────────────────────────── */}
-            <section>
-              <SectionHeader
-                icon={MessageCircle}
-                title="Communications"
-                description="Email and SMS notifications sent to your customers"
-                accent="bg-violet-500"
-              />
+            {activeTab === 'communications' && (
               <SettingsSection>
                 <EmailTemplateCard businessId={business?.id} />
                 <SmsConfigCard businessId={business?.id} />
               </SettingsSection>
-            </section>
+            )}
 
             {/* ── 3. Payments ──────────────────────────────────────────── */}
-            <section>
-              <SectionHeader
-                icon={CreditCard}
-                title="Payments"
-                description="Online payments, tax, and pricing discounts"
-                accent="bg-emerald-500"
-              />
+            {activeTab === 'payments' && (
               <SettingsSection>
                 {/* Stripe Connect */}
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
@@ -600,30 +599,18 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </SettingsSection>
-            </section>
+            )}
 
             {/* ── 4. Integrations ─────────────────────────────────────── */}
-            <section>
-              <SectionHeader
-                icon={Plug}
-                title="Integrations"
-                description="Third-party connections — advertising and the voice agent"
-                accent="bg-amber-500"
-              />
+            {activeTab === 'integrations' && (
               <SettingsSection>
                 <GoogleAdsConfigCard businessId={business?.id} />
                 <VoiceAgentConfigCard businessId={business?.id} />
               </SettingsSection>
-            </section>
+            )}
 
             {/* ── 5. Team and security ────────────────────────────────── */}
-            <section>
-              <SectionHeader
-                icon={ShieldCheck}
-                title="Team and security"
-                description="Your account and login security"
-                accent="bg-slate-600"
-              />
+            {activeTab === 'team' && (
               <SettingsSection>
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Your account</h3>
@@ -651,7 +638,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </SettingsSection>
-            </section>
+            )}
 
           </div>
         </main>
