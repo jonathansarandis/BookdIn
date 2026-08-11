@@ -1,10 +1,10 @@
 // @ts-nocheck
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { withSessionRetry } from '@/lib/supabase/withSessionRetry'
-import { Plus, Users, Loader2, X, Phone, Mail, Pencil, Trash2, Send, CheckCircle2, MapPin, AlertCircle } from 'lucide-react'
+import { Plus, Users, Loader2, X, Phone, Mail, Pencil, Trash2, Send, CheckCircle2, MapPin, AlertCircle, Pipette } from 'lucide-react'
 
 const COLORS = ['#2563FF', '#7c3aed', '#16a34a', '#d97706', '#dc2626', '#0e7490', '#4338ca', '#be123c']
 
@@ -21,6 +21,7 @@ export default function ProvidersPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const supabase = createClient()
+  const colorInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     display_name: '', email: '', phone: '', color: COLORS[0], notes: '', accept_jobs: true, is_active: true,
@@ -188,6 +189,14 @@ export default function ProvidersPage() {
                       className={`w-6 h-6 rounded-full transition-all ${form.color === c ? 'ring-2 ring-offset-1 ring-gray-400 scale-110' : ''}`}
                       style={{ backgroundColor: c }} />
                   ))}
+                  <button type="button" onClick={() => colorInputRef.current?.click()} title="Custom colour"
+                    className={`w-6 h-6 rounded-full transition-all flex items-center justify-center ${!COLORS.includes(form.color) ? 'ring-2 ring-offset-1 ring-gray-400 scale-110' : ''}`}
+                    style={{ background: !COLORS.includes(form.color) ? form.color : 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }}>
+                    {COLORS.includes(form.color) && <Pipette className="w-3 h-3 text-white drop-shadow" />}
+                  </button>
+                  <input ref={colorInputRef} type="color" value={form.color}
+                    onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
+                    className="sr-only" tabIndex={-1} />
                 </div>
               </div>
             </div>
