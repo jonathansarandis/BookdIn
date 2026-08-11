@@ -37,7 +37,8 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     .select(`
       *,
       customer:customers(id, full_name, email, phone),
-      job:jobs!invoices_job_id_fkey(id, scheduled_at, service:services(name))
+      job:jobs!invoices_job_id_fkey(id, scheduled_at, service:services(name)),
+      business:businesses(name, business_number, business_number_label)
     `)
     .eq('id', params.id)
     .eq('business_id', profile?.business_id)
@@ -62,6 +63,14 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
               INV-{invoice.id.slice(0, 8).toUpperCase()}
             </h1>
             <p className="text-sm text-gray-500">Created {formatDateShort(invoice.created_at)}</p>
+            {invoice.business?.name && (
+              <p className="text-sm text-gray-500 mt-1">
+                {invoice.business.name}
+                {invoice.business.business_number && (
+                  <span className="block">{invoice.business.business_number_label || 'ABN'} {invoice.business.business_number}</span>
+                )}
+              </p>
+            )}
           </div>
         </div>
         <span className={cn('px-3 py-1 rounded-full text-sm font-medium border capitalize', STATUS_STYLES[invoice.status] || 'bg-gray-100 text-gray-700')}>

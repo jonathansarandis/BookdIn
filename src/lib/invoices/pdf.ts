@@ -88,7 +88,7 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
   doc.fontSize(14).fillColor(INK).font('Helvetica-Bold').text(data.business.name, businessTextX, businessTextY)
   doc.font('Helvetica').fontSize(9).fillColor(MUTED)
   if (data.business.businessNumber) {
-    doc.text(`${data.business.businessNumberLabel || 'ABN'}: ${data.business.businessNumber}`)
+    doc.text(`${data.business.businessNumberLabel || 'ABN'} ${data.business.businessNumber}`)
   }
   const addrLine = [data.business.streetAddress, [data.business.suburb, data.business.state, data.business.postcode].filter(Boolean).join(' ')]
     .filter(Boolean).join(', ')
