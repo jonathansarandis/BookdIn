@@ -78,7 +78,13 @@ export async function middleware(request: NextRequest) {
   // link, etc. — must bounce them to their own portal instead of a dead-end admin
   // page. Only resolved when it can actually change the outcome (an /auth/* page,
   // or a protected non-provider page) to avoid a DB round trip on every request.
-  if (user && !isDemoUser && (isAuthPage || (!isPublic && !pathname.startsWith('/provider')))) {
+  // Never applies to /api/* — an API caller expects JSON/status codes, not an
+  // HTML redirect, and every API route already does its own auth check. Without
+  // this exclusion, "/api/provider/jobs".startsWith('/provider') is false (it
+  // starts with "/api/provider", not "/provider"), so a cleaner's own fetch()
+  // calls got silently redirected to the dashboard HTML page instead of JSON —
+  // res.json() then threw on the HTML body, leaving the schedule empty.
+  if (user && !isDemoUser && !pathname.startsWith('/api/') && (isAuthPage || (!isPublic && !pathname.startsWith('/provider')))) {
     const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
 
     if (profile) {
