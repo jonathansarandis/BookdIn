@@ -10,7 +10,6 @@ const TIME_SLOTS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:
 interface Props {
   jobId: string
   initialScheduledAt: string | null
-  durationMinutes: number | null
   businessTimezone: string
   initialIsFlexibleTime: boolean
 }
@@ -32,7 +31,7 @@ function toTimeInput(iso: string, tz: string): string {
   ].join(':')
 }
 
-export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinutes, businessTimezone, initialIsFlexibleTime }: Props) {
+export default function ScheduleEditor({ jobId, initialScheduledAt, businessTimezone, initialIsFlexibleTime }: Props) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [scheduledAt, setScheduledAt] = useState(initialScheduledAt)
@@ -155,12 +154,6 @@ export default function ScheduleEditor({ jobId, initialScheduledAt, durationMinu
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <span>{isFlexibleTime ? 'Flexible time' : displayTime}</span>
-            </div>
-          )}
-          {durationMinutes && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-              <span>{durationMinutes} minutes</span>
             </div>
           )}
           {saved && (

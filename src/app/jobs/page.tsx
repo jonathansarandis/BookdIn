@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, ClipboardList } from 'lucide-react'
+import { Plus, ClipboardList, AlertCircle } from 'lucide-react'
 import { formatCurrency, getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
@@ -74,7 +74,17 @@ export default async function JobsPage({
     query = query.is('provider_id', null).not('status', 'in', '("completed","cancelled")')
   }
 
-  const { data: jobs } = await query.limit(100)
+  let { data: jobs, error: jobsError } = await query.limit(100)
+
+  // See customers/page.tsx — same retry-once-on-error rationale: a stale
+  // token can fail this request even though the page itself loaded fine.
+  if (jobsError) {
+    console.error('[jobs] query failed, retrying once:', jobsError.message)
+    const retry = await query.limit(100)
+    jobs = retry.data
+    jobsError = retry.error
+    if (jobsError) console.error('[jobs] retry also failed:', jobsError.message)
+  }
 
   const FILTERS = [
     { label: 'All bookings', value: '' },
@@ -99,7 +109,7 @@ export default async function JobsPage({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Bookings</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{jobs?.length || 0} bookings</p>
+          <p className="text-sm text-gray-500 mt-0.5">{jobsError ? '—' : jobs?.length || 0} bookings</p>
         </div>
         <Link
           href="/booking"
@@ -177,7 +187,12 @@ export default async function JobsPage({
       )}
 
       {/* Table */}
-      {jobs && jobs.length > 0 ? (
+      {jobsError ? (
+        <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          Couldn't load bookings — check your connection and try refreshing.
+        </div>
+      ) : jobs && jobs.length > 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>

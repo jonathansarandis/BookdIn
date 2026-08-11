@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Calendar, Clock, MapPin, CheckCircle2, LogOut, User } from 'lucide-react'
+import { toBusinessDateTime, formatBusinessDateTime, fromBusinessDateTime } from '@/lib/datetime'
 
 const STATUS_STYLES: Record<string, any> = {
   pending:     { bg: '#fffbeb', color: '#d97706', label: 'Pending' },
@@ -16,22 +17,26 @@ const STATUS_STYLES: Record<string, any> = {
   cancelled:   { bg: '#f9fafb', color: '#6b7280', label: 'Cancelled' },
 }
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr)
-  const today = new Date()
+// Jobs display in the timezone of their own location (falls back to the
+// business default) — not the viewing device's timezone, which is wrong
+// whenever the cleaner's phone/browser isn't set to the job's local zone.
+function formatDate(dateStr: string, tz: string) {
+  const d = toBusinessDateTime(dateStr, tz)
+  const today = toBusinessDateTime(new Date().toISOString(), tz)
   const tomorrow = new Date(today.getTime() + 86400000)
   if (d.toDateString() === today.toDateString()) return 'Today'
   if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+  return formatBusinessDateTime(dateStr, tz, 'EEE d MMM')
 }
 
-function formatTime(dateStr: string) {
-  return new Date(dateStr).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })
+function formatTime(dateStr: string, tz: string) {
+  return formatBusinessDateTime(dateStr, tz, 'h:mm a')
 }
 
 export default function ProviderDashboard() {
   const [provider, setProvider] = useState<any>(null)
   const [jobs, setJobs] = useState<any[]>([])
+  const [defaultTimezone, setDefaultTimezone] = useState('Australia/Sydney')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const supabase = createClient()
@@ -55,6 +60,7 @@ export default function ProviderDashboard() {
     const data = await res.json()
     setProvider(data.provider)
     setJobs(data.jobs)
+    if (data.defaultTimezone) setDefaultTimezone(data.defaultTimezone)
     setLoading(false)
   }
 
@@ -74,9 +80,14 @@ export default function ProviderDashboard() {
     router.push('/provider/login')
   }
 
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
+  // "Today" is bucketed against the business's own timezone, not the viewing
+  // device's — otherwise a cleaner whose phone clock/timezone is off (or who's
+  // travelling) sees jobs shuffled into the wrong day/tab.
+  const nowIso = new Date().toISOString()
+  const todayDateStr = formatBusinessDateTime(nowIso, defaultTimezone, 'yyyy-MM-dd')
+  const todayStart = fromBusinessDateTime(todayDateStr, '00:00', defaultTimezone)
+  const tomorrowDateStr = formatBusinessDateTime(new Date(new Date(todayStart).getTime() + 86400000).toISOString(), defaultTimezone, 'yyyy-MM-dd')
+  const todayEnd = fromBusinessDateTime(tomorrowDateStr, '00:00', defaultTimezone)
 
   const todayJobs = jobs.filter(j => j.scheduled_at >= todayStart && j.scheduled_at < todayEnd && j.status !== 'completed')
   const upcomingJobs = jobs.filter(j => j.scheduled_at >= todayEnd && j.status !== 'completed')
@@ -159,6 +170,12 @@ export default function ProviderDashboard() {
           <div className="space-y-3">
             {displayJobs.map(job => {
               const statusStyle = STATUS_STYLES[job.status] || STATUS_STYLES.pending
+              const jobTimezone = job.location?.timezone || defaultTimezone
+              const bedBath = [
+                job.bedrooms != null && `${job.bedrooms} bed`,
+                job.bathrooms != null && `${job.bathrooms} bath`,
+              ].filter(Boolean).join(' / ')
+              const extrasNames = (job.job_extras || []).map((ex: any) => ex.name)
               return (
                 <div key={job.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   {/* Job header */}
@@ -178,9 +195,9 @@ export default function ProviderDashboard() {
                   <div className="px-5 py-4 space-y-2.5">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="font-medium">{formatDate(job.scheduled_at)}</span>
+                      <span className="font-medium">{formatDate(job.scheduled_at, jobTimezone)}</span>
                       <span className="text-gray-400">at</span>
-                      <span className="font-medium">{formatTime(job.scheduled_at)}</span>
+                      <span className="font-medium">{formatTime(job.scheduled_at, jobTimezone)}</span>
                     </div>
                     {job.address && (
                       <div className="flex items-start gap-2 text-sm text-gray-600">
@@ -203,10 +220,14 @@ export default function ProviderDashboard() {
                         </a>
                       </div>
                     )}
-                    {job.duration_minutes && (
+                    {(bedBath || extrasNames.length > 0) && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span>{job.duration_minutes} minutes</span>
+                        <span>
+                          {bedBath}
+                          {bedBath && extrasNames.length > 0 && ' '}
+                          {extrasNames.length > 0 && `+ ${extrasNames.join(', ')}`}
+                        </span>
                       </div>
                     )}
                     {job.payout_cents > 0 && (

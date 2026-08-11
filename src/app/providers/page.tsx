@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Users, Loader2, X, Phone, Mail, Pencil, Trash2, Send, CheckCircle2, MapPin } from 'lucide-react'
+import { withSessionRetry } from '@/lib/supabase/withSessionRetry'
+import { Plus, Users, Loader2, X, Phone, Mail, Pencil, Trash2, Send, CheckCircle2, MapPin, AlertCircle } from 'lucide-react'
 
 const COLORS = ['#2563FF', '#7c3aed', '#16a34a', '#d97706', '#dc2626', '#0e7490', '#4338ca', '#be123c']
 
@@ -18,6 +19,7 @@ export default function ProvidersPage() {
   const [businessId, setBusinessId] = useState('')
   const [locations, setLocations] = useState<any[]>([])
   const [formError, setFormError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const supabase = createClient()
 
   const [form, setForm] = useState({
@@ -31,11 +33,18 @@ export default function ProvidersPage() {
       if (!user) { window.location.href = '/auth/login'; return }
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
       setBusinessId(profile?.business_id)
-      const [{ data: provData }, { data: locData }] = await Promise.all([
-        supabase.from('providers').select('*').eq('business_id', profile?.business_id).order('created_at'),
-        supabase.from('locations').select('id, name').eq('business_id', profile?.business_id).eq('is_active', true).order('name'),
+      const [{ data: provData, error: provErr }, { data: locData }] = await Promise.all([
+        withSessionRetry(supabase, () => supabase.from('providers').select('*').eq('business_id', profile?.business_id).order('created_at')),
+        withSessionRetry(supabase, () => supabase.from('locations').select('id, name').eq('business_id', profile?.business_id).eq('is_active', true).order('name')),
       ])
-      setProviders(provData || [])
+      // A query that still errors after a session-refresh retry is a real
+      // failure, not "zero providers" — don't blank the list out silently.
+      if (provErr) {
+        setLoadError("Couldn't load providers — check your connection and try refreshing.")
+      } else {
+        setLoadError(null)
+        setProviders(provData || [])
+      }
       setLocations(locData || [])
       setLoading(false)
     }
@@ -232,9 +241,16 @@ export default function ProvidersPage() {
         </div>
       )}
 
+      {loadError && (
+        <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          {loadError}
+        </div>
+      )}
+
       {loading ? (
         <div className="text-sm text-gray-400 py-8 text-center">Loading...</div>
-      ) : providers.length === 0 ? (
+      ) : loadError ? null : providers.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">No providers yet</p>

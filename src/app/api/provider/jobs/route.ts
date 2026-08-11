@@ -31,7 +31,7 @@ export async function GET() {
   // Business tax settings needed for override-aware payout computation
   const { data: business } = await admin
     .from('businesses')
-    .select('tax_rate, tax_mode')
+    .select('tax_rate, tax_mode, timezone')
     .eq('id', provider.business_id)
     .single()
 
@@ -60,7 +60,9 @@ export async function GET() {
       provider_fee_extra,
       customer:customers(full_name, phone, email),
       service:services(name),
-      address:addresses(line1, city, state, postcode)
+      address:addresses(line1, city, state, postcode),
+      location:locations(timezone),
+      job_extras(id, name, price)
     `)
     .eq('provider_id', provider.id)
     .not('status', 'in', '("cancelled")')
@@ -90,6 +92,8 @@ export async function GET() {
       customer: job.customer,
       service: job.service,
       address: job.address,
+      location: job.location,
+      job_extras: job.job_extras,
     }
   })
 
@@ -100,6 +104,7 @@ export async function GET() {
       color: provider.color,
       is_active: provider.is_active,
     },
+    defaultTimezone: business?.timezone || 'Australia/Sydney',
     jobs: safeJobs,
   })
 }
