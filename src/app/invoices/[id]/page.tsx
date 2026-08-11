@@ -38,7 +38,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       *,
       customer:customers(id, full_name, email, phone),
       job:jobs!invoices_job_id_fkey(id, scheduled_at, service:services(name)),
-      business:businesses(name, business_number, business_number_label)
+      business:businesses(name, logo_url, business_number, business_number_label)
     `)
     .eq('id', params.id)
     .eq('business_id', profile?.business_id)
@@ -64,12 +64,21 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             </h1>
             <p className="text-sm text-gray-500">Created {formatDateShort(invoice.created_at)}</p>
             {invoice.business?.name && (
-              <p className="text-sm text-gray-500 mt-1">
-                {invoice.business.name}
-                {invoice.business.business_number && (
-                  <span className="block">{invoice.business.business_number_label || 'ABN'} {invoice.business.business_number}</span>
+              <div className="flex items-center gap-2 mt-1">
+                {invoice.business.logo_url && (
+                  <img
+                    src={invoice.business.logo_url}
+                    alt={`${invoice.business.name} logo`}
+                    className="w-8 h-8 rounded object-contain flex-shrink-0"
+                  />
                 )}
-              </p>
+                <p className="text-sm text-gray-500">
+                  {invoice.business.name}
+                  {invoice.business.business_number && (
+                    <span className="block">{invoice.business.business_number_label || 'ABN'} {invoice.business.business_number}</span>
+                  )}
+                </p>
+              </div>
             )}
           </div>
         </div>

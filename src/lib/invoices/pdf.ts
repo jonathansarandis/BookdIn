@@ -48,10 +48,13 @@ const PAGE_MARGIN = 50
 
 async function fetchLogoBuffer(url: string): Promise<Buffer | null> {
   try {
-    // pdfkit only embeds JPEG/PNG — skip anything else (e.g. SVG logos) rather than error
-    if (!/\.(png|jpe?g)(\?.*)?$/i.test(url)) return null
     const res = await fetch(url)
     if (!res.ok) return null
+    // pdfkit only embeds JPEG/PNG — skip anything else (e.g. SVG logos) rather than error.
+    // Logos are uploaded to a fixed extensionless path (see settings/page.tsx), so the
+    // URL itself carries no file-type info — check the actual Content-Type instead.
+    const contentType = res.headers.get('content-type') || ''
+    if (!/^image\/(png|jpe?g)/i.test(contentType)) return null
     const arrayBuffer = await res.arrayBuffer()
     return Buffer.from(arrayBuffer)
   } catch {
@@ -74,17 +77,21 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
 
   const pageWidth = doc.page.width - PAGE_MARGIN * 2
 
-  // ── Header: logo/business (left) + invoice meta (right) ──────────────────
+  // ── Header: logo + business (left) + invoice meta (right) ────────────────
   const headerTop = doc.y
+  const LOGO_BOX = 50
+  const LOGO_GAP = 15
+  let logoRendered = false
   if (logoBuffer) {
     try {
-      doc.image(logoBuffer, PAGE_MARGIN, headerTop, { fit: [140, 50] })
+      doc.image(logoBuffer, PAGE_MARGIN, headerTop, { fit: [LOGO_BOX, LOGO_BOX] })
+      logoRendered = true
     } catch {
       // corrupt/unsupported image data — fall through without a logo
     }
   }
-  const businessTextX = PAGE_MARGIN
-  const businessTextY = logoBuffer ? headerTop + 56 : headerTop
+  const businessTextX = logoRendered ? PAGE_MARGIN + LOGO_BOX + LOGO_GAP : PAGE_MARGIN
+  const businessTextY = headerTop
   doc.fontSize(14).fillColor(INK).font('Helvetica-Bold').text(data.business.name, businessTextX, businessTextY)
   doc.font('Helvetica').fontSize(9).fillColor(MUTED)
   if (data.business.businessNumber) {
@@ -105,7 +112,7 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
     .text(data.status.toUpperCase(), { width: pageWidth, align: 'right' })
 
   doc.moveDown(2)
-  doc.y = Math.max(doc.y, businessTextY + 90)
+  doc.y = Math.max(doc.y, businessTextY + 90, headerTop + LOGO_BOX + 10)
 
   // ── Bill to ────────────────────────────────────────────────────────────
   const billToY = doc.y
