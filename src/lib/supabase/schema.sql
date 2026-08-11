@@ -332,6 +332,14 @@ declare
   biz_slug text;
   biz_name text;
 begin
+  -- Provider invites (see /api/providers/invite) create a new auth.users row
+  -- tagged is_provider: true. Their link to a business is providers.business_id,
+  -- not profiles — skip creating a phantom business + owner profile for them.
+  if coalesce((new.raw_user_meta_data->>'is_provider')::boolean, false)
+     or new.raw_user_meta_data->>'role' = 'provider' then
+    return new;
+  end if;
+
   biz_name := coalesce(new.raw_user_meta_data->>'business_name', 'My Business');
   biz_slug := lower(regexp_replace(biz_name, '[^a-zA-Z0-9]', '-', 'g')) || '-' || substring(new.id::text, 1, 6);
 
