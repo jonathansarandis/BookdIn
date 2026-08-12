@@ -110,22 +110,26 @@ input[type="date"].blank-date {
 }
 
 .addons-scroll-container {
+  overflow-y: scroll !important;
   scrollbar-width: thin;
-  scrollbar-color: #6366f1 #f1f1f1;
+  scrollbar-color: #6366f1 #f1f5f9;
 }
 .addons-scroll-container::-webkit-scrollbar {
-  width: 6px;
+  -webkit-appearance: none;
+  width: 8px;
+  display: block !important;
 }
 .addons-scroll-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
+  background: #f1f5f9;
+  border-radius: 4px;
 }
 .addons-scroll-container::-webkit-scrollbar-thumb {
-  background: #6366f1;
-  border-radius: 3px;
+  background-color: #6366f1;
+  border-radius: 4px;
+  border: 2px solid #f1f5f9;
 }
 .addons-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #4f46e5;
+  background-color: #4f46e5;
 }
 
 @media (max-width: 639px) {
