@@ -109,27 +109,34 @@ input[type="date"].blank-date {
   color: transparent !important;
 }
 
-.addons-scroll-container {
-  overflow-y: scroll !important;
-  scrollbar-width: thin;
-  scrollbar-color: #6366f1 #f1f5f9;
+/* Add-ons scroll affordance — macOS/iOS overlay scrollbars can't reliably be
+   forced visible via CSS, so "more content below" is signalled with a fade +
+   bouncing chevron + label instead, all driven by AddonsPicker's scroll state. */
+.addons-fade-container {
+  position: relative;
 }
-.addons-scroll-container::-webkit-scrollbar {
-  -webkit-appearance: none;
-  width: 8px;
-  display: block !important;
+.addons-fade-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, #ffffff);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.2s ease;
 }
-.addons-scroll-container::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+.addons-fade-container[data-scroll-end="true"]::after {
+  opacity: 0;
 }
-.addons-scroll-container::-webkit-scrollbar-thumb {
-  background-color: #6366f1;
-  border-radius: 4px;
-  border: 2px solid #f1f5f9;
+
+@keyframes addons-scroll-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
 }
-.addons-scroll-container::-webkit-scrollbar-thumb:hover {
-  background-color: #4f46e5;
+.addons-scroll-chevron {
+  animation: addons-scroll-bounce 1.5s ease-in-out infinite;
 }
 
 @media (max-width: 639px) {

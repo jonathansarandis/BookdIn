@@ -1,5 +1,8 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+
 type Extra = {
   id: string
   name: string
@@ -20,12 +23,40 @@ type Props = {
 }
 
 export default function AddonsPicker({ extras, selected, onChange, brandColor, showPrice = true }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [hasOverflow, setHasOverflow] = useState(false)
+  const [atBottom, setAtBottom] = useState(false)
+
   const active = extras.filter(e => e.is_active)
+  const popularExtras = active.filter(e => e.is_popular).sort((a, b) => a.name.localeCompare(b.name))
+  const otherExtras = active.filter(e => !e.is_popular).sort((a, b) => a.name.localeCompare(b.name))
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    function checkOverflow() {
+      setHasOverflow(el!.scrollHeight > el!.clientHeight + 1)
+    }
+    function checkAtBottom() {
+      const gapToBottom = el!.scrollHeight - el!.scrollTop - el!.clientHeight
+      setAtBottom(gapToBottom < 4)
+    }
+
+    checkOverflow()
+    checkAtBottom()
+
+    el.addEventListener('scroll', checkAtBottom)
+    window.addEventListener('resize', checkOverflow)
+    return () => {
+      el.removeEventListener('scroll', checkAtBottom)
+      window.removeEventListener('resize', checkOverflow)
+    }
+  }, [popularExtras.length, otherExtras.length])
 
   if (active.length === 0) return null
 
-  const popularExtras = active.filter(e => e.is_popular).sort((a, b) => a.name.localeCompare(b.name))
-  const otherExtras = active.filter(e => !e.is_popular).sort((a, b) => a.name.localeCompare(b.name))
+  const showScrollHint = hasOverflow && !atBottom
 
   function renderRow(extra: Extra) {
     const qty = selected[extra.id] ?? 0
@@ -100,36 +131,37 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor, s
   }
 
   return (
-    <div className="relative">
-      <div
-        className="max-h-[400px] overflow-y-scroll pr-1 addons-scroll-container"
-        style={{
-          WebkitOverflowScrolling: 'touch',
-          scrollbarWidth: 'thin',
-          scrollbarColor: '#6366f1 #f1f5f9',
-        } as React.CSSProperties}
-      >
-        {popularExtras.length > 0 && (
-          <div>
-            <h4 className="text-sm font-semibold text-gray-900 mb-2">Popular add-ons</h4>
-            <div className="space-y-0.5">
-              {popularExtras.map(renderRow)}
+    <div>
+      <div className="addons-fade-container" data-scroll-end={showScrollHint ? 'false' : 'true'}>
+        <div
+          ref={scrollRef}
+          className="max-h-[400px] overflow-y-auto pr-1"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {popularExtras.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Popular add-ons</h4>
+              <div className="space-y-0.5">
+                {popularExtras.map(renderRow)}
+              </div>
             </div>
-          </div>
-        )}
-        {otherExtras.length > 0 && (
-          <div className={popularExtras.length > 0 ? 'mt-5' : ''}>
-            <h4 className="text-sm font-semibold text-gray-900 mb-2">All add-ons</h4>
-            <div className="space-y-0.5">
-              {otherExtras.map(renderRow)}
+          )}
+          {otherExtras.length > 0 && (
+            <div className={popularExtras.length > 0 ? 'mt-5' : ''}>
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">All add-ons</h4>
+              <div className="space-y-0.5">
+                {otherExtras.map(renderRow)}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent"
-        aria-hidden="true"
-      />
+      {showScrollHint && (
+        <div className="flex flex-col items-center gap-0.5 pt-1.5" aria-hidden="true">
+          <ChevronDown className="w-4 h-4 text-gray-400 addons-scroll-chevron" />
+          <span className="text-xs text-gray-400">Scroll to see more extras</span>
+        </div>
+      )}
     </div>
   )
 }
