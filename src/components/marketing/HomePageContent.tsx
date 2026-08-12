@@ -608,7 +608,7 @@ export default function HomePageContent() {
               position: "absolute", bottom: 0, right: "-8%", width: "60%",
               filter: "drop-shadow(0 24px 50px rgba(10,15,30,0.22))",
             }}>
-              <BrowserFrame src="/screenshots/calendar.png" alt="BookdIn calendar view" />
+              <BrowserFrame src="/screenshots/calendar-peek.png" alt="BookdIn calendar view" />
             </div>
           </div>
           <div>
@@ -801,7 +801,7 @@ export default function HomePageContent() {
                   </div>
                 ))}
                 <div style={{
-                  marginTop: "auto", background: "rgba(37,99,255,0.12)", borderRadius: 14,
+                  background: "rgba(37,99,255,0.12)", borderRadius: 14,
                   padding: "1.3rem", border: "1px solid rgba(37,99,255,0.25)",
                 }}>
                   <div style={{ fontSize: "0.82rem", color: dark.body }}>Revenue today</div>
