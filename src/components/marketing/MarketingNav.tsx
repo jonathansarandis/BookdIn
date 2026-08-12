@@ -62,7 +62,7 @@ export default function MarketingNav() {
           <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexShrink: 0 }}>
             <Link href="/#compare" style={navLink}>Features</Link>
             <Link href="/#revenue" style={navLink}>Revenue</Link>
-            <Link href="/pricing" style={navLink}>Pricing</Link>
+            <Link href="/#pricing" style={navLink}>Pricing</Link>
             <Link href="/about" style={navLink}>About</Link>
           </div>
 

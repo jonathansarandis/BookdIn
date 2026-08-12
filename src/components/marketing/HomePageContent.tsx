@@ -257,27 +257,29 @@ function PricingCard({ p, billing }: { p: PricingTier; billing: "monthly" | "yea
 const PRICING_TIERS: PricingTier[] = [
   {
     name: "Starter",
-    monthlyPrice: 49,
-    yearlyPrice: 41,
+    monthlyPrice: 79,
+    yearlyPrice: 66,
     tagline: "Solo operators and small teams just getting started.",
     ctaLabel: "Start free trial",
     ctaHref: "/auth/signup",
     features: [
       { text: "Online booking form (public URL + iframe embed)" },
       { text: "Up to 3 service providers" },
+      { text: "1 location" },
       { text: "Unlimited bookings" },
       { text: "Customer management (CRM pipeline)" },
       { text: "Calendar view" },
       { text: "Automated booking confirmation emails" },
       { text: "GST invoices with PDF download" },
       { text: "Stripe payments (card on file, pre-authorisation)" },
+      { text: "1 admin account" },
       { text: "14-day free trial, no credit card required" },
     ],
   },
   {
     name: "Growth",
-    monthlyPrice: 99,
-    yearlyPrice: 82,
+    monthlyPrice: 149,
+    yearlyPrice: 124,
     tagline: "Growing teams that want the AI Agent doing the busywork.",
     precedingLabel: "Everything in Starter, plus:",
     featured: true,
@@ -301,8 +303,8 @@ const PRICING_TIERS: PricingTier[] = [
   },
   {
     name: "Enterprise",
-    monthlyPrice: 199,
-    yearlyPrice: 165,
+    monthlyPrice: 299,
+    yearlyPrice: 249,
     tagline: "Multi-location operators and franchises with custom needs.",
     precedingLabel: "Everything in Growth, plus:",
     ctaLabel: "Contact us",
@@ -325,7 +327,7 @@ const PRICING_TIERS: PricingTier[] = [
 function PricingSection() {
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   return (
-    <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
+    <section id="pricing" style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
       <div className="bd-reveal" style={{ maxWidth: 1080, margin: "0 auto" }}>
         <div style={eyebrowPill("blue")}>Pricing</div>
         <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Simple, transparent pricing</h2>
@@ -546,7 +548,7 @@ export default function HomePageContent() {
               { icon: "sparkle" as const, val: "AI", label: "Daily business coaching", sub: "No competitor has this" },
               { icon: "shieldCheck" as const, val: "99.9%", label: "Uptime guaranteed", sub: "Enterprise infrastructure" },
               { icon: "clock" as const, val: "14", label: "Day free trial", sub: "No credit card needed" },
-              { icon: "tag" as const, val: "$49", label: "Starting price /mo", sub: "No per-booking fees" },
+              { icon: "tag" as const, val: "$79", label: "Starting price /mo", sub: "No per-booking fees" },
             ].map(s => (
               <div key={s.val} style={{
                 textAlign: "center", padding: "1.8rem 1.4rem", borderRadius: 16,
@@ -841,7 +843,6 @@ export default function HomePageContent() {
                   { label: "Automated follow-ups", note: "Daily automated payment capture & follow-ups", bi: true, o: false, ex: true },
                   { label: "Room-based dynamic pricing", note: "Auto-calculate quotes by bedrooms & extras", bi: true, o: false, ex: true },
                   { label: "Free trial", biVal: "14 days", oVal: "7 days" },
-                  { label: "Starting price", biVal: "$49/mo", oVal: "$67/mo" },
                 ].map((row, i) => (
                   <tr key={i} style={{ background: row.ex ? "rgba(37,99,255,0.035)" : (i % 2 === 0 ? "rgba(10,15,30,0.015)" : "transparent") }}>
                     <td style={{ padding: "1.35rem 1.4rem", borderBottom: `1px solid ${light.divider}` }}>
