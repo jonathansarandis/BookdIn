@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import BrowserFrame from "@/components/marketing/BrowserFrame";
@@ -103,9 +103,9 @@ const STAT_ICON_PATHS: Record<string, React.ReactNode> = {
   tag: <><path d="M12.5 3H5a2 2 0 0 0-2 2v7.5a1 1 0 0 0 .29.71l9.5 9.5a1 1 0 0 0 1.42 0l7.5-7.5a1 1 0 0 0 0-1.42l-9.5-9.5A1 1 0 0 0 12.5 3Z" /><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor" stroke="none" /></>,
 };
 
-function StatIcon({ type }: { type: keyof typeof STAT_ICON_PATHS }) {
+function StatIcon({ type, size = 22 }: { type: keyof typeof STAT_ICON_PATHS; size?: number }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" width="22" height="22">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
       {STAT_ICON_PATHS[type]}
     </svg>
   );
@@ -150,8 +150,29 @@ function FeatureSection({
   );
 }
 
-function PricingCard({ p }: { p: { name: string; price: string; period: string; desc: string; featured: boolean } }) {
+type PricingFeature = { text: string; highlight?: boolean };
+type PricingTier = {
+  name: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  tagline: string;
+  precedingLabel?: string;
+  featured?: boolean;
+  ctaLabel: string;
+  ctaHref: string;
+  features: PricingFeature[];
+};
+
+function PricingCard({ p, billing }: { p: PricingTier; billing: "monthly" | "yearly" }) {
   const { ref, rotateX, rotateY, scale } = useTilt<HTMLDivElement>(4, 1.02);
+  const [expanded, setExpanded] = useState(false);
+  const price = billing === "yearly" ? p.yearlyPrice : p.monthlyPrice;
+  const VISIBLE_COUNT = 6;
+  const visibleFeatures = expanded ? p.features : p.features.slice(0, VISIBLE_COUNT);
+  const remaining = p.features.length - VISIBLE_COUNT;
+  const bodyColor = p.featured ? dark.bullet : light.bullet;
+  const faintColor = p.featured ? dark.faint : light.faint;
+
   return (
     <div
       ref={ref}
@@ -168,23 +189,189 @@ function PricingCard({ p }: { p: { name: string; price: string; period: string; 
         boxShadow: p.featured ? "0 24px 60px rgba(37,99,255,0.22)" : "0 2px 10px rgba(10,15,30,0.03)",
         transform: `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(${scale})`,
         transformOrigin: "center", willChange: "transform",
+        display: "flex", flexDirection: "column",
       }}>
       {p.featured && <div style={{ position: "absolute", top: "1.4rem", right: "1.4rem", background: BLUE, color: "#fff", fontSize: "0.68rem", fontWeight: 700, padding: "3px 10px", borderRadius: 100 }}>Most popular</div>}
-      <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: p.featured ? dark.faint : light.faint, marginBottom: "0.8rem" }}>{p.name}</div>
+      <div style={{ fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: faintColor, marginBottom: "0.8rem" }}>{p.name}</div>
       <div style={{ fontSize: "3rem", fontWeight: 700, color: p.featured ? "#fff" : light.headline, letterSpacing: "-1.5px", lineHeight: 1 }}>
-        {p.price}<span style={{ fontSize: "0.95rem", fontWeight: 400, color: p.featured ? dark.faint : light.faint }}>{p.period}</span>
+        ${price}<span style={{ fontSize: "0.95rem", fontWeight: 400, color: faintColor }}>/mo</span>
       </div>
-      <p style={{ fontSize: "0.9rem", color: p.featured ? dark.body : light.body, margin: "0.9rem 0 1.7rem", lineHeight: 1.65 }}>{p.desc}</p>
-      <Link href="/auth/signup" style={{
+      <div style={{ fontSize: "0.78rem", color: billing === "yearly" ? GREEN_LIGHT : faintColor, marginTop: "0.4rem", fontWeight: billing === "yearly" ? 700 : 400, minHeight: "1.1rem" }}>
+        {billing === "yearly" ? "billed annually · save 17%" : "billed monthly"}
+      </div>
+      <p style={{ fontSize: "0.9rem", color: p.featured ? dark.body : light.body, margin: "0.9rem 0 1.5rem", lineHeight: 1.65 }}>{p.tagline}</p>
+      <Link href={p.ctaHref} style={{
         display: "block", textAlign: "center", padding: "0.85rem",
         borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: "0.95rem",
         background: p.featured ? BLUE : "transparent",
         color: p.featured ? "#fff" : light.headline,
         border: p.featured ? "none" : `1px solid ${light.cardBorder}`,
+        marginBottom: "1.6rem",
       }}>
-        {p.price === "Custom" ? "Contact us" : "Start 14-day trial"}
+        {p.ctaLabel}
       </Link>
+
+      <div style={{ height: 1, background: p.featured ? "rgba(255,255,255,0.1)" : light.divider, marginBottom: "1.4rem" }} />
+
+      {p.precedingLabel && (
+        <div style={{ fontSize: "0.82rem", fontWeight: 700, color: p.featured ? dark.headline : light.headline, marginBottom: "0.9rem" }}>{p.precedingLabel}</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", flex: 1 }}>
+        {visibleFeatures.map(f => (
+          <div key={f.text} style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem" }}>
+            <span style={{
+              color: p.featured ? BLUE_LIGHT : "#16a34a", fontWeight: 700, fontSize: "0.72rem", lineHeight: "1.1rem",
+              width: 16, height: 16, borderRadius: "50%",
+              background: p.featured ? "rgba(77,140,255,0.15)" : "rgba(22,163,74,0.1)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2,
+            }}>✓</span>
+            <span style={{ fontSize: "0.88rem", color: bodyColor, lineHeight: 1.55, display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+              {f.text}
+              {f.highlight && (
+                <span style={{ color: p.featured ? PURPLE_LIGHT : PURPLE, display: "inline-flex" }} title="AI-powered">
+                  <StatIcon type="sparkle" size={13} />
+                </span>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {remaining > 0 && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          style={{
+            background: "none", border: "none", cursor: "pointer", textAlign: "left",
+            color: p.featured ? BLUE_LIGHT : BLUE, fontSize: "0.82rem", fontWeight: 600,
+            marginTop: "1rem", padding: 0,
+          }}
+        >
+          {expanded ? "Show less" : `+${remaining} more`}
+        </button>
+      )}
     </div>
+  );
+}
+
+const PRICING_TIERS: PricingTier[] = [
+  {
+    name: "Starter",
+    monthlyPrice: 49,
+    yearlyPrice: 41,
+    tagline: "Solo operators and small teams just getting started.",
+    ctaLabel: "Start free trial",
+    ctaHref: "/auth/signup",
+    features: [
+      { text: "Online booking form (public URL + iframe embed)" },
+      { text: "Up to 3 service providers" },
+      { text: "Unlimited bookings" },
+      { text: "Customer management (CRM pipeline)" },
+      { text: "Calendar view" },
+      { text: "Automated booking confirmation emails" },
+      { text: "GST invoices with PDF download" },
+      { text: "Stripe payments (card on file, pre-authorisation)" },
+      { text: "14-day free trial, no credit card required" },
+    ],
+  },
+  {
+    name: "Growth",
+    monthlyPrice: 99,
+    yearlyPrice: 82,
+    tagline: "Growing teams that want the AI Agent doing the busywork.",
+    precedingLabel: "Everything in Starter, plus:",
+    featured: true,
+    ctaLabel: "Start free trial",
+    ctaHref: "/auth/signup",
+    features: [
+      { text: "AI Business Agent — daily brief, task panel & end-of-day summary", highlight: true },
+      { text: "Unlimited service providers" },
+      { text: "Mobile app for cleaners (iOS & Android)" },
+      { text: "SMS notifications (confirmations, payment reminders)" },
+      { text: "Google Ads integration (auto-populate ad spend)" },
+      { text: "Weekly profit report by location" },
+      { text: "Payroll calculations (provider payout tracking)" },
+      { text: "CRM lead source tracking & conversion reports" },
+      { text: "Recurring bookings & frequency discounts" },
+      { text: "Up to 3 locations" },
+      { text: "3 admin accounts" },
+      { text: "Voice agent Aria — after-hours (coming Q4 2026)", highlight: true },
+      { text: "Priority email support" },
+    ],
+  },
+  {
+    name: "Enterprise",
+    monthlyPrice: 199,
+    yearlyPrice: 165,
+    tagline: "Multi-location operators and franchises with custom needs.",
+    precedingLabel: "Everything in Growth, plus:",
+    ctaLabel: "Contact us",
+    ctaHref: "mailto:hello@bookdin.co?subject=Enterprise%20plan",
+    features: [
+      { text: "AI Business Agent — always on, across every location", highlight: true },
+      { text: "Unlimited locations" },
+      { text: "Unlimited admin accounts" },
+      { text: "White-label booking forms (your own branding)" },
+      { text: "Voice agent Aria — always on, not just after hours", highlight: true },
+      { text: "API access and webhooks" },
+      { text: "Custom integrations on request" },
+      { text: "Dedicated account manager" },
+      { text: "Live chat support" },
+      { text: "Custom onboarding & SLA uptime guarantee" },
+    ],
+  },
+];
+
+function PricingSection() {
+  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
+  return (
+    <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
+      <div className="bd-reveal" style={{ maxWidth: 1080, margin: "0 auto" }}>
+        <div style={eyebrowPill("blue")}>Pricing</div>
+        <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Simple, transparent pricing</h2>
+        <p style={{ fontSize: "1.05rem", color: light.body, marginBottom: "2.2rem" }}>
+          No per-booking fees. No hidden charges. Start free for 14 days.
+        </p>
+
+        <div style={{
+          display: "inline-flex", alignItems: "center", background: light.chipBg,
+          border: `1px solid ${light.chipBorder}`, borderRadius: 100, padding: 4, marginBottom: "3rem",
+        }}>
+          {(["monthly", "yearly"] as const).map(b => (
+            <button
+              key={b}
+              onClick={() => setBilling(b)}
+              style={{
+                display: "flex", alignItems: "center", gap: "0.5rem",
+                border: "none", cursor: "pointer", borderRadius: 100,
+                padding: "0.55rem 1.3rem", fontSize: "0.88rem", fontWeight: 600,
+                background: billing === b ? "#fff" : "transparent",
+                color: billing === b ? light.headline : light.faint,
+                boxShadow: billing === b ? "0 2px 8px rgba(10,15,30,0.08)" : "none",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {b === "monthly" ? "Monthly" : "Yearly"}
+              {b === "yearly" && (
+                <span style={{
+                  background: "rgba(34,197,94,0.12)", color: "#16a34a", fontSize: "0.65rem",
+                  fontWeight: 700, padding: "2px 7px", borderRadius: 100,
+                }}>
+                  Save 17%
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.4rem", maxWidth: 1000, margin: "0 auto 2rem", textAlign: "left", alignItems: "start" }}>
+          {PRICING_TIERS.map(p => <PricingCard key={p.name} p={p} billing={billing} />)}
+        </div>
+        <p style={{ fontSize: "0.85rem", color: light.faint }}>
+          No credit card required · 14-day free trial on all plans · Cancel anytime
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -677,25 +864,7 @@ export default function HomePageContent() {
       </section>
 
       {/* == PRICING (white) == */}
-      <section style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
-        <div className="bd-reveal" style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div style={eyebrowPill("blue")}>Pricing</div>
-          <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Simple, transparent pricing</h2>
-          <p style={{ fontSize: "1.05rem", color: light.body, marginBottom: "3.5rem" }}>
-            No per-booking fees. No hidden charges. Start free for 14 days.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.4rem", maxWidth: 900, margin: "0 auto 2rem", textAlign: "left" }}>
-            {[
-              { name: "Starter", price: "$49", period: "/mo", desc: "Up to 3 staff, unlimited bookings, invoicing, public booking page, room-based pricing", featured: false },
-              { name: "Growth", price: "$99", period: "/mo", desc: "Everything in Starter, plus the AI Business Agent, CRM pipeline, profit reports, payroll & recurring automation", featured: true },
-              { name: "Enterprise", price: "Custom", period: "", desc: "Multi-location, custom integrations, dedicated onboarding & support", featured: false },
-            ].map(p => <PricingCard key={p.name} p={p} />)}
-          </div>
-          <p style={{ fontSize: "0.85rem", color: light.faint }}>
-            No credit card required · 14-day free trial on all plans · Cancel anytime
-          </p>
-        </div>
-      </section>
+      <PricingSection />
 
       {/* == FINAL CTA (dark gradient) == */}
       <section style={{ background: dark.bg, padding: "0 2rem clamp(5rem, 9vw, 8rem)" }}>
