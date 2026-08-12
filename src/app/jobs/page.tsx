@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Plus, ClipboardList, AlertCircle } from 'lucide-react'
 import { formatCurrency, getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import BookingsToolbar from '@/app/jobs/BookingsToolbar'
 
 export const metadata = { title: 'Bookings' }
 
@@ -37,10 +38,22 @@ function formatDateTime(dateStr: string) {
   }
 }
 
+// Preserves every current query param while overriding the ones passed in —
+// used so switching one filter (status, location, etc.) doesn't drop the others.
+function buildJobsUrl(current: Record<string, string | undefined>, overrides: Record<string, string | undefined>) {
+  const params = new URLSearchParams()
+  const merged = { ...current, ...overrides }
+  for (const [key, value] of Object.entries(merged)) {
+    if (value) params.set(key, value)
+  }
+  const qs = params.toString()
+  return qs ? `/jobs?${qs}` : '/jobs'
+}
+
 export default async function JobsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; filter?: string; location?: string }
+  searchParams: { status?: string; filter?: string; location?: string; q?: string; from?: string; to?: string }
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -66,7 +79,15 @@ export default async function JobsPage({
   const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString()
   const weekEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7).toISOString()
 
-  if (searchParams.filter === 'today') {
+  // An explicit date range takes priority over the quick filters below.
+  if (searchParams.from || searchParams.to) {
+    if (searchParams.from) query = query.gte('scheduled_at', new Date(searchParams.from).toISOString())
+    if (searchParams.to) {
+      const toEnd = new Date(searchParams.to)
+      toEnd.setDate(toEnd.getDate() + 1)
+      query = query.lt('scheduled_at', toEnd.toISOString())
+    }
+  } else if (searchParams.filter === 'today') {
     query = query.gte('scheduled_at', todayStart).lt('scheduled_at', todayEnd)
   } else if (searchParams.filter === 'upcoming') {
     query = query.gte('scheduled_at', todayStart).lte('scheduled_at', weekEnd)
@@ -85,6 +106,23 @@ export default async function JobsPage({
     jobsError = retry.error
     if (jobsError) console.error('[jobs] retry also failed:', jobsError.message)
   }
+
+  // Free-text search across customer name, address, and booking ID — the
+  // result set is already capped at 100 rows so filtering in memory is fine.
+  const searchTerm = searchParams.q?.trim().toLowerCase()
+  if (searchTerm && jobs) {
+    jobs = jobs.filter((job: any) =>
+      job.customer?.full_name?.toLowerCase().includes(searchTerm) ||
+      job.address?.line1?.toLowerCase().includes(searchTerm) ||
+      job.address?.city?.toLowerCase().includes(searchTerm) ||
+      job.id?.toLowerCase().includes(searchTerm)
+    )
+  }
+
+  const totalRevenueCents = (jobs || []).reduce(
+    (sum: number, job: any) => sum + (job.price_override ?? job.total_price ?? job.price ?? 0),
+    0
+  )
 
   const FILTERS = [
     { label: 'All bookings', value: '' },
@@ -106,19 +144,30 @@ export default async function JobsPage({
     <div className="space-y-5 animate-fade-in">
 
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Bookings</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{jobsError ? '—' : jobs?.length || 0} bookings</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {jobsError ? '—' : (
+              <>
+                <span className="font-medium text-gray-700">Total Bookings:</span> {jobs?.length || 0}
+                <span className="mx-2 text-gray-300">|</span>
+                <span className="font-medium text-gray-700">Revenue:</span> {formatCurrency(totalRevenueCents)}
+              </>
+            )}
+          </p>
         </div>
-        <Link
-          href="/booking"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all"
-          style={{ background: '#2563FF' }}
-        >
-          <Plus className="w-4 h-4" />
-          New booking
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <BookingsToolbar />
+          <Link
+            href="/booking"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all"
+            style={{ background: '#2563FF' }}
+          >
+            <Plus className="w-4 h-4" />
+            New booking
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -126,7 +175,7 @@ export default async function JobsPage({
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
           {FILTERS.map(f => (
             <Link key={f.value}
-              href={`/jobs?filter=${f.value}${searchParams.status ? `&status=${searchParams.status}` : ''}`}
+              href={buildJobsUrl(searchParams, { filter: f.value || undefined })}
               className={cn('px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                 (searchParams.filter || '') === f.value
                   ? 'bg-white text-gray-900 shadow-sm'
@@ -138,7 +187,7 @@ export default async function JobsPage({
         <div className="flex gap-1.5 flex-wrap">
           {STATUSES.map(s => (
             <Link key={s.value}
-              href={`/jobs?${searchParams.filter ? `filter=${searchParams.filter}&` : ''}status=${s.value}`}
+              href={buildJobsUrl(searchParams, { status: s.value || undefined })}
               className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
                 (searchParams.status || '') === s.value
                   ? 'bg-gray-900 text-white border-gray-900'
@@ -152,10 +201,7 @@ export default async function JobsPage({
       {locations && locations.length > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
           <Link
-            href={`/jobs?${new URLSearchParams({
-              ...(searchParams.filter ? { filter: searchParams.filter } : {}),
-              ...(searchParams.status ? { status: searchParams.status } : {}),
-            }).toString()}`}
+            href={buildJobsUrl(searchParams, { location: undefined })}
             className={cn(
               'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
               !searchParams.location
@@ -168,11 +214,7 @@ export default async function JobsPage({
           {locations.map(loc => (
             <Link
               key={loc.id}
-              href={`/jobs?${new URLSearchParams({
-                ...(searchParams.filter ? { filter: searchParams.filter } : {}),
-                ...(searchParams.status ? { status: searchParams.status } : {}),
-                location: loc.id,
-              }).toString()}`}
+              href={buildJobsUrl(searchParams, { location: loc.id })}
               className={cn(
                 'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
                 searchParams.location === loc.id

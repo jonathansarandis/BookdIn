@@ -21,6 +21,7 @@ import PriceOverrideEditor from '@/app/jobs/[id]/PriceOverrideEditor'
 import ResendConfirmationButton from '@/app/jobs/[id]/ResendConfirmationButton'
 import ProviderFeeEditor from '@/app/jobs/[id]/ProviderFeeEditor'
 import RefundButton from '@/app/jobs/[id]/RefundButton'
+import DeleteBookingButton from '@/app/jobs/[id]/DeleteBookingButton'
 import { getChargeableAmount, getProviderPayout } from '@/lib/pricing'
 
 const STATUS_STYLES = {
@@ -197,6 +198,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <DeleteBookingButton jobId={job.id} customerName={job.customer?.full_name} paymentStatus={job.payment_status} />
           <CancelBookingButton jobId={job.id} status={job.status} />
           <Link
             href={`/booking?rebook=${job.id}`}
