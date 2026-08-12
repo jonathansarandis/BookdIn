@@ -685,7 +685,7 @@ export default function HomePageContent() {
       </section>
 
       {/* == FINANCIAL REPORTS (white) == */}
-      <section style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem" }}>
+      <section id="revenue" style={{ background: light.bg, padding: "clamp(4rem, 9vw, 10rem) 2rem", scrollMarginTop: 120 }}>
         <div className="bd-feature-grid bd-reveal" style={{
           maxWidth: 1320, margin: "0 auto",
           display: "grid", gridTemplateColumns: "4fr 7fr",
