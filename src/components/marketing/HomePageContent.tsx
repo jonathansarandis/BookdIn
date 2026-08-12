@@ -606,9 +606,11 @@ export default function HomePageContent() {
             <BrowserFrame src="/screenshots/bookings.png" alt="BookdIn bookings list" />
             <div style={{
               position: "absolute", bottom: 0, right: "-8%", width: "60%",
-              filter: "drop-shadow(0 24px 50px rgba(10,15,30,0.22))",
+              borderRadius: 16, overflow: "hidden",
+              border: `1px solid ${light.cardBorder}`,
+              boxShadow: "0 24px 50px rgba(10,15,30,0.22)",
             }}>
-              <BrowserFrame src="/screenshots/calendar-peek.png" alt="BookdIn calendar view" />
+              <img src="/screenshots/calendar-peek.png" alt="BookdIn calendar view" style={{ width: "100%", display: "block" }} />
             </div>
           </div>
           <div>
