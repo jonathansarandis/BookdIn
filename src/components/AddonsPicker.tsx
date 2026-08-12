@@ -102,8 +102,12 @@ export default function AddonsPicker({ extras, selected, onChange, brandColor, s
   return (
     <div className="relative">
       <div
-        className="max-h-[400px] overflow-y-scroll pr-1 addons-scroll"
-        style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+        className="max-h-[400px] overflow-y-scroll pr-1 addons-scroll-container"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#6366f1 #f1f1f1',
+        } as React.CSSProperties}
       >
         {popularExtras.length > 0 && (
           <div>
