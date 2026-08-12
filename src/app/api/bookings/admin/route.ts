@@ -10,8 +10,6 @@ import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const supabase = createClient()
 
@@ -205,17 +203,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     const effectiveBasePrice = locService?.base_price ?? service.base_price
 
-    // 5. Frequency discount: DB first, hardcoded fallback.
-    // Server enforces one_time for non-recurring services regardless of client payload.
+    // 5. Frequency discount — must match the client-side lookup exactly (booking/page.tsx),
+    // since the client already computed and sent total_price using it.
+    // frequency_discounts is per-business (not per-service) since migration
+    // 20260507_freq_discounts_per_business.sql — service_id was dropped from the table.
+    // No row, or a row with is_enabled=false, both mean 0% — no hardcoded fallback,
+    // matching the client (which has none either).
     const effectiveFrequency = service.allows_recurring === false ? 'one_time' : frequency
     const { data: freqRow } = await admin
       .from('frequency_discounts')
-      .select('discount_percent')
-      .eq('service_id', service_id)
+      .select('discount_percent, is_enabled')
+      .eq('business_id', businessId)
       .eq('frequency', effectiveFrequency)
       .single()
-    const discountPct = service.frequency_discount_eligible
-      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[effectiveFrequency] ?? 0)
+    const discountPct = service.frequency_discount_eligible && freqRow?.is_enabled
+      ? freqRow.discount_percent
       : 0
 
     // 6. Fetch extras — join service_extras junction to extras catalog.

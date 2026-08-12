@@ -52,7 +52,6 @@ export async function POST(request: NextRequest) {
   let location_id = body.location_id
   const isFlexible = scheduled_time === 'flexible'
   const effectiveTime = isFlexible ? '09:00' : scheduled_time
-  const HARDCODED_DISCOUNTS: Record<string, number> = { weekly: 5, fortnightly: 10, monthly: 10 }
 
   // Cookie read — fallback only; payload attribution is primary
   let cookieGclid: string | null = null
@@ -144,17 +143,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Service not available at this location' }, { status: 400 })
     }
 
-    // 2a. Frequency discount: DB first, hardcoded fallback.
-    // Server enforces one_time for non-recurring services regardless of client payload.
+    // 2a. Frequency discount — must match BookingFormRenderer.tsx's client-side lookup
+    // exactly, since the client already computed and sent total_price using it.
+    // frequency_discounts is per-business (not per-service) since migration
+    // 20260507_freq_discounts_per_business.sql — service_id was dropped from the table.
+    // No row, or a row with is_enabled=false, both mean 0% (the client has no
+    // hardcoded fallback either — introducing one here would just cause the same
+    // pricing-mismatch class of bug in the opposite direction).
     const effectiveFrequency = service.allows_recurring === false ? 'one_time' : frequency
     const { data: freqRow } = await supabase
       .from('frequency_discounts')
-      .select('discount_percent')
-      .eq('service_id', service_id)
+      .select('discount_percent, is_enabled')
+      .eq('business_id', business_id)
       .eq('frequency', effectiveFrequency)
       .single()
-    const discountPct = service.frequency_discount_eligible
-      ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[effectiveFrequency] ?? 0)
+    const discountPct = service.frequency_discount_eligible && freqRow?.is_enabled
+      ? freqRow.discount_percent
       : 0
 
     // 2b. Fetch extras early — three-layer price resolution:
