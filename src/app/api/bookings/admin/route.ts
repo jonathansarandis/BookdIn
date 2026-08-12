@@ -89,13 +89,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const { data: location } = await admin
     .from('locations')
-    .select('id')
+    .select('id, timezone')
     .eq('id', location_id)
     .eq('business_id', businessId)
     .single()
   if (!location) {
     return NextResponse.json({ error: 'Location not found or does not belong to this business' }, { status: 404 })
   }
+  // The booking's own location timezone always wins over the business default for
+  // anything shown to the customer or staff (confirmation email, SMS, notifications) —
+  // a business with locations in multiple timezones would otherwise tell the customer
+  // the wrong appointment time.
+  const effectiveTimezone = location.timezone || business.timezone || 'Australia/Melbourne'
 
   // Validate customer + address present for create path (before submission row)
   if (!editJobId) {
@@ -502,7 +507,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             brand_color: business.brand_color,
             logo_url: business.logo_url,
             contact_email: business.contact_email,
-            timezone: business.timezone,
+            timezone: effectiveTimezone,
             plan: business.plan,
             currency: business.currency,
           },
@@ -533,7 +538,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (!business.contact_email) {
         await logStep(admin, submissionId!, { step: 'owner_email', status: 'failed', error: 'no contact_email configured', duration_ms: Date.now() - t_owner_email })
       } else {
-        const ownerTz = business.timezone || 'Australia/Melbourne'
+        const ownerTz = effectiveTimezone
         const ownerDateStr = new Date(scheduled_at).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: ownerTz })
         const ownerTimeStr = (is_flexible_time ?? false)
           ? 'Flexible time'
@@ -583,7 +588,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const { sendDialpadSms } = await import('@/lib/sms/dialpad')
       const { formatDateForSms, formatTimeForSms } = await import('@/lib/sms/format')
       const smsCustomer = jobForEmail?.customer
-      const smsTz = business.timezone || 'Australia/Melbourne'
+      const smsTz = effectiveTimezone
       const smsIsFlexible = is_flexible_time ?? false
 
       const smsResult = await sendDialpadSms({
@@ -646,7 +651,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         .eq('business_id', businessId)
 
       const notifCustomer = jobForEmail?.customer
-      const notifTz = business.timezone || 'Australia/Melbourne'
+      const notifTz = effectiveTimezone
       const notifDateStr = new Date(scheduled_at).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: notifTz })
 
       if (staffProfiles?.length) {

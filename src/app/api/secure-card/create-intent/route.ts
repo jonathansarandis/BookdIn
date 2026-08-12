@@ -106,6 +106,10 @@ export async function POST(request: NextRequest) {
         usage: 'off_session',
         // Apple Pay and Google Pay are card-based — they appear via ECE without listing here
         payment_method_types: ['card'],
+        // Lets the setup_intent.succeeded webhook handler find this job as a fallback
+        // if the client never gets to call /api/secure-card/save (e.g. the browser
+        // does a full-page 3DS redirect and doesn't resume the JS flow afterwards).
+        metadata: { jobId: job.id },
       },
       stripeOpts
     )

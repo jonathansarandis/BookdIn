@@ -56,16 +56,19 @@ interface Props {
 }
 
 export default function JobPopover({ job, businessTimezone, onClose }: Props) {
-  const startTimeStr = job ? formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a') : ''
+  // Use the job's own location timezone, not the business default — a business with
+  // locations in multiple timezones would otherwise show the wrong time here.
+  const jobTimezone = job?.location?.timezone || businessTimezone
+  const startTimeStr = job ? formatBusinessDateTime(job.scheduled_at, jobTimezone, 'h:mm a') : ''
   const endTimeStr = job?.duration_minutes
     ? formatBusinessDateTime(
         new Date(new Date(job.scheduled_at).getTime() + job.duration_minutes * 60_000).toISOString(),
-        businessTimezone,
+        jobTimezone,
         'h:mm a'
       )
     : null
   const timeRange = endTimeStr ? `${startTimeStr} – ${endTimeStr}` : startTimeStr
-  const dateStr = job ? formatBusinessDateTime(job.scheduled_at, businessTimezone, 'EEEE, d MMMM yyyy') : ''
+  const dateStr = job ? formatBusinessDateTime(job.scheduled_at, jobTimezone, 'EEEE, d MMMM yyyy') : ''
   const paymentStatus = job?.payment_status || 'unpaid'
 
   return (

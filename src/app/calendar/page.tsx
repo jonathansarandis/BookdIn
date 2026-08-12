@@ -42,7 +42,7 @@ export default async function CalendarPage({
 
   let jobsQuery = supabase
     .from('jobs')
-    .select('*, customer:customers(full_name, email, phone), service:services(name, pricing_type), provider:providers(display_name, color), address:addresses(line1, city, state, postcode), location:locations(id, name), job_extras(id, name, price)')
+    .select('*, customer:customers(full_name, email, phone), service:services(name, pricing_type), provider:providers(display_name, color), address:addresses(line1, city, state, postcode), location:locations(id, name, timezone), job_extras(id, name, price)')
     .eq('business_id', profile!.business_id!)
     .gte('scheduled_at', monthStart)
     .lte('scheduled_at', monthEnd)

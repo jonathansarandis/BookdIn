@@ -88,6 +88,13 @@ export default function BookingPage() {
   const [existingCampaigns, setExistingCampaigns] = useState<string[]>([])
   const [freqDiscounts, setFreqDiscounts] = useState<Record<string, { discount_percent: number; is_enabled: boolean }>>({})
 
+  // The selected location's own timezone always wins for reading/writing scheduled_at —
+  // businessTimezone is only a fallback for locations that haven't set one (or before
+  // locations have loaded). This matters because a business's locations can span
+  // multiple timezones (e.g. Melbourne + Perth), and using one global timezone for
+  // every booking silently shifts times by the difference between zones.
+  const locationTimezone = locations.find(l => l.id === locationId)?.timezone || businessTimezone
+
   function update(field: string, value: any) {
     setForm(f => ({ ...f, [field]: value }))
   }
@@ -108,7 +115,7 @@ export default function BookingPage() {
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
         supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax, tax_mode').eq('id', bid).single(),
         supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', bid),
-        supabase.from('locations').select('id, name').eq('business_id', bid).eq('is_active', true).order('name'),
+        supabase.from('locations').select('id, name, timezone').eq('business_id', bid).eq('is_active', true).order('name'),
       ])
       setServices(svcs || [])
       setCustomers(cxs || [])
@@ -194,13 +201,17 @@ export default function BookingPage() {
           *,
           customer:customers(id, full_name, email, phone),
           address:addresses(id, line1, city, state, postcode),
-          job_extras(id, extra_id, name, price, quantity)
+          job_extras(id, extra_id, name, price, quantity),
+          location:locations(timezone)
         `)
         .eq('id', editJobId)
         .single()
       if (!job) return
 
-      const d = toBusinessDateTime(job.scheduled_at, businessTimezone)
+      // Read the stored UTC instant back out using the job's own location timezone
+      // (not the business default) — fetched directly from the job query above so this
+      // doesn't race against the separate business-timezone load elsewhere on this page.
+      const d = toBusinessDateTime(job.scheduled_at, job.location?.timezone || businessTimezone)
       const pad = (n: number) => String(n).padStart(2, '0')
       const scheduledDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
       const scheduledTime = job.is_flexible_time ? 'flexible' : `${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -401,7 +412,7 @@ export default function BookingPage() {
 
         // Step 3: job + extras + activity log (server-side price verification)
         const isFlexible = form.scheduled_time === 'flexible'
-        const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, isFlexible ? '09:00' : form.scheduled_time, businessTimezone)
+        const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, isFlexible ? '09:00' : form.scheduled_time, locationTimezone)
         const editRes = await fetch('/api/bookings/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -443,7 +454,7 @@ export default function BookingPage() {
     try {
       // Customer/address creation happens server-side — build payload only
       const isFlexible = form.scheduled_time === 'flexible'
-      const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, isFlexible ? '09:00' : form.scheduled_time, businessTimezone)
+      const scheduledAtIso = fromBusinessDateTime(form.scheduled_date, isFlexible ? '09:00' : form.scheduled_time, locationTimezone)
 
       const customerPayload = (form.customer_id && !form.new_customer)
         ? { customer_id: form.customer_id }

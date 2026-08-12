@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { loadStripe } from '@stripe/stripe-js'
 import {
@@ -83,6 +83,49 @@ function PaymentForm({ token, info }: { token: string; info: BookingInfo }) {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Failed to save card')
   }
+
+  // Handle returning from a 3D Secure / SCA redirect. confirmSetup() above uses
+  // redirect: 'if_required', which resolves inline for most cards — but when the
+  // card issuer requires an authentication challenge, Stripe.js navigates the
+  // browser away to the issuer's page and back to return_url, appending
+  // setup_intent_client_secret/redirect_status query params. That full page
+  // reload drops all in-memory JS state, so the saveCard() call inside
+  // handleSubmit() above never runs and the card silently never gets persisted
+  // even though Stripe itself considers the SetupIntent succeeded. This effect
+  // detects that return trip and finishes the save.
+  const handledRedirectRef = useRef(false)
+  useEffect(() => {
+    if (!stripe || handledRedirectRef.current) return
+    const params = new URLSearchParams(window.location.search)
+    const clientSecret = params.get('setup_intent_client_secret')
+    if (!clientSecret) return
+    handledRedirectRef.current = true
+
+    async function completeRedirectReturn() {
+      setSubmitting(true)
+      setError(null)
+      try {
+        const { setupIntent, error: retrieveError } = await stripe.retrieveSetupIntent(clientSecret)
+        if (retrieveError) throw new Error(retrieveError.message)
+        if (setupIntent?.status === 'succeeded' && setupIntent.payment_method) {
+          const pmId = typeof setupIntent.payment_method === 'string'
+            ? setupIntent.payment_method
+            : setupIntent.payment_method?.id
+          await saveCard(pmId)
+          setSuccess(true)
+        } else if (setupIntent?.status === 'requires_payment_method') {
+          setError('Card verification failed. Please try again.')
+        }
+      } catch (err: any) {
+        setError(err.message || 'Something went wrong finishing your card setup. Please try again.')
+      } finally {
+        setSubmitting(false)
+        // Strip the redirect params so a page refresh doesn't try to replay this.
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }
+    completeRedirectReturn()
+  }, [stripe])
 
   // Express Checkout (Apple Pay / Google Pay) — fires when user authorises in the wallet sheet
   const handleExpressCheckoutConfirm = async () => {

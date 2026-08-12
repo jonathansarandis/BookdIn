@@ -45,7 +45,10 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
 
   function getJobsForDay(day: number) {
     return jobs.filter(job => {
-      const jobDate = toBusinessDateTime(job.scheduled_at, businessTimezone)
+      // Bucket each job by day using its own location's timezone, not one shared
+      // business timezone — a business with locations in different timezones (e.g.
+      // Melbourne + Perth) would otherwise show jobs under the wrong day/time.
+      const jobDate = toBusinessDateTime(job.scheduled_at, job.location?.timezone || businessTimezone)
       return jobDate.getDate() === day &&
              jobDate.getMonth() === month &&
              jobDate.getFullYear() === year
@@ -105,7 +108,7 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                       {job.location?.name && (
                         <span className="opacity-60 mr-1">{job.location.name.slice(0,3).toUpperCase()}</span>
                       )}
-                      {job.is_flexible_time ? 'Flexible · ' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a') + ' '}
+                      {job.is_flexible_time ? 'Flexible · ' : formatBusinessDateTime(job.scheduled_at, job.location?.timezone || businessTimezone, 'h:mm a') + ' '}
                       {job.customer?.full_name?.split(' ')[0]}
                     </button>
                   ))}
@@ -166,7 +169,7 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
                       {job.customer?.full_name || 'Unknown'}
                     </span>
                     <span className="text-sm font-medium flex-shrink-0">
-                      {job.is_flexible_time ? 'Flexible' : formatBusinessDateTime(job.scheduled_at, businessTimezone, 'h:mm a')}
+                      {job.is_flexible_time ? 'Flexible' : formatBusinessDateTime(job.scheduled_at, job.location?.timezone || businessTimezone, 'h:mm a')}
                     </span>
                   </div>
                 </button>

@@ -171,6 +171,67 @@ export async function POST(request: Request) {
         break
       }
 
+      case 'setup_intent.succeeded': {
+        // Fallback safety net for the "secure card" flow (src/app/secure-card/[token]).
+        // The primary path is the client calling POST /api/secure-card/save right after
+        // confirmSetup() resolves. But when a card issuer requires 3D Secure / SCA,
+        // Stripe.js does a full-page redirect to the issuer and back — which drops all
+        // in-memory JS state, so that client-side save can silently never happen even
+        // though Stripe itself already succeeded. This case catches that and persists
+        // the same fields /save would have, guarded so it's a no-op if /save already
+        // ran (or runs moments later) for this job.
+        const setupIntent = event.data.object as Stripe.SetupIntent
+        const jobId = setupIntent.metadata?.jobId
+        const paymentMethodId = typeof setupIntent.payment_method === 'string'
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id
+
+        if (jobId && paymentMethodId) {
+          const { data: job } = await supabase
+            .from('jobs')
+            .select('id, stripe_payment_method_id, customer_id, business_id')
+            .eq('id', jobId)
+            .single()
+
+          if (job && !job.stripe_payment_method_id) {
+            await supabase
+              .from('jobs')
+              .update({
+                stripe_payment_method_id: paymentMethodId,
+                payment_status: 'card_on_file',
+                card_setup_token: null,
+                card_setup_token_expires_at: null,
+              })
+              .eq('id', jobId)
+
+            console.log('[webhook] setup_intent.succeeded fallback persisted card for job', jobId)
+
+            // Best-effort: mirror the customer_payment_methods upsert /save does, so the
+            // card brand/last4 show up in the UI too. Not critical — the job update above
+            // is what actually fixes "still shows unpaid", so failures here don't block it.
+            if (job.customer_id && job.business_id) {
+              try {
+                const stripeOpts = event.account ? { stripeAccount: event.account } : {}
+                const pmDetails = await stripe.paymentMethods.retrieve(paymentMethodId, stripeOpts)
+                await supabase.from('customer_payment_methods').upsert({
+                  customer_id:              job.customer_id,
+                  business_id:              job.business_id,
+                  stripe_payment_method_id: paymentMethodId,
+                  card_brand:               pmDetails.card?.brand ?? null,
+                  card_last4:               pmDetails.card?.last4 ?? null,
+                  card_exp_month:           pmDetails.card?.exp_month ?? null,
+                  card_exp_year:            pmDetails.card?.exp_year ?? null,
+                  updated_at:               new Date().toISOString(),
+                }, { onConflict: 'customer_id,business_id' })
+              } catch (cpmErr: any) {
+                console.error('[webhook] setup_intent.succeeded customer_payment_methods upsert failed (non-blocking):', cpmErr.message)
+              }
+            }
+          }
+        }
+        break
+      }
+
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
         const jobId = session.metadata?.jobId
