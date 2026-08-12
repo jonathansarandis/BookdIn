@@ -226,10 +226,10 @@ function PricingCard({ p, billing }: { p: PricingTier; billing: "monthly" | "yea
               background: p.featured ? "rgba(77,140,255,0.15)" : "rgba(22,163,74,0.1)",
               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2,
             }}>✓</span>
-            <span style={{ fontSize: "0.88rem", color: bodyColor, lineHeight: 1.55, display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.88rem", color: bodyColor, lineHeight: 1.55 }}>
               {f.text}
               {f.highlight && (
-                <span style={{ color: p.featured ? PURPLE_LIGHT : PURPLE, display: "inline-flex" }} title="AI-powered">
+                <span style={{ color: p.featured ? PURPLE_LIGHT : PURPLE, display: "inline-block", verticalAlign: "middle", marginLeft: "0.4rem" }} title="AI-powered">
                   <StatIcon type="sparkle" size={13} />
                 </span>
               )}
@@ -327,7 +327,7 @@ const PRICING_TIERS: PricingTier[] = [
 function PricingSection() {
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   return (
-    <section id="pricing" style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center" }}>
+    <section id="pricing" style={{ background: light.bg, padding: "0 2rem clamp(4rem, 9vw, 9rem)", textAlign: "center", scrollMarginTop: 120 }}>
       <div className="bd-reveal" style={{ maxWidth: 1080, margin: "0 auto" }}>
         <div style={eyebrowPill("blue")}>Pricing</div>
         <h2 style={h2(light, { fontSize: "clamp(2rem, 3.5vw, 2.8rem)" })}>Simple, transparent pricing</h2>
@@ -816,7 +816,7 @@ export default function HomePageContent() {
       </section>
 
       {/* == FEATURE COMPARISON (white) == */}
-      <section id="compare" style={{ background: light.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem" }}>
+      <section id="compare" style={{ background: light.bg, padding: "clamp(4rem, 9vw, 9rem) 2rem", scrollMarginTop: 120 }}>
         <div className="bd-reveal" style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "clamp(2.5rem, 5vw, 4rem)" }}>
             <div style={eyebrowPill("blue")}>The highlights</div>
