@@ -13,6 +13,7 @@ import ContactInfoField from './builtins/ContactInfoField'
 import TncCheckboxField from './builtins/TncCheckboxField'
 import CustomFieldInput from './CustomFieldInput'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
+import { normalizeAuPhone } from '@/lib/sms/phone'
 
 export interface BookingFormRendererProps {
   businessId: string
@@ -519,6 +520,7 @@ export default function BookingFormRenderer({
           if (!c.email?.trim()) return 'Enter your email'
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) return 'Enter a valid email address'
           if (!c.phone?.trim()) return 'Enter your phone number'
+          if (!normalizeAuPhone(c.phone)) return 'Enter a complete phone number'
           return null
         }
         case 'tnc_checkbox':

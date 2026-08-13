@@ -9,6 +9,7 @@ import { fromBusinessDateTime } from '@/lib/datetime'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
 import { sendExpoPush } from '@/lib/push/expo'
 import { inferLocationIdFromState } from '@/lib/bookings/inferLocation'
+import { normalizeAuPhone } from '@/lib/sms/phone'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -238,6 +239,19 @@ export async function POST(request: NextRequest) {
       )
     }
     await logStep(supabase, submissionId!, { step: 'validation', status: 'ok', duration_ms: Date.now() - t_validation })
+
+    // 2e. Phone validation — the booking form already blocks this client-side, but a
+    // direct/bypassed API call could still slip through. Reject anything that isn't a
+    // complete AU number (missing, too short, or too many digits) rather than silently
+    // storing something staff can't actually reach the customer on.
+    if (!normalizeAuPhone(customer?.phone)) {
+      await logStep(supabase, submissionId!, { step: 'validation', status: 'failed', error: 'invalid phone number' })
+      await markFailed(supabase, submissionId!, 'Invalid or incomplete phone number')
+      return NextResponse.json(
+        { error: 'Enter a complete phone number' },
+        { status: 400 },
+      )
+    }
 
     // 3. Create or find customer
     let customerId: string

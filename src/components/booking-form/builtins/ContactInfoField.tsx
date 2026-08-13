@@ -61,6 +61,9 @@ export default function ContactInfoField({ value, onChange, disabled }: Props) {
           <label className={LABEL_CLASS}>Phone<span className="text-red-500 ml-1">*</span></label>
           <input
             required
+            type="tel"
+            autoComplete="tel"
+            maxLength={20}
             value={value.phone}
             onChange={e => update('phone', e.target.value)}
             placeholder="04xx xxx xxx"
