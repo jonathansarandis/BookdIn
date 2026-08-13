@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Search, Download, CalendarRange } from 'lucide-react'
+import { Search, Download } from 'lucide-react'
+import DateRangePicker from './DateRangePicker'
 
 export default function BookingsToolbar() {
   const router = useRouter()
@@ -40,31 +41,11 @@ export default function BookingsToolbar() {
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
-        <CalendarRange className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-        <input
-          type="date"
-          value={from}
-          onChange={e => updateParams({ from: e.target.value || null })}
-          className="text-xs text-gray-700 focus:outline-none bg-transparent"
-        />
-        <span className="text-gray-300 text-xs">–</span>
-        <input
-          type="date"
-          value={to}
-          onChange={e => updateParams({ to: e.target.value || null })}
-          className="text-xs text-gray-700 focus:outline-none bg-transparent"
-        />
-        {(from || to) && (
-          <button
-            onClick={() => updateParams({ from: null, to: null })}
-            className="text-xs text-gray-400 hover:text-gray-600 ml-1"
-            title="Clear date range"
-          >
-            ×
-          </button>
-        )}
-      </div>
+      <DateRangePicker
+        from={from}
+        to={to}
+        onChange={range => updateParams({ from: range.from, to: range.to })}
+      />
 
       <div className="relative">
         <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />

@@ -310,12 +310,14 @@ export default function ProvidersPage() {
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">Portal access</span>
                       )}
                     </div>
-                    {provider.email && !provider.user_id && (
+                    {provider.email && (
                       <button onClick={() => handleInvite(provider)} disabled={inviting === provider.id}
+                        title={provider.user_id ? 'Send a fresh portal link — useful if they lost access or forgot their password' : undefined}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all"
                         style={{ borderColor: '#2563FF', color: inviteSuccess === provider.id ? '#16a34a' : '#2563FF', background: inviteSuccess === provider.id ? '#f0fdf4' : 'transparent', borderColor: inviteSuccess === provider.id ? '#16a34a' : '#2563FF' }}>
                         {inviting === provider.id ? <><Loader2 className="w-3 h-3 animate-spin" /> Sending...</>
                           : inviteSuccess === provider.id ? <><CheckCircle2 className="w-3 h-3" /> Sent!</>
+                          : provider.user_id ? <><Send className="w-3 h-3" /> Resend portal link</>
                           : <><Send className="w-3 h-3" /> Invite to portal</>}
                       </button>
                     )}
