@@ -22,6 +22,36 @@ const MARKDOWN_COMPONENTS = {
 
 interface Message { role: 'user' | 'assistant'; content: string }
 
+// The compact dashboard widget only has room for a handful of tasks, but buildAgentBrief
+// pushes chase_payment tasks in first — so whenever there are 4+ unpaid jobs (common), a
+// plain slice(0, 4) shows nothing but payment chases and lead follow-ups never surface,
+// even though they're sitting right behind them in brief.tasks. Pick a priority-sorted but
+// type-diverse top N instead, capping how many of one task type can crowd the visible list.
+function pickDiverseTasks(all: any[], limit: number, maxPerType: number) {
+  const priorityWeight: Record<string, number> = { urgent: 0, high: 1, medium: 2 }
+  const sorted = [...all].sort((a, b) => (priorityWeight[a.priority] ?? 3) - (priorityWeight[b.priority] ?? 3))
+  const counts: Record<string, number> = {}
+  const picked: any[] = []
+  const overflow: any[] = []
+  for (const t of sorted) {
+    if (picked.length >= limit) { overflow.push(t); continue }
+    const c = counts[t.type] || 0
+    if (c < maxPerType) {
+      picked.push(t)
+      counts[t.type] = c + 1
+    } else {
+      overflow.push(t)
+    }
+  }
+  // If capping left empty slots (e.g. fewer distinct types than the cap allows), backfill
+  // from overflow so we still show `limit` tasks whenever that many exist.
+  for (const t of overflow) {
+    if (picked.length >= limit) break
+    picked.push(t)
+  }
+  return picked
+}
+
 export default function AgentWidget() {
   const [brief, setBrief] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -117,7 +147,7 @@ export default function AgentWidget() {
     )
   }
 
-  const tasks = (brief.tasks || []).filter((t: any) => !dismissed.has(t.id)).slice(0, 4)
+  const tasks = pickDiverseTasks((brief.tasks || []).filter((t: any) => !dismissed.has(t.id)), 4, 2)
   const urgentCount = (brief.tasks || []).filter((t: any) => t.priority === 'urgent' && !dismissed.has(t.id)).length
 
   function handleAction(task: any) {
