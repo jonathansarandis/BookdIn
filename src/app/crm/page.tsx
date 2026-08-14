@@ -112,13 +112,16 @@ export default function CRMPage() {
             const stageContacts = contactsByStage[stage.key] || []
             return (
               <div key={stage.key} className="flex-shrink-0 w-68" style={{ width: '272px' }}>
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <div className="flex items-center gap-2">
+                {/* Sticky so the stage name/count/add-contact stay visible while scrolling
+                    down a long column of leads — was scrolling away with everything else,
+                    making it hard to tell which stage you were looking at. */}
+                <div className="sticky top-0 z-10 bg-gray-100 flex items-center justify-between mb-3 px-1 py-1.5 -mx-1">
+                  <div className="flex items-center gap-2 px-1">
                     <div className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
                     <span className="text-sm font-semibold text-gray-900">{stage.label}</span>
                     <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{stageContacts.length}</span>
                   </div>
-                  <Link href={`/crm/new?stage=${stage.key}`} className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 transition-all" style={{ textDecoration: 'none' }}>
+                  <Link href={`/crm/new?stage=${stage.key}`} className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 transition-all" style={{ textDecoration: 'none' }}>
                     <Plus className="w-3.5 h-3.5" />
                   </Link>
                 </div>
