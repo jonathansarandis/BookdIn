@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { RefreshCw, Plus, Pause, Play, X, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
+const CANCELLABLE_STATUSES = '("completed","cancelled")'
+
 const FREQ_LABELS: Record<string, string> = {
   weekly: 'Weekly',
   fortnightly: 'Fortnightly',
@@ -31,6 +33,7 @@ export default function RecurringPage() {
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [businessId, setBusinessId] = useState('')
+  const [cancelling, setCancelling] = useState<string | null>(null)
   const supabase = createClient()
 
   const [form, setForm] = useState({
@@ -120,10 +123,42 @@ export default function RecurringPage() {
     setSchedules(prev => prev.map(s => s.id === id ? { ...s, is_active: !isActive } : s))
   }
 
-  async function deleteSchedule(id: string) {
-    if (!confirm('Cancel this recurring schedule?')) return
-    await supabase.from('recurring_schedules').delete().eq('id', id)
-    setSchedules(prev => prev.filter(s => s.id !== id))
+  // Cancels the schedule AND every future, not-yet-completed booking already generated from
+  // it — the one-click "client cancelled/rescheduled" action. Matches on recurring_schedule_id
+  // for jobs the cron created after that link was added, and falls back to customer+service
+  // for older jobs created before the link existed, so nothing already on the calendar is
+  // left behind. Only ever touches future, non-terminal jobs — past/completed jobs and
+  // payment records are untouched.
+  async function deleteSchedule(schedule: any) {
+    const name = schedule.customer?.full_name || 'this customer'
+    if (!confirm(`Cancel the recurring schedule for ${name}? This will also cancel every upcoming booking already on the calendar for them. Past and completed bookings are not affected. This can't be undone.`)) return
+
+    setCancelling(schedule.id)
+    const nowIso = new Date().toISOString()
+
+    const { data: cancelledJobs, error: cancelError } = await supabase
+      .from('jobs')
+      .update({ status: 'cancelled' })
+      .or(`recurring_schedule_id.eq.${schedule.id},and(customer_id.eq.${schedule.customer_id},service_id.eq.${schedule.service_id},recurring_schedule_id.is.null)`)
+      .gte('scheduled_at', nowIso)
+      .not('status', 'in', CANCELLABLE_STATUSES)
+      .select('id')
+
+    if (cancelError) {
+      setCancelling(null)
+      alert(`Couldn't cancel the upcoming bookings: ${cancelError.message}. The schedule itself was not cancelled either — nothing was changed.`)
+      return
+    }
+
+    const { error: deleteError } = await supabase.from('recurring_schedules').delete().eq('id', schedule.id)
+    setCancelling(null)
+    if (deleteError) {
+      alert(`Cancelled ${cancelledJobs?.length || 0} upcoming booking(s), but couldn't remove the schedule itself: ${deleteError.message}`)
+      return
+    }
+
+    setSchedules(prev => prev.filter(s => s.id !== schedule.id))
+    alert(`Cancelled the recurring schedule for ${name} and ${cancelledJobs?.length || 0} upcoming booking(s).`)
   }
 
   const activeCount = schedules.filter(s => s.is_active).length
@@ -322,12 +357,15 @@ export default function RecurringPage() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => togglePause(schedule.id, schedule.is_active)}
-                        className="p-1 text-gray-400 hover:text-gray-600" title={schedule.is_active ? 'Pause' : 'Resume'}>
+                        disabled={cancelling === schedule.id}
+                        className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-40" title={schedule.is_active ? 'Pause' : 'Resume'}>
                         {schedule.is_active ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                       </button>
-                      <button onClick={() => deleteSchedule(schedule.id)}
-                        className="p-1 text-gray-400 hover:text-red-500">
-                        <X className="w-4 h-4" />
+                      <button onClick={() => deleteSchedule(schedule)}
+                        disabled={cancelling === schedule.id}
+                        className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-40"
+                        title="Cancel schedule + all upcoming bookings">
+                        {cancelling === schedule.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                       </button>
                     </div>
                   </td>
