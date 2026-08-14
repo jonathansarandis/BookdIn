@@ -18,24 +18,36 @@ export async function POST(request: Request) {
     // Get job details
     const { data: job } = await supabase
       .from('jobs')
-      .select('*, customer:customers(id, full_name, email)')
+      .select('*, customer:customers(id, full_name, email), business:businesses(stripe_account_id, currency)')
       .eq('id', jobId)
       .single()
 
     if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     if (!job.total_price || job.total_price <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
 
+    // Saved cards (and any PaymentMethod at all, in this Connect setup) live on the
+    // business's connected Stripe account, not the BookdIn platform account — every other
+    // payment route (capture-payments cron, webhook, secure-card/*) scopes calls with
+    // stripeAccount for this reason. This route never did, so reusing a saved card failed
+    // with Stripe's "No such PaymentMethod ... retry on that connected account" error.
+    const stripeAccountId = job.business?.stripe_account_id
+    const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+    const currency = (job.business?.currency || 'AUD').toLowerCase()
+
     // Create PaymentIntent with manual capture (holds funds, captures day before service)
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: job.price_override ?? job.total_price,
-      currency: 'aud',
-      payment_method: paymentMethodId,
-      capture_method: 'manual',
-      confirm: true,
-      description: `Job ${jobId} - ${job.customer?.full_name || 'Customer'}`,
-      metadata: { jobId },
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/jobs/${jobId}`,
-    })
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount: job.price_override ?? job.total_price,
+        currency,
+        payment_method: paymentMethodId,
+        capture_method: 'manual',
+        confirm: true,
+        description: `Job ${jobId} - ${job.customer?.full_name || 'Customer'}`,
+        metadata: { jobId },
+        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/jobs/${jobId}`,
+      },
+      stripeOpts
+    )
 
     // Save payment intent ID to job
     await supabase
@@ -51,7 +63,7 @@ export async function POST(request: Request) {
     // save it so it's offered as "saved card" next time this customer is booked.
     if (paymentIntent.status === 'requires_capture' && job.customer?.id && job.business_id) {
       try {
-        const pmDetails = await stripe.paymentMethods.retrieve(paymentMethodId)
+        const pmDetails = await stripe.paymentMethods.retrieve(paymentMethodId, stripeOpts)
         await supabase.from('customer_payment_methods').upsert({
           customer_id:              job.customer.id,
           business_id:              job.business_id,

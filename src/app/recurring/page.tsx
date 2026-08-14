@@ -34,6 +34,7 @@ export default function RecurringPage() {
   const [showForm, setShowForm] = useState(false)
   const [businessId, setBusinessId] = useState('')
   const [cancelling, setCancelling] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
   const supabase = createClient()
 
   const [form, setForm] = useState({
@@ -118,6 +119,33 @@ export default function RecurringPage() {
     }
   }
 
+  // Materializes upcoming occurrences for every active schedule right now, instead of
+  // waiting for the next 8am cron run — useful right after creating/editing a schedule, or
+  // just to confirm a fix took effect without waiting on the clock.
+  async function syncNow() {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/recurring/sync', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Sync failed')
+
+      const { data: scheds } = await supabase
+        .from('recurring_schedules')
+        .select('*, customer:customers(full_name), service:services(name), provider:providers(display_name), location:locations(id, name)')
+        .eq('business_id', businessId)
+        .order('next_scheduled_at')
+      setSchedules(scheds || [])
+
+      alert(data.jobs_created > 0
+        ? `Synced — created ${data.jobs_created} upcoming booking${data.jobs_created === 1 ? '' : 's'} across ${data.schedules_checked} schedule${data.schedules_checked === 1 ? '' : 's'}.`
+        : `Synced — everything was already up to date across ${data.schedules_checked} schedule${data.schedules_checked === 1 ? '' : 's'}.`)
+    } catch (err: any) {
+      alert(`Sync failed: ${err.message}`)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   async function togglePause(id: string, isActive: boolean) {
     await supabase.from('recurring_schedules').update({ is_active: !isActive }).eq('id', id)
     setSchedules(prev => prev.map(s => s.id === id ? { ...s, is_active: !isActive } : s))
@@ -176,13 +204,24 @@ export default function RecurringPage() {
           <h1 className="text-xl font-bold text-gray-900">Recurring Bookings</h1>
           <p className="text-sm text-gray-500 mt-0.5">Manage scheduled recurring services</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add schedule
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={syncNow}
+            disabled={syncing}
+            title="Materialize upcoming bookings for every active schedule now, instead of waiting for the next automatic run"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            {syncing ? 'Syncing...' : 'Sync now'}
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add schedule
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
