@@ -9,6 +9,7 @@ import PayButton from '@/components/payments/PayButton'
 import ProviderAssigner from '@/app/jobs/[id]/ProviderAssigner'
 import JobMessages from '@/app/jobs/[id]/JobMessages'
 import CardSetupButton from '@/app/jobs/[id]/CardSetupButton'
+import AdminCardEntry from '@/app/jobs/[id]/AdminCardEntry'
 import ChargeButton from '@/app/jobs/[id]/ChargeButton'
 import PreauthorizeButton from '@/app/jobs/[id]/PreauthorizeButton'
 import ChargeNowButton from '@/app/jobs/[id]/ChargeNowButton'
@@ -395,6 +396,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <PayButton jobId={job.id} amount={chargeableCents}
                     label={`Collect payment · $${(chargeableCents / 100).toFixed(2)}`} />
                 )}
+                <AdminCardEntry jobId={job.id} hasCard={false} />
                 <CardSetupButton jobId={job.id} hasCard={false} />
               </>
             )}
@@ -407,6 +409,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 </p>
                 <PreauthorizeButton jobId={job.id} />
                 <ChargeNowButton jobId={job.id} totalPrice={chargeableCents} />
+                <AdminCardEntry jobId={job.id} hasCard={true} />
                 <CardSetupButton jobId={job.id} hasCard={true} />
                 <CancelCardButton jobId={job.id} label="Cancel saved card" />
               </div>
@@ -440,6 +443,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   Pre-authorisation failed. Retry with the saved card or collect a new one.
                 </p>
                 <PreauthorizeButton jobId={job.id} label="Try pre-authorize again" />
+                <AdminCardEntry jobId={job.id} hasCard={false} />
                 <CardSetupButton jobId={job.id} hasCard={false} />
               </div>
             )}

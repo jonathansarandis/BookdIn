@@ -5,6 +5,7 @@ import { Plus, ClipboardList, AlertCircle } from 'lucide-react'
 import { formatCurrency, getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import BookingsToolbar from '@/app/jobs/BookingsToolbar'
+import StatusFilter from '@/app/jobs/StatusFilter'
 
 export const metadata = { title: 'Bookings' }
 
@@ -71,7 +72,13 @@ export default async function JobsPage({
     .eq('business_id', profile!.business_id!)
     .order('scheduled_at', { ascending: false })
 
-  if (searchParams.status) query = query.eq('status', searchParams.status)
+  // status can now be a comma-separated list (multi-select), e.g. "pending,confirmed" —
+  // Cancelled is kept mutually exclusive of everything else client-side (StatusFilter),
+  // so a list containing "cancelled" here will only ever be exactly ["cancelled"].
+  const selectedStatuses = searchParams.status ? searchParams.status.split(',').filter(Boolean) : []
+  if (selectedStatuses.length === 1) query = query.eq('status', selectedStatuses[0])
+  else if (selectedStatuses.length > 1) query = query.in('status', selectedStatuses)
+
   if (searchParams.location) query = query.eq('location_id', searchParams.location)
 
   const today = new Date()
@@ -119,25 +126,21 @@ export default async function JobsPage({
     )
   }
 
-  const totalRevenueCents = (jobs || []).reduce(
-    (sum: number, job: any) => sum + (job.price_override ?? job.total_price ?? job.price ?? 0),
-    0
-  )
+  // Cancelled bookings never happened / won't be paid, so their $ shouldn't quietly inflate
+  // the headline Revenue figure — excluded by default and whenever viewing a mix of other
+  // statuses. The one exception: if the admin has deliberately filtered down to exactly
+  // "Cancelled" (to see what was lost), the total should reflect that view.
+  const isCancelledOnlyView = selectedStatuses.length === 1 && selectedStatuses[0] === 'cancelled'
+  const totalRevenueCents = (jobs || []).reduce((sum: number, job: any) => {
+    if (!isCancelledOnlyView && job.status === 'cancelled') return sum
+    return sum + (job.price_override ?? job.total_price ?? job.price ?? 0)
+  }, 0)
 
   const FILTERS = [
     { label: 'All bookings', value: '' },
     { label: 'Today',        value: 'today' },
     { label: 'This week',    value: 'upcoming' },
     { label: 'Unassigned',   value: 'unassigned' },
-  ]
-
-  const STATUSES = [
-    { label: 'All',         value: '' },
-    { label: 'Pending',     value: 'pending' },
-    { label: 'Confirmed',   value: 'confirmed' },
-    { label: 'In progress', value: 'in_progress' },
-    { label: 'Completed',   value: 'completed' },
-    { label: 'Cancelled',   value: 'cancelled' },
   ]
 
   return (
@@ -153,6 +156,9 @@ export default async function JobsPage({
                 <span className="font-medium text-gray-700">Total Bookings:</span> {jobs?.length || 0}
                 <span className="mx-2 text-gray-300">|</span>
                 <span className="font-medium text-gray-700">Revenue:</span> {formatCurrency(totalRevenueCents)}
+                {!isCancelledOnlyView && (jobs || []).some((j: any) => j.status === 'cancelled') && (
+                  <span className="text-gray-400"> (excludes cancelled)</span>
+                )}
               </>
             )}
           </p>
@@ -184,18 +190,7 @@ export default async function JobsPage({
             </Link>
           ))}
         </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {STATUSES.map(s => (
-            <Link key={s.value}
-              href={buildJobsUrl(searchParams, { status: s.value || undefined })}
-              className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
-                (searchParams.status || '') === s.value
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white')}>
-              {s.label}
-            </Link>
-          ))}
-        </div>
+        <StatusFilter />
       </div>
 
       {locations && locations.length > 1 && (
