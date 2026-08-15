@@ -118,7 +118,11 @@ async function handleCheckAvailability(business: any, args: any) {
   const slots = await getAvailableSlots(admin, business.id, loc.id, date, service.duration_minutes || 120, tz)
 
   if (slots.length === 0) {
-    return `We don't have any openings on ${date} for ${service.name}. Would another day work?`
+    // Deliberately not "fully booked" or "no availability" — the agent should never sound
+    // like it's refusing the caller. This phrasing (and the matching system-prompt
+    // instruction) both push toward: offer another day, but still take the booking on the
+    // caller's preferred date/time if they want it, and let the office sort it out after.
+    return `We're pretty full on ${date} for ${service.name} — worth asking if another day would work for them. If they'd still like that date, go ahead and take the booking anyway for their preferred date and time; let them know we'll check if we can fit them in and confirm shortly.`
   }
 
   return {
