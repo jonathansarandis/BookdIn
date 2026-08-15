@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     // Get job details
     const { data: job } = await supabase
       .from('jobs')
-      .select('*, customer:customers(id, full_name, email), business:businesses(stripe_account_id, currency)')
+      .select('*, customer:customers(id, full_name, email, stripe_customer_id), business:businesses(stripe_account_id, currency)')
       .eq('id', jobId)
       .single()
 
@@ -34,11 +34,20 @@ export async function POST(request: Request) {
     const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
     const currency = (job.business?.currency || 'AUD').toLowerCase()
 
+    // A saved/reused payment method is attached to a Stripe Customer object (created back
+    // when the card was originally saved via the secure-card flow) — Stripe requires that
+    // Customer be passed on the PaymentIntent too, or it rejects with "payment_method ...
+    // belongs to the Customer ... Please include the Customer in the customer parameter."
+    // A brand new card entered fresh for this booking has no owning Customer yet, so this
+    // is correctly omitted in that case.
+    const stripeCustomerId = job.customer?.stripe_customer_id || undefined
+
     // Create PaymentIntent with manual capture (holds funds, captures day before service)
     const paymentIntent = await stripe.paymentIntents.create(
       {
         amount: job.price_override ?? job.total_price,
         currency,
+        customer: stripeCustomerId,
         payment_method: paymentMethodId,
         capture_method: 'manual',
         confirm: true,
