@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
-import { fromBusinessDateTime, formatBusinessDateTime } from '@/lib/datetime'
+import { fromBusinessDateTime, formatBusinessDateTime, getCurrentDateTimeInfo } from '@/lib/datetime'
 import { upsertCrmContact, logCrmActivity } from '@/lib/crm/upsert'
 import { sendBookingConfirmation } from '@/lib/email'
 import { getAvailableSlots } from '@/lib/voice/availability'
@@ -74,11 +74,32 @@ export async function POST(request: NextRequest) {
 
 async function dispatchTool(name: string, args: any, business: any, callCtx: { vapiCallId: string | null; fromNumber: string | null }) {
   switch (name) {
+    case 'get_current_datetime': return handleGetCurrentDatetime(business, args)
     case 'check_availability': return handleCheckAvailability(business, args)
     case 'get_pricing': return handleGetPricing(business, args)
     case 'create_booking': return handleCreateBooking(business, args, callCtx)
     case 'transfer_to_human': return handleTransferToHuman(business, args, callCtx)
     default: return `Unknown tool: ${name}`
+  }
+}
+
+// The model has no built-in notion of "today" — it must call this before
+// working out any relative date (today, tomorrow, next Tuesday, etc.) rather
+// than guessing or asking the caller. Returns a day-by-day lookup for the
+// next 14 dates so the model never has to do date arithmetic itself, which
+// is where it's most likely to get "next Tuesday" wrong. Resolves timezone
+// from the caller's stated location where possible, since Melbourne/Sydney
+// (AEST), Adelaide (ACST), and Perth (AWST) can be on a different calendar
+// date near midnight.
+async function handleGetCurrentDatetime(business: any, args: any) {
+  const loc = await resolveLocation(admin, business.id, args?.location)
+  const tz = loc?.timezone || business.timezone || 'Australia/Melbourne'
+  const info = getCurrentDateTimeInfo(tz)
+  return {
+    timezone: tz,
+    today_date: info.today,
+    current_time: info.now,
+    next_14_days: info.upcoming_dates,
   }
 }
 

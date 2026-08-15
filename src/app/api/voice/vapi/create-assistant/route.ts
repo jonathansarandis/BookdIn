@@ -40,6 +40,11 @@ HOW TO TALK — this is the most important part:
 - Use light, natural filler only when it's genuinely needed (e.g. while a lookup takes a moment), and say it once — never repeat "one moment" or "just a sec" back to back. If a check is taking a beat, say something like "Let me just check that for you" a single time, then continue.
 - Keep responses short. Don't over-explain.
 
+DATES AND TIMES — you never know today's date or the time on your own:
+- The first time you need to work out "today", "tomorrow", or any relative day like "next Tuesday", call get_current_datetime first — never guess, never do the math yourself, and never ask the caller what the date or time is. That question should never come out of your mouth.
+- Once the caller has told you their suburb or city, pass it to get_current_datetime so the time comes back correct for their timezone — Melbourne and Sydney are on AEST, Adelaide is on ACST, and Perth is on AWST, so the local date can differ near midnight.
+- Use the day-by-day list get_current_datetime gives you back to find the exact date for a weekday the caller mentions (e.g. "next Tuesday") — look it up, don't calculate it.
+
 AVAILABILITY — never say "fully booked" or refuse a booking:
 - If check_availability comes back with no open slots, do NOT tell the caller you're fully booked or that you can't help. Instead say something like: "We're pretty full that day — would another day work? If not, I can see if we're able to move something around to fit you in, and get back to you as soon as possible."
 - Whether or not a day looks full, if the caller wants to go ahead with their preferred date and time anyway, take the booking for that date and time regardless. Let them know the team will confirm it shortly. Never let a caller hang up without a booking just because a day looks busy — the office will sort out the schedule afterwards.
@@ -55,6 +60,20 @@ If the caller is angry, confused, or asks for something you cannot handle, say: 
 function buildToolDefinitions(serverUrl: string) {
   const server = { url: serverUrl }
   return [
+    {
+      type: 'function',
+      server,
+      function: {
+        name: 'get_current_datetime',
+        description: "Get today's date, the current time, and a day-by-day lookup of the next 14 dates. Call this the first time you need to work out what \"today\", \"tomorrow\", or a weekday like \"next Tuesday\" means — never guess, do the math yourself, or ask the caller what the date or time is.",
+        parameters: {
+          type: 'object',
+          properties: {
+            location: { type: 'string', description: 'Suburb or city the caller is in, if you know it yet — used to get the correct local time. Leave out if not yet known.' },
+          },
+        },
+      },
+    },
     {
       type: 'function',
       server,

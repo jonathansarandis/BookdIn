@@ -51,3 +51,26 @@ export function formatBusinessDateTime(
 ): string {
   return formatInTimeZone(new Date(utcIsoString), businessTimezone, formatStr)
 }
+
+/**
+ * Returns the current date/time in a given timezone, plus a lookup table of
+ * the next 14 calendar dates mapped to weekday names.
+ *
+ * Used by the voice agent's get_current_datetime tool so the model never has
+ * to do date arithmetic (or guess) to work out what "today", "tomorrow", or
+ * "next Tuesday" means — it looks the date up instead of computing it, which
+ * is what stops it from asking the caller what day/time it currently is.
+ */
+export function getCurrentDateTimeInfo(timezone: string) {
+  const now = new Date()
+  const today = formatInTimeZone(now, timezone, 'yyyy-MM-dd')
+  const nowLabel = formatInTimeZone(now, timezone, 'EEEE d MMMM yyyy, h:mm a')
+  const upcomingDates = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(now.getTime() + (i + 1) * 24 * 60 * 60 * 1000)
+    return {
+      weekday: formatInTimeZone(d, timezone, 'EEEE'),
+      date: formatInTimeZone(d, timezone, 'yyyy-MM-dd'),
+    }
+  })
+  return { timezone, today, now: nowLabel, upcoming_dates: upcomingDates }
+}
