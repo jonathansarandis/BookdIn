@@ -201,8 +201,8 @@ export async function POST(req: NextRequest) {
 
   const payload = buildVapiAssistantPayload(business, services || [], locations || [], appUrl)
 
-  const isUpdate = !!business.vapi_assistant_id
-  const vapiRes = await fetch(
+  let isUpdate = !!business.vapi_assistant_id
+  let vapiRes = await fetch(
     isUpdate ? `https://api.vapi.ai/assistant/${business.vapi_assistant_id}` : 'https://api.vapi.ai/assistant',
     {
       method: isUpdate ? 'PATCH' : 'POST',
@@ -213,6 +213,24 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(payload),
     }
   )
+
+  // A stored vapi_assistant_id that 404s means it doesn't exist under whatever account
+  // VAPI_API_KEY currently points to — most likely the key was swapped/corrected since
+  // that ID was saved (e.g. it pointed at the wrong Vapi account originally). Rather than
+  // fail outright, fall back to creating a fresh assistant under the current key so
+  // "Create assistant" self-heals instead of needing a manual DB fix every time.
+  if (isUpdate && vapiRes.status === 404) {
+    console.warn(`[create-assistant] Stored vapi_assistant_id ${business.vapi_assistant_id} not found under current VAPI_API_KEY — creating a new assistant instead.`)
+    isUpdate = false
+    vapiRes = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+  }
 
   const vapiData = await vapiRes.json().catch(() => null)
   if (!vapiRes.ok) {
