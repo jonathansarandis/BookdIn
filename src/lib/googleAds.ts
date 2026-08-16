@@ -220,3 +220,71 @@ export async function getWeeklyAdPerformanceByLocation(
   }
   return result
 }
+
+export interface WeeklyAdPerformancePoint {
+  /** Monday of the week, as Google Ads' own segments.week returns it. */
+  weekStart: string
+  byLocation: WeeklyAdPerformanceByLocation
+}
+
+/**
+ * Multi-week ad performance trend, one entry per calendar week — lets the AI agent
+ * look back further than a single week's snapshot (e.g. "why did Adelaide's CPA spike")
+ * instead of only ever seeing today's number. Grouped by Google Ads' own segments.week,
+ * so one API call covers the whole range regardless of how many weeks are requested.
+ */
+export async function getGoogleAdsHistory(
+  business: BusinessGoogleAdsConfig,
+  weeksBack: number = 8,
+): Promise<WeeklyAdPerformancePoint[]> {
+  const clampedWeeks = Math.min(Math.max(weeksBack, 1), 16)
+  const end = new Date(Date.now() - 24 * 3600000) // yesterday — today's numbers may be incomplete
+  const start = new Date(end.getTime() - (clampedWeeks * 7 - 1) * 86400000)
+  const startStr = start.toISOString().slice(0, 10)
+  const endStr = end.toISOString().slice(0, 10)
+
+  const results = await searchGoogleAds(
+    business,
+    `SELECT campaign.name, segments.week, metrics.cost_micros, metrics.conversions FROM campaign WHERE segments.date BETWEEN '${startStr}' AND '${endStr}'`,
+  )
+
+  type Bucket = Record<'melbourne' | 'perth' | 'adelaide' | 'sydney', { spend: number; conversions: number }>
+  const byWeek = new Map<string, Bucket>()
+
+  for (const row of results) {
+    const campaignName: string | undefined = row.campaign?.name
+    const weekStart: string | undefined = row.segments?.week
+    if (!campaignName || !weekStart) continue
+    const location = mapCampaignToLocation(campaignName)
+    if (!location) continue
+
+    if (!byWeek.has(weekStart)) {
+      byWeek.set(weekStart, {
+        melbourne: { spend: 0, conversions: 0 },
+        perth: { spend: 0, conversions: 0 },
+        adelaide: { spend: 0, conversions: 0 },
+        sydney: { spend: 0, conversions: 0 },
+      })
+    }
+    const bucket = byWeek.get(weekStart)!
+    const costMicros = Number(row.metrics?.costMicros ?? row.metrics?.cost_micros ?? 0)
+    bucket[location].spend += costMicros / 1_000_000
+    bucket[location].conversions += Number(row.metrics?.conversions ?? 0)
+  }
+
+  return Array.from(byWeek.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekStart, totals]) => {
+      const byLocation = {} as WeeklyAdPerformanceByLocation
+      for (const key of Object.keys(totals) as (keyof typeof totals)[]) {
+        const spend = Math.round(totals[key].spend * 100) / 100
+        const conversions = Math.round(totals[key].conversions * 100) / 100
+        byLocation[key] = {
+          spend,
+          conversions,
+          costPerConversion: conversions > 0 ? Math.round((spend / conversions) * 100) / 100 : null,
+        }
+      }
+      return { weekStart, byLocation }
+    })
+}
