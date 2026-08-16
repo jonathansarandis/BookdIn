@@ -105,6 +105,17 @@ input::placeholder, textarea::placeholder {
   color: #9ca3af !important;
 }
 
+/* Exception: the AI Agent dashboard widget's chat box sits on a near-black
+   background (#0A0F1E) — the blanket dark-text rule above made typed text
+   invisible there. Scoped selector (higher specificity, still !important)
+   wins over the blanket rule without touching every other input in the app. */
+.agent-widget-dark input {
+  color: #FFFFFF !important;
+}
+.agent-widget-dark input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
 input[type="date"].blank-date {
   color: transparent !important;
 }

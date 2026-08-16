@@ -195,7 +195,7 @@ export default function AgentWidget() {
   return (
     <div className="space-y-3">
       {/* Chat panel */}
-      <div className="rounded-xl overflow-hidden" style={{ background: '#0A0F1E' }}>
+      <div className="agent-widget-dark rounded-xl overflow-hidden" style={{ background: '#0A0F1E' }}>
         <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.3)' }}>
