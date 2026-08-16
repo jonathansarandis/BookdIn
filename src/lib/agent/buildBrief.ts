@@ -80,8 +80,16 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
   // just raw spend. Never lets a Google Ads failure break the whole brief.
   let googleAdsSummary: any = null
   if (businessRow && isGoogleAdsConfigured(businessRow as any)) {
-    const weekStartStr = toDateString(thisMonday)
-    const weekEndStr = toDateString(new Date(thisMonday.getTime() + 6 * 86400000))
+    // A trailing 7 COMPLETE days, not "Monday of this week" — Google Ads has no rows for
+    // days that haven't happened yet, so querying thisMonday->thisMonday+6 only ever
+    // returned Monday-through-today. Early in the week that's a 1-2 day sample, which
+    // swings cost-per-conversion wildly and can trigger a false "CPA above $40" flag off
+    // a single unlucky day. Ending yesterday (today's numbers may not be fully reported
+    // yet) and going back 7 full days guarantees a real week of data every time this runs.
+    const adWindowEnd = new Date(now.getTime() - 24 * 3600000)
+    const adWindowStart = new Date(adWindowEnd.getTime() - 6 * 86400000)
+    const weekStartStr = toDateString(adWindowStart)
+    const weekEndStr = toDateString(adWindowEnd)
     try {
       const byLocation = await getWeeklyAdPerformanceByLocation(businessRow as any, weekStartStr, weekEndStr)
       const totalSpend = Math.round(
