@@ -6,6 +6,17 @@ import { formatCurrency, getInitials } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import BookingsToolbar from '@/app/jobs/BookingsToolbar'
 import StatusFilter from '@/app/jobs/StatusFilter'
+import { fromBusinessDateTime, getCurrentDateTimeInfo } from '@/lib/datetime'
+
+// Pure calendar-day arithmetic on a "yyyy-MM-dd" string, deliberately anchored
+// in UTC just to do the addition safely — the result is handed to
+// fromBusinessDateTime() below to get the actual timezone-aware instant, so
+// this step itself never needs to know about the business's timezone.
+function addDaysToDateStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
 
 export const metadata = { title: 'Bookings' }
 
@@ -60,11 +71,11 @@ export default async function JobsPage({
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
 
-  const { data: locations } = await supabase
-    .from('locations')
-    .select('id, name')
-    .eq('business_id', profile!.business_id!)
-    .order('name')
+  const [{ data: locations }, { data: business }] = await Promise.all([
+    supabase.from('locations').select('id, name').eq('business_id', profile!.business_id!).order('name'),
+    supabase.from('businesses').select('timezone').eq('id', profile!.business_id!).single(),
+  ])
+  const tz = business?.timezone || 'Australia/Melbourne'
 
   let query = supabase
     .from('jobs')
@@ -81,23 +92,30 @@ export default async function JobsPage({
 
   if (searchParams.location) query = query.eq('location_id', searchParams.location)
 
-  const today = new Date()
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
-  const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString()
-  const weekEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7).toISOString()
+  // Date-range boundaries must be computed in the BUSINESS's local timezone,
+  // not raw UTC — new Date("2026-08-10") parses as UTC midnight, which is
+  // 10am on Aug 10 in Melbourne (AEST, UTC+10). That shifted the whole
+  // filter window ~10 hours later than the Calendar page's boundaries (which
+  // already convert correctly via fromBusinessDateTime), so a job that the
+  // Calendar correctly shows on Aug 10 could be wrongly excluded here, and a
+  // job that belongs to the next day could be wrongly included — causing the
+  // Bookings page total to disagree with a manual count off the Calendar.
+  const { today: todayStr } = getCurrentDateTimeInfo(tz)
 
   // An explicit date range takes priority over the quick filters below.
   if (searchParams.from || searchParams.to) {
-    if (searchParams.from) query = query.gte('scheduled_at', new Date(searchParams.from).toISOString())
+    if (searchParams.from) query = query.gte('scheduled_at', fromBusinessDateTime(searchParams.from, '00:00', tz))
     if (searchParams.to) {
-      const toEnd = new Date(searchParams.to)
-      toEnd.setDate(toEnd.getDate() + 1)
-      query = query.lt('scheduled_at', toEnd.toISOString())
+      query = query.lt('scheduled_at', fromBusinessDateTime(addDaysToDateStr(searchParams.to, 1), '00:00', tz))
     }
   } else if (searchParams.filter === 'today') {
-    query = query.gte('scheduled_at', todayStart).lt('scheduled_at', todayEnd)
+    query = query
+      .gte('scheduled_at', fromBusinessDateTime(todayStr, '00:00', tz))
+      .lt('scheduled_at', fromBusinessDateTime(addDaysToDateStr(todayStr, 1), '00:00', tz))
   } else if (searchParams.filter === 'upcoming') {
-    query = query.gte('scheduled_at', todayStart).lte('scheduled_at', weekEnd)
+    query = query
+      .gte('scheduled_at', fromBusinessDateTime(todayStr, '00:00', tz))
+      .lte('scheduled_at', fromBusinessDateTime(addDaysToDateStr(todayStr, 7), '23:59', tz))
   } else if (searchParams.filter === 'unassigned') {
     query = query.is('provider_id', null).not('status', 'in', '("completed","cancelled")')
   }
