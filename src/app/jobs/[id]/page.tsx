@@ -84,6 +84,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         service:services(id, name, base_price),
         provider:providers(id, display_name, color, payout_percent),
         address:addresses(line1, city, state, postcode),
+        location:locations(timezone),
         job_extras(id, name, price, extra:extras(is_quote_only))
       `)
       .eq('id', params.id)
@@ -237,7 +238,16 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           <ScheduleEditor
             jobId={job.id}
             initialScheduledAt={job.scheduled_at}
-            businessTimezone={business?.timezone || 'Australia/Melbourne'}
+            // The job's own location timezone must win here, matching Calendar,
+            // the Provider portal, admin "New booking", the public booking form,
+            // and the voice agent — all of which already convert scheduled_at
+            // using the job's actual location timezone, not the business default.
+            // This page previously always used business.timezone regardless of
+            // location, which was self-consistent (round-tripped fine) but wrong
+            // for any non-default-timezone location: it displayed a shifted time
+            // compared to every other view, and silently re-shifted scheduled_at
+            // by that offset if the time was ever edited here.
+            businessTimezone={job.location?.timezone || business?.timezone || 'Australia/Melbourne'}
             initialIsFlexibleTime={job.is_flexible_time ?? false}
           />
 
