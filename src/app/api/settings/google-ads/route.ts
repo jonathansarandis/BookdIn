@@ -33,8 +33,19 @@ export async function POST(req: Request) {
     }
 
     const updates: Record<string, any> = {
-      google_ads_customer_id: google_ads_customer_id || null,
       google_ads_enabled: !!google_ads_enabled,
+    }
+
+    // Only touch the Customer ID on an explicit config save. Previously this was
+    // unconditionally overwritten (defaulting to null) on every POST to this route,
+    // including the "Disconnect" call — so disconnecting could silently wipe a
+    // perfectly good Customer ID even though Disconnect is only meant to revoke the
+    // Google OAuth session below, not the separately-configured Customer ID/developer
+    // token. This is exactly what happened in production: a disconnect+reconnect
+    // cleared google_ads_customer_id, and the reconnect (OAuth-only) never restores it,
+    // leaving isGoogleAdsConfigured() false even though the Google account is connected.
+    if (!disconnect) {
+      updates.google_ads_customer_id = google_ads_customer_id || null
     }
 
     if (developer_token) {

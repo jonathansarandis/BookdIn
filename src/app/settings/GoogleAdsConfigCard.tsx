@@ -82,7 +82,9 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
     const res = await fetch('/api/settings/google-ads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ business_id: businessId, google_ads_customer_id: customerId || null, google_ads_enabled: false, disconnect: true }),
+      // Customer ID intentionally omitted — disconnect only revokes the Google OAuth
+      // session server-side now; it no longer touches google_ads_customer_id at all.
+      body: JSON.stringify({ business_id: businessId, google_ads_enabled: false, disconnect: true }),
     })
     setDisconnecting(false)
     if (!res.ok) {
