@@ -34,9 +34,14 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
     const serviceAmountCents = invoice.subtotal - extrasTotalCents
     lineItems.push({ description: invoice.job.service?.name || 'Service', amountCents: serviceAmountCents })
     for (const e of extras) {
+      const amountCents = (e.price || 0) * (e.quantity || 1)
+      // Skip add-ons that weren't actually charged (e.g. quote-only extras left at $0
+      // because they were never priced/confirmed for this job) — only show line items
+      // the customer is actually being billed for.
+      if (amountCents <= 0) continue
       lineItems.push({
         description: e.quantity > 1 ? `${e.name} ×${e.quantity}` : e.name,
-        amountCents: (e.price || 0) * (e.quantity || 1),
+        amountCents,
       })
     }
   } else {

@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit'
-import { formatCurrency, formatDateShort } from '@/lib/utils'
+import { formatCurrency, formatDateShortWithYear } from '@/lib/utils'
 
 export interface InvoicePdfLineItem {
   description: string
@@ -106,8 +106,8 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
   doc.fontSize(20).fillColor(INK).font('Helvetica-Bold').text('INVOICE', PAGE_MARGIN, headerTop, { width: pageWidth, align: 'right' })
   doc.font('Helvetica').fontSize(9).fillColor(MUTED)
     .text(data.invoiceNumber, { width: pageWidth, align: 'right' })
-    .text(`Issued ${formatDateShort(data.createdAt)}`, { width: pageWidth, align: 'right' })
-  if (data.dueDate) doc.text(`Due ${formatDateShort(data.dueDate)}`, { width: pageWidth, align: 'right' })
+    .text(`Issued ${formatDateShortWithYear(data.createdAt)}`, { width: pageWidth, align: 'right' })
+  if (data.dueDate) doc.text(`Due ${formatDateShortWithYear(data.dueDate)}`, { width: pageWidth, align: 'right' })
   doc.font('Helvetica-Bold').fillColor(INK)
     .text(data.status.toUpperCase(), { width: pageWidth, align: 'right' })
 
@@ -130,7 +130,7 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
     doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text('SERVICE', PAGE_MARGIN + 300, billToY, { width: pageWidth - 300 })
     doc.font('Helvetica').fontSize(11).fillColor(INK).text(data.serviceName || '—', PAGE_MARGIN + 300, billToY + 14, { width: pageWidth - 300 })
     if (data.serviceDate) {
-      doc.fontSize(9).fillColor(MUTED).text(formatDateShort(data.serviceDate), PAGE_MARGIN + 300, doc.y, { width: pageWidth - 300 })
+      doc.fontSize(9).fillColor(MUTED).text(formatDateShortWithYear(data.serviceDate), PAGE_MARGIN + 300, doc.y, { width: pageWidth - 300 })
     }
   }
 

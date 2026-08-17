@@ -32,6 +32,13 @@ export function formatDateShort(date: string | Date): string {
   return format(d, 'MMM d')
 }
 
+// Same as formatDateShort but always includes the year — used on invoices, where the
+// document may be viewed/printed well after the fact and "Aug 16" alone is ambiguous.
+export function formatDateShortWithYear(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  return format(d, 'MMM d, yyyy')
+}
+
 export function formatTimeAgo(date: string | Date): string {
   return formatDistanceToNow(typeof date === 'string' ? new Date(date) : date, { addSuffix: true })
 }
