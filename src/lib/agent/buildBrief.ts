@@ -20,6 +20,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
   const lastWeekStart = new Date(now.getTime() - 7 * 86400000).toISOString()
   const fortyEightHoursAgo = new Date(now.getTime() - 48 * 3600000).toISOString()
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 3600000).toISOString()
+  const fourDaysAgo = new Date(now.getTime() - 4 * 86400000).toISOString()
 
   const [
     { data: pendingPayment },
@@ -33,6 +34,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
     { data: crmStaleLeads },
     { data: businessRow },
     { data: dueFollowUps },
+    { data: unreviewedCalls },
   ] = await Promise.all([
     supabase.from('jobs').select('id, total_price, price_override, customer_id, customer:customers(full_name, phone, email), scheduled_at, created_at')
       .eq('business_id', businessId).eq('payment_status', 'unpaid').not('status', 'in', '("cancelled","completed")').order('created_at', { ascending: false }),
@@ -60,6 +62,11 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
       .eq('business_id', businessId).not('stage', 'in', '("won","lost")')
       .not('next_followup_at', 'is', null).lte('next_followup_at', now.toISOString())
       .order('next_followup_at', { ascending: true }).limit(10),
+    // Aria's end-of-call notes waiting on a human to read them — not_reviewed within the
+    // last few days, so this doesn't build an unbounded backlog of ancient calls.
+    supabase.from('voice_calls').select('id, caller_name, phone_number_from, actionable_notes, booking_id, created_at')
+      .eq('business_id', businessId).not('actionable_notes', 'is', null).is('notes_reviewed_at', null)
+      .gte('created_at', fourDaysAgo).order('created_at', { ascending: false }).limit(8),
   ])
 
   const yesterdayDate = dateInTimezone(businessRow?.timezone, -1)
@@ -164,6 +171,16 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
   }
   for (const gap of calendarGaps.slice(0, 2)) {
     tasks.push({ id: `gap-${gap.date}`, type: 'fill_calendar', priority: 'medium', title: `Fill calendar — ${gap.label}`, subtitle: `Only ${gap.count} job${gap.count !== 1 ? 's' : ''} booked · target is 5+`, date: gap.date, action: 'View leads' })
+  }
+  for (const call of (unreviewedCalls || []).slice(0, 5)) {
+    const caller = call.caller_name || call.phone_number_from || 'Unknown caller'
+    tasks.push({
+      id: `call-notes-${call.id}`, type: 'voice_call_notes', priority: call.booking_id ? 'low' : 'medium',
+      title: `Aria call — ${caller}`,
+      subtitle: call.actionable_notes.length > 100 ? `${call.actionable_notes.slice(0, 100)}…` : call.actionable_notes,
+      callId: call.id, customerPhone: call.phone_number_from, jobId: call.booking_id || undefined,
+      action: 'Review call',
+    })
   }
 
   return {

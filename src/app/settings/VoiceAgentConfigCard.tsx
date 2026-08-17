@@ -20,6 +20,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
   const [phoneNumber, setPhoneNumber] = useState('')
   const [agentName, setAgentName] = useState('Aria')
   const [personality, setPersonality] = useState('')
+  const [businessHours, setBusinessHours] = useState('')
   const [voicePreset, setVoicePreset] = useState<'charlotte' | 'custom'>('charlotte')
   const [customVoiceId, setCustomVoiceId] = useState('')
   const [vapiAssistantId, setVapiAssistantId] = useState<string | null>(null)
@@ -45,7 +46,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
     setLoading(true)
     supabase
       .from('businesses')
-      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_provider, voice_id, vapi_assistant_id, voice_sip_username, voice_sip_domain, voice_sip_port, voice_sip_password_encrypted, vapi_sip_phone_number_id')
+      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_business_hours, voice_provider, voice_id, vapi_assistant_id, voice_sip_username, voice_sip_domain, voice_sip_port, voice_sip_password_encrypted, vapi_sip_phone_number_id')
       .eq('id', businessId)
       .single()
       .then(({ data }) => {
@@ -54,6 +55,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
           setPhoneNumber(data.voice_phone_number || '')
           setAgentName(data.voice_agent_name || 'Aria')
           setPersonality(data.voice_agent_personality || '')
+          setBusinessHours(data.voice_business_hours || '')
           setVapiAssistantId(data.vapi_assistant_id || null)
           if (data.voice_id && data.voice_id !== CHARLOTTE_VOICE_ID) {
             setVoicePreset('custom')
@@ -85,6 +87,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
       voice_phone_number: phoneNumber || null,
       voice_agent_name: agentName || 'Aria',
       voice_agent_personality: personality || null,
+      voice_business_hours: businessHours || null,
       voice_provider: 'elevenlabs',
       voice_id: effectiveVoiceId || CHARLOTTE_VOICE_ID,
       voice_sip_username: sipUsername || null,
@@ -260,6 +263,20 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
         />
         <p className="text-[10px] text-gray-400 mt-1">
           Extra instructions appended to the agent's script — mention the services and areas you cover.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-xs text-gray-600 mb-1">Business hours</label>
+        <input
+          type="text"
+          value={businessHours}
+          onChange={e => setBusinessHours(e.target.value)}
+          placeholder="e.g. Tue-Thu until 8pm, Fri-Mon until 5pm"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          Told to callers so Aria knows when the office is actually open vs. when she's taking after-hours bookings. This is separate from your Dialpad call-forwarding schedule — update both if your hours change.
         </p>
       </div>
 

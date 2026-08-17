@@ -5,14 +5,24 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Phone, Clock, ExternalLink, PlayCircle } from 'lucide-react'
+import { ArrowLeft, Phone, Clock, ExternalLink, PlayCircle, ClipboardCheck, Check } from 'lucide-react'
 
 export default function VoiceCallDetailPage() {
   const params = useParams()
   const [call, setCall] = useState<any>(null)
   const [job, setJob] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [markingReviewed, setMarkingReviewed] = useState(false)
   const supabase = createClient()
+
+  async function markReviewed() {
+    if (!call || markingReviewed) return
+    setMarkingReviewed(true)
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('voice_calls').update({ notes_reviewed_at: now }).eq('id', call.id)
+    setMarkingReviewed(false)
+    if (!error) setCall((c: any) => c ? { ...c, notes_reviewed_at: now } : c)
+  }
 
   useEffect(() => { fetchCall() }, [params.id])
 
@@ -53,7 +63,8 @@ export default function VoiceCallDetailPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Phone className="w-4 h-4 text-gray-400" /> {call.phone_number_from || 'Unknown caller'}
+              <Phone className="w-4 h-4 text-gray-400" />
+              {call.caller_name ? `${call.caller_name} — ${call.phone_number_from || 'Unknown number'}` : (call.phone_number_from || 'Unknown caller')}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               {new Date(call.created_at).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })}
@@ -86,6 +97,30 @@ export default function VoiceCallDetailPage() {
           <Link href={`/jobs/${job.id}`} className="inline-flex items-center gap-1 text-sm text-green-800 font-medium mt-2 hover:underline">
             View booking <ExternalLink className="w-3.5 h-3.5" />
           </Link>
+        </div>
+      )}
+
+      {call.actionable_notes && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
+              <ClipboardCheck className="w-4 h-4" /> Actionable notes
+            </h3>
+            {call.notes_reviewed_at ? (
+              <span className="inline-flex items-center gap-1 text-xs text-green-700 flex-shrink-0">
+                <Check className="w-3.5 h-3.5" /> Reviewed
+              </span>
+            ) : (
+              <button
+                onClick={markReviewed}
+                disabled={markingReviewed}
+                className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50 flex-shrink-0"
+              >
+                {markingReviewed ? 'Marking…' : 'Mark reviewed'}
+              </button>
+            )}
+          </div>
+          <p className="text-sm text-amber-900 mt-2 leading-relaxed">{call.actionable_notes}</p>
         </div>
       )}
 

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import AgentMessageModal from './AgentMessageModal'
 import AgentIcon from './AgentIcon'
 
-const TASK_ICONS: Record<string, any> = { chase_payment: CreditCard, assign_provider: UserX, follow_up_lead: PhoneCall, fill_calendar: Calendar }
+const TASK_ICONS: Record<string, any> = { chase_payment: CreditCard, assign_provider: UserX, follow_up_lead: PhoneCall, fill_calendar: Calendar, voice_call_notes: PhoneCall }
 const PRIORITY_DOT: Record<string, string> = { urgent: 'bg-red-500', high: 'bg-amber-500', medium: 'bg-blue-400' }
 const CRM_STAGE_LABELS: Record<string, string> = { lead: 'Lead', contacted: 'Contacted', quoted: 'Quoted', won: 'Won', lost: 'Lost' }
 const CRM_STAGE_COLORS: Record<string, string> = { lead: 'bg-gray-100 text-gray-600', contacted: 'bg-blue-50 text-blue-700', quoted: 'bg-purple-50 text-purple-700', won: 'bg-green-50 text-green-700', lost: 'bg-red-50 text-red-700' }
@@ -153,6 +153,8 @@ export default function AgentWidget() {
   function handleAction(task: any) {
     if (task.type === 'chase_payment' || task.type === 'follow_up_lead') {
       setMessageTask(task)
+    } else if (task.type === 'voice_call_notes' && task.callId) {
+      window.open(`/voice/${task.callId}`, '_blank')
     } else if (task.jobId) {
       window.open(`/jobs/${task.jobId}`, '_blank')
     } else {

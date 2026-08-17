@@ -167,8 +167,6 @@ function buildVapiAssistantPayload(business: any, services: any[], locations: an
     ? services.map((s: any) => `${s.name} — from ${formatCents(s.base_price, business.currency || 'AUD')}`).join('; ')
     : 'No services configured yet.'
 
-  // No business_hours field exists in the schema yet — using a sensible default
-  // until a real settings field is added.
   const businessHours = business.voice_business_hours || 'Monday to Saturday, 8am–6pm'
 
   const systemPrompt = SYSTEM_PROMPT_TEMPLATE
