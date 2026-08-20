@@ -2,9 +2,9 @@
 // src/app/api/voice/vapi/route.ts
 //
 // Vapi tool-call webhook. Vapi calls this URL in real time during a live call
-// whenever the assistant invokes one of the four tools configured on it
+// whenever the assistant invokes one of the tools configured on it
 // (see /api/voice/vapi/create-assistant): check_availability, get_pricing,
-// create_booking, transfer_to_human.
+// create_booking, take_message, get_current_datetime.
 //
 // NOTE ON PAYLOAD SHAPE: this was built without a live Vapi account/API key to
 // verify against, so the request parsing in src/lib/voice/shared.ts reads every
@@ -78,7 +78,7 @@ async function dispatchTool(name: string, args: any, business: any, callCtx: { v
     case 'check_availability': return handleCheckAvailability(business, args)
     case 'get_pricing': return handleGetPricing(business, args)
     case 'create_booking': return handleCreateBooking(business, args, callCtx)
-    case 'transfer_to_human': return handleTransferToHuman(business, args, callCtx)
+    case 'take_message': return handleTakeMessage(business, args, callCtx)
     default: return `Unknown tool: ${name}`
   }
 }
@@ -411,31 +411,62 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
   }
 }
 
-async function handleTransferToHuman(business: any, args: any, callCtx: { vapiCallId: string | null; fromNumber: string | null }) {
-  const { reason } = args || {}
+// Aria only answers calls outside business hours — there is never a live human to actually
+// connect the caller to. The old version of this tool told the caller "transferring you
+// now / let me connect you" and then just... kept talking, because no real transfer ever
+// happened (Vapi function tools can't perform a live call transfer on their own — that
+// needs a dedicated Vapi "transferCall" action, which this never was). This replacement is
+// honest about that: it takes a message, logs the caller as a CRM lead if this call isn't
+// already tied to a booking, and raises an URGENT task so a human follows up the moment
+// they're back on shift, instead of pretending to connect the caller live.
+async function handleTakeMessage(business: any, args: any, callCtx: { vapiCallId: string | null; fromNumber: string | null }) {
+  const { reason, full_name, phone } = args || {}
+  const callerPhone = phone || callCtx.fromNumber || null
+  const noteText = reason || 'Caller asked for the team — no further detail captured.'
 
   try {
+    if (callCtx.vapiCallId) {
+      await admin.from('voice_calls')
+        .update({ status: 'message_taken', is_urgent: true, actionable_notes: noteText, ...(full_name ? { caller_name: full_name } : {}) })
+        .eq('vapi_call_id', callCtx.vapiCallId)
+    }
+
     const { data: staff } = await admin.from('profiles').select('id').eq('business_id', business.id)
     if (staff?.length) {
       await admin.from('notifications').insert(staff.map((s: any) => ({
         business_id: business.id,
         user_id: s.id,
-        type: 'voice_transfer_requested',
-        title: '📞 Voice agent call needs a human',
-        body: reason
-          ? `Caller requested a transfer: ${reason}${callCtx.fromNumber ? ` (from ${callCtx.fromNumber})` : ''}`
-          : `The voice agent could not handle this call and requested a transfer.${callCtx.fromNumber ? ` Caller: ${callCtx.fromNumber}` : ''}`,
+        type: 'voice_message_taken',
+        title: '📞 Urgent: after-hours message from Aria',
+        body: `${full_name ? `${full_name} — ` : ''}${noteText}${callerPhone ? ` (${callerPhone})` : ''}`,
         entity_type: 'voice_call',
       })))
     }
-    if (callCtx.vapiCallId) {
-      await admin.from('voice_calls').update({ status: 'transferred' }).eq('vapi_call_id', callCtx.vapiCallId)
+
+    // Log the caller as a CRM lead so nothing gets lost — skip if this call already has a
+    // booking (handleCreateBooking already upserts the contact in that case).
+    if (callerPhone) {
+      const crmResult = await upsertCrmContact(admin, {
+        business_id: business.id,
+        customer_id: null,
+        full_name: full_name || `Caller ${callerPhone.slice(-4)}`,
+        email: null,
+        phone: callerPhone,
+        source: 'voice',
+      })
+      if (crmResult.contact_id) {
+        await logCrmActivity(admin, {
+          business_id: business.id,
+          contact_id: crmResult.contact_id,
+          type: 'note',
+          title: 'Message taken by Aria (after hours) — needs follow-up',
+          body: noteText,
+        })
+      }
     }
   } catch (e) {
-    console.error('[vapi transfer_to_human] notification failed (non-blocking):', e)
+    console.error('[vapi take_message] logging failed (non-blocking):', e)
   }
 
-  return business.phone
-    ? `Transferring you now to our team on ${business.phone} — please hold.`
-    : 'Let me connect you with a team member who can help — please hold.'
+  return "Got it, I've noted that down and flagged it for the team as urgent — they'll follow up with you as soon as they're back on shift. Can I grab your name and the best number to reach you on, if I don't have that already?"
 }

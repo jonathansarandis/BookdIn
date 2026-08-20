@@ -67,9 +67,15 @@ Business details: {{business_details}}
 Services and pricing: {{services_pricing}}
 Business hours: {{business_hours}}
 
-If the caller is angry, confused, or asks for something you cannot handle, say: 'Let me connect you with a team member who can help' and transfer the call.
+YOU ARE THE AFTER-HOURS LINE — THERE IS NO ONE TO TRANSFER TO:
+- You only ever answer calls outside business hours. Nobody from the team is available to be connected or transferred to right now — that's the entire reason you're the one answering.
+- Never say "let me connect you," "let me transfer you," "please hold while I put you through," or anything implying a live handoff is happening. It isn't, and saying so is a broken promise the caller will notice within a few seconds.
+- Whenever the caller explicitly asks for a specific person, has a complaint, needs something you can't do yourself (a custom or on-site quote, Build Clean, Commercial Cleaning, anything outside normal booking), call take_message. Get their name and best callback number if you don't already have them, then reassure them clearly: the team will follow up as soon as they're back on shift — don't imply it'll happen sooner than that.
+- This applies even if the caller just asks "is there a real person there" or similar — be upfront that you're the after-hours assistant and a team member will call them back, rather than pretending to check or connect.
 
-{{custom_personality}}`
+{{custom_personality}}
+
+{{knowledge_base}}`
 
 function buildToolDefinitions(serverUrl: string) {
   const server = { url: serverUrl }
@@ -155,13 +161,16 @@ function buildToolDefinitions(serverUrl: string) {
       type: 'function',
       server,
       function: {
-        name: 'transfer_to_human',
-        description: 'Transfer the call to a team member. Use this when the caller explicitly asks for a human, or when the request is something you cannot handle (complaints, custom quotes, anything outside normal booking).',
+        name: 'take_message',
+        description: 'Log a message for the team when you cannot complete the request yourself — the caller explicitly asks for a specific person, has a complaint, needs a custom/on-site quote (Build Clean, Commercial Cleaning), or asks for anything outside normal booking. This does NOT connect or transfer the call anywhere — you are the after-hours line and there is no one to put the caller through to. It logs an urgent note for the team to action when they are next on shift.',
         parameters: {
           type: 'object',
           properties: {
-            reason: { type: 'string', description: 'Brief reason for the transfer.' },
+            reason: { type: 'string', description: "What the caller needs, in enough detail for a team member to action it without re-calling the customer to ask what it was about." },
+            full_name: { type: 'string', description: "Caller's name, if you have it." },
+            phone: { type: 'string', description: "Best callback number, if different from the number they're calling from." },
           },
+          required: ['reason'],
         },
       },
     },
@@ -190,6 +199,9 @@ function buildVapiAssistantPayload(business: any, services: any[], locations: an
     .replaceAll('{{services_pricing}}', servicesPricing)
     .replaceAll('{{business_hours}}', businessHours)
     .replaceAll('{{custom_personality}}', business.voice_agent_personality || '')
+    .replaceAll('{{knowledge_base}}', business.voice_agent_knowledge
+      ? `REFERENCE KNOWLEDGE — packages, add-ons, and policies:\nThis is background knowledge, not a script. Never recite it unprompted — draw on it only when a caller asks something specific it answers.\n\n${business.voice_agent_knowledge}`
+      : '')
 
   const serverUrl = `${appUrl}/api/voice/vapi`
 

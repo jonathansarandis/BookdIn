@@ -64,7 +64,7 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
       .order('next_followup_at', { ascending: true }).limit(10),
     // Aria's end-of-call notes waiting on a human to read them — not_reviewed within the
     // last few days, so this doesn't build an unbounded backlog of ancient calls.
-    supabase.from('voice_calls').select('id, caller_name, phone_number_from, actionable_notes, booking_id, created_at')
+    supabase.from('voice_calls').select('id, caller_name, phone_number_from, actionable_notes, booking_id, is_urgent, created_at')
       .eq('business_id', businessId).not('actionable_notes', 'is', null).is('notes_reviewed_at', null)
       .gte('created_at', fourDaysAgo).order('created_at', { ascending: false }).limit(8),
   ])
@@ -174,9 +174,14 @@ export async function buildAgentBrief(supabase: SupabaseClient, businessId: stri
   }
   for (const call of (unreviewedCalls || []).slice(0, 5)) {
     const caller = call.caller_name || call.phone_number_from || 'Unknown caller'
+    // Urgent = Aria took a message because she couldn't handle the request herself (no
+    // booking resulted) — she's after-hours only, so there's no human for the caller to
+    // have reached instead. These need to jump the queue over routine reviewed-but-low
+    // call notes, which is why they get their own priority tier.
     tasks.push({
-      id: `call-notes-${call.id}`, type: 'voice_call_notes', priority: call.booking_id ? 'low' : 'medium',
-      title: `Aria call — ${caller}`,
+      id: `call-notes-${call.id}`, type: 'voice_call_notes',
+      priority: call.is_urgent ? 'urgent' : (call.booking_id ? 'low' : 'medium'),
+      title: call.is_urgent ? `Urgent — Aria call needs follow-up: ${caller}` : `Aria call — ${caller}`,
       subtitle: call.actionable_notes.length > 100 ? `${call.actionable_notes.slice(0, 100)}…` : call.actionable_notes,
       callId: call.id, customerPhone: call.phone_number_from, jobId: call.booking_id || undefined,
       action: 'Review call',

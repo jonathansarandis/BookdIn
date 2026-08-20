@@ -26,6 +26,9 @@ function statusBadge(call: any) {
   if (call.booking_id) {
     return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3" /> Booked</span>
   }
+  if (call.status === 'message_taken') {
+    return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full"><ArrowRightCircle className="w-3 h-3" /> Message taken</span>
+  }
   if (call.status === 'transferred') {
     return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full"><ArrowRightCircle className="w-3 h-3" /> Transferred</span>
   }
