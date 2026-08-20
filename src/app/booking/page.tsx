@@ -526,10 +526,27 @@ export default function BookingPage() {
         })
       }
 
-      // Handle card payment - create payment intent with manual capture
-      // ('saved' reuses the customer's stored payment method — same intent flow,
-      // no fresh Stripe Elements entry needed)
-      if ((paymentMethod === 'card' || paymentMethod === 'saved') && getCardPaymentMethod) {
+      // Card payment handling differs by method:
+      // - 'saved' reuses the customer's stored payment method. This used to call
+      //   /api/stripe/intent immediately, which authorizes (holds funds on) the card the
+      //   instant the job is created — even if the job is weeks out. That's the rebook
+      //   bug: rebooking a returning customer auto-selects "saved card" and was
+      //   silently pre-authorizing it on the spot. Now it just records the card as
+      //   card_on_file, same as every other booking path, and the nightly cron
+      //   authorizes it the day before the job (or same-day bookings get flagged for
+      //   a manual pre-auth).
+      // - 'card' (fresh entry) still authorizes immediately — unchanged for now.
+      if (paymentMethod === 'saved' && getCardPaymentMethod) {
+        const paymentMethodId = await getCardPaymentMethod()
+        if (!paymentMethodId) throw new Error('Please select a saved card')
+        const attachRes = await fetch(`/api/jobs/${jobId}/attach-saved-card`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentMethodId }),
+        })
+        const attachData = await attachRes.json()
+        if (!attachRes.ok) throw new Error(attachData.error || 'Failed to save card on file')
+      } else if (paymentMethod === 'card' && getCardPaymentMethod) {
         const paymentMethodId = await getCardPaymentMethod()
         if (!paymentMethodId) throw new Error('Please enter valid card details')
         const intentRes = await fetch('/api/stripe/intent', {

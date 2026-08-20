@@ -393,6 +393,53 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw e
     }
 
+    // Recurring bookings — this is where the actual series gets set up. Booking with
+    // frequency=weekly/fortnightly/monthly used to only ever create the ONE job above;
+    // "frequency" was stored on it as an inert label with nothing that ever generated
+    // the following occurrences. The real recurring engine (materializeRecurringJobs,
+    // used by the daily cron + the manual /recurring "Sync now" button) only acts on
+    // rows in recurring_schedules — nothing here ever inserted one. Fix: create the
+    // schedule now, seeded to start the day AFTER this job, then materialize
+    // immediately so the calendar fills in without waiting for tomorrow's 8am cron.
+    if (['weekly', 'fortnightly', 'monthly'].includes(effectiveFrequency)) {
+      const t_recurring = Date.now()
+      try {
+        const { getNextDate } = await import('@/lib/recurring/materialize')
+        const nextOccurrence = getNextDate(new Date(scheduled_at), effectiveFrequency)
+        const { data: scheduleRow, error: scheduleErr } = await admin
+          .from('recurring_schedules')
+          .insert({
+            business_id: businessId,
+            customer_id: resolvedCustomerId,
+            service_id,
+            address_id: resolvedAddressId,
+            provider_id: provider_id ?? null,
+            frequency: effectiveFrequency,
+            next_scheduled_at: nextOccurrence.toISOString(),
+            is_active: true,
+            price: taxSplit.subtotal,
+            auto_charge: (payment_method ?? 'card') === 'card',
+            notes: notes ?? null,
+          })
+          .select('id')
+          .single()
+
+        if (scheduleErr) {
+          console.error('[admin booking] recurring_schedules insert failed:', scheduleErr)
+        } else {
+          await admin.from('jobs').update({ recurring_schedule_id: scheduleRow.id }).eq('id', job.id)
+          const { materializeRecurringJobs } = await import('@/lib/recurring/materialize')
+          const result = await materializeRecurringJobs(admin, { businessId })
+          console.log(`[admin booking] materialized ${result.jobsCreated} future occurrence(s) for new recurring schedule ${scheduleRow.id}`)
+        }
+        await logStep(admin, submissionId!, { step: 'recurring_schedule', status: scheduleErr ? 'failed' : 'ok', duration_ms: Date.now() - t_recurring, error: scheduleErr?.message })
+      } catch (e: any) {
+        // Non-critical — the single job booked today still exists either way, just log it
+        console.error('[admin booking] recurring schedule setup failed (non-blocking):', e.message)
+        await logStep(admin, submissionId!, { step: 'recurring_schedule', status: 'failed', duration_ms: Date.now() - t_recurring, error: e.message })
+      }
+    }
+
     // CRM: fetch customer, upsert contact, log activity (non-critical)
     const t_crm = Date.now()
     try {

@@ -364,6 +364,46 @@ export async function POST(request: NextRequest) {
     }
     await logStep(supabase, submissionId!, { step: 'job_insert', status: 'ok', duration_ms: Date.now() - t_job })
 
+    // Recurring bookings — same fix as the admin booking route: frequency was only ever
+    // stored as a label on this one job, nothing ever created the following occurrences.
+    // Create the recurring_schedules row the actual materializer engine reads, then
+    // materialize immediately so the calendar fills in right away.
+    if (['weekly', 'fortnightly', 'monthly'].includes(effectiveFrequency)) {
+      const t_recurring = Date.now()
+      try {
+        const { getNextDate, materializeRecurringJobs } = await import('@/lib/recurring/materialize')
+        const nextOccurrence = getNextDate(new Date(scheduledAtIso), effectiveFrequency)
+        const { data: scheduleRow, error: scheduleErr } = await supabase
+          .from('recurring_schedules')
+          .insert({
+            business_id,
+            customer_id: customerId,
+            service_id,
+            address_id: addr?.id ?? null,
+            frequency: effectiveFrequency,
+            next_scheduled_at: nextOccurrence.toISOString(),
+            is_active: true,
+            price: taxSplit.subtotal,
+            auto_charge: true,
+            notes: customer_notes || null,
+          })
+          .select('id')
+          .single()
+
+        if (scheduleErr) {
+          console.error('[public booking] recurring_schedules insert failed:', scheduleErr)
+        } else {
+          await supabase.from('jobs').update({ recurring_schedule_id: scheduleRow.id }).eq('id', job.id)
+          const result = await materializeRecurringJobs(supabase, { businessId: business_id })
+          console.log(`[public booking] materialized ${result.jobsCreated} future occurrence(s) for new recurring schedule ${scheduleRow.id}`)
+        }
+        await logStep(supabase, submissionId!, { step: 'recurring_schedule', status: scheduleErr ? 'failed' : 'ok', duration_ms: Date.now() - t_recurring, error: scheduleErr?.message })
+      } catch (e: any) {
+        console.error('[public booking] recurring schedule setup failed (non-blocking):', e.message)
+        await logStep(supabase, submissionId!, { step: 'recurring_schedule', status: 'failed', duration_ms: Date.now() - t_recurring, error: e.message })
+      }
+    }
+
     // 5a. Generate single-use card-setup token (14-day expiry)
     const { randomBytes } = await import('crypto')
     const cardSetupToken = randomBytes(32).toString('hex')

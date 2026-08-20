@@ -17,7 +17,7 @@ export const HORIZON_DAYS = 90
 // long. 40 comfortably covers even weekly schedules across the full horizon.
 const MAX_OCCURRENCES_PER_RUN = 40
 
-function getNextDate(current: Date, frequency: string): Date {
+export function getNextDate(current: Date, frequency: string): Date {
   const next = new Date(current)
   switch (frequency) {
     case 'weekly':      next.setDate(next.getDate() + 7); break
