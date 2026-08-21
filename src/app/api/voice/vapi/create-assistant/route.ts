@@ -12,6 +12,12 @@
 // fields, the fix is isolated to buildVapiAssistantPayload() below.
 // (fillerInjectionEnabled was removed here — Vapi dropped it from voice
 // provider configs in their Nov 2024 update.)
+//
+// transcriber / backgroundSpeechDenoisingPlan / stopSpeakingPlan /
+// startSpeakingPlan.smartEndpointingPlan were added later (Aug 2026, "Aria
+// can't hear me" reports) and cross-checked against Vapi's current docs at
+// the time — backgroundDenoisingEnabled specifically was deprecated in favor
+// of backgroundSpeechDenoisingPlan, so don't reintroduce the old flat field.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -67,11 +73,15 @@ Business details: {{business_details}}
 Services and pricing: {{services_pricing}}
 Business hours: {{business_hours}}
 
-YOU ARE THE AFTER-HOURS LINE — THERE IS NO ONE TO TRANSFER TO:
-- You only ever answer calls outside business hours. Nobody from the team is available to be connected or transferred to right now — that's the entire reason you're the one answering.
+OPEN EVERY CALL BY EXPLAINING WHY YOU'RE THE ONE ANSWERING:
+- Near the start of the call — right after your greeting, before you get into what they need — let the caller know they've either called outside office hours or the team is currently on another call, so you're helping out in the meantime.
+- Say this naturally, not as a scripted disclaimer, e.g. "You've caught us either outside office hours or while the team's on other calls, but I can help — I can answer questions, get you booked in, or take a message for a callback." Vary the phrasing call to call rather than repeating it word for word.
+
+THERE IS NO ONE TO TRANSFER TO — YOU HANDLE THE CALL YOURSELF:
+- Whether it's after hours or the team is simply tied up, nobody is available to be connected or transferred to right now — that's the entire reason you're the one answering.
 - Never say "let me connect you," "let me transfer you," "please hold while I put you through," or anything implying a live handoff is happening. It isn't, and saying so is a broken promise the caller will notice within a few seconds.
-- Whenever the caller explicitly asks for a specific person, has a complaint, needs something you can't do yourself (a custom or on-site quote, Build Clean, Commercial Cleaning, anything outside normal booking), call take_message. Get their name and best callback number if you don't already have them, then reassure them clearly: the team will follow up as soon as they're back on shift — don't imply it'll happen sooner than that.
-- This applies even if the caller just asks "is there a real person there" or similar — be upfront that you're the after-hours assistant and a team member will call them back, rather than pretending to check or connect.
+- Whenever the caller explicitly asks for a specific person, has a complaint, needs something you can't do yourself (a custom or on-site quote, Build Clean, Commercial Cleaning, anything outside normal booking), call take_message. Get their name and best callback number if you don't already have them, then reassure them clearly: the team will follow up as soon as they're free — don't imply it'll happen sooner than that.
+- This applies even if the caller just asks "is there a real person there" or similar — be upfront that no one's available to take the call right now and a team member will call them back, rather than pretending to check or connect.
 
 {{custom_personality}}
 
@@ -207,7 +217,7 @@ function buildVapiAssistantPayload(business: any, services: any[], locations: an
 
   return {
     name: `${business.name} — ${agentName}`,
-    firstMessage: `Hi there, thanks for calling ${business.name}! You're speaking with ${agentName} — how can I help?`,
+    firstMessage: `Hi there, thanks for calling ${business.name}! You're speaking with ${agentName} — looks like you've either caught us outside office hours or the team's on other calls, but I can help: I can answer questions, get you booked in, or take a message for a callback. What can I do for you?`,
     model: {
       provider: 'anthropic',
       model: 'claude-sonnet-4-6',
@@ -218,6 +228,22 @@ function buildVapiAssistantPayload(business: any, services: any[], locations: an
       provider: '11labs',
       voiceId: business.voice_id || 'XB0fDUnXU5powFXDhCwa',
     },
+    // No transcriber was ever configured here — Vapi was falling back to whatever its
+    // account default happens to be, unverified and not tuned for phone-call audio. This
+    // is the most likely cause of "Aria can't hear me properly" reports: nova-3 is
+    // Deepgram's current flagship model and outperforms the older phone-call-specific
+    // nova-2 variant on real phone-line (8kHz, compressed) audio too.
+    transcriber: {
+      provider: 'deepgram',
+      model: 'nova-3',
+      language: 'en',
+    },
+    // Smart Denoising (Krisp) filters background noise/cross-talk while the caller is
+    // speaking — background traffic, other conversations, etc. — before it ever reaches
+    // the transcriber. Also unset previously.
+    backgroundSpeechDenoisingPlan: {
+      smartDenoisingPlan: { enabled: true },
+    },
     serverUrl: `${appUrl}/api/voice/vapi/call-events`,
     // Was true — this is the most likely cause of the rapid repeated "one moment, just a
     // sec" filler reported in testing (backchanneling inserts verbal acknowledgements
@@ -226,7 +252,26 @@ function buildVapiAssistantPayload(business: any, services: any[], locations: an
     // that we have one.
     backchannelingEnabled: false,
     responseDelaySeconds: 0.4,
-    startSpeakingPlan: { waitSeconds: 0.5 },
+    // LiveKit smart endpointing (English) reads speech patterns/confidence to judge when
+    // the caller has actually finished talking, rather than a fixed pause length — this is
+    // Vapi's own recommended default for English phone calls and should feel less like
+    // Aria is ignoring the caller or jumping in too early.
+    startSpeakingPlan: {
+      waitSeconds: 0.4,
+      smartEndpointingPlan: {
+        provider: 'livekit',
+        waitFunction: '2000 / (1 + exp(-10 * (x - 0.5)))',
+      },
+    },
+    // No stop speaking plan existed before, so interruption handling was on whatever
+    // Vapi's bare default is. voiceSeconds: 0.2 is Vapi's recommended balanced setting —
+    // sensitive enough to let a caller genuinely interrupt, not so sensitive that phone
+    // line noise or a stray "mm" cuts Aria off mid-sentence.
+    stopSpeakingPlan: {
+      numWords: 0,
+      voiceSeconds: 0.2,
+      backoffSeconds: 1.0,
+    },
   }
 }
 
