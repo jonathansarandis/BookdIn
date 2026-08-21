@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { business_id, to_phone } = body
+  const { business_id, to_phone, use_realtime } = body
   if (!to_phone) return NextResponse.json({ error: 'to_phone is required' }, { status: 400 })
 
   const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
@@ -18,9 +18,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data: business } = await supabase.from('businesses').select('vapi_assistant_id').eq('id', business_id).single()
-  if (!business?.vapi_assistant_id) {
-    return NextResponse.json({ error: 'No voice assistant configured yet — save your settings first to create one.' }, { status: 400 })
+  // use_realtime routes the test call to the OpenAI Realtime test assistant
+  // (vapi_test_assistant_id) instead of the live one — lets Jonathan A/B test
+  // the two architectures without touching the number customers actually call.
+  const { data: business } = await supabase.from('businesses').select('vapi_assistant_id, vapi_test_assistant_id').eq('id', business_id).single()
+  const assistantId = use_realtime ? business?.vapi_test_assistant_id : business?.vapi_assistant_id
+  if (!assistantId) {
+    return NextResponse.json({
+      error: use_realtime
+        ? 'No Realtime test assistant configured yet — create it first.'
+        : 'No voice assistant configured yet — save your settings first to create one.',
+    }, { status: 400 })
   }
   if (!process.env.VAPI_API_KEY || !process.env.VAPI_PHONE_NUMBER_ID) {
     return NextResponse.json({ error: 'Voice calling is not configured on the server yet.' }, { status: 500 })
@@ -33,7 +41,7 @@ export async function POST(req: Request) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      assistantId: business.vapi_assistant_id,
+      assistantId,
       phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
       customer: { number: to_phone },
     }),

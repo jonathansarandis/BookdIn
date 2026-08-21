@@ -16,6 +16,16 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
   const [creatingAssistant, setCreatingAssistant] = useState(false)
   const [assistantStatus, setAssistantStatus] = useState<{ ok: boolean; message: string } | null>(null)
 
+  // OpenAI Realtime test assistant — separate from the live Vapi assistant above,
+  // never touches vapi_assistant_id or the number customers actually call.
+  const [vapiTestAssistantId, setVapiTestAssistantId] = useState<string | null>(null)
+  const [testRealtimeVoiceId, setTestRealtimeVoiceId] = useState<'marin' | 'cedar' | 'alloy' | 'echo' | 'shimmer'>('marin')
+  const [creatingTestAssistant, setCreatingTestAssistant] = useState(false)
+  const [testAssistantStatus, setTestAssistantStatus] = useState<{ ok: boolean; message: string } | null>(null)
+  const [realtimeTestPhone, setRealtimeTestPhone] = useState('')
+  const [testingRealtimeCall, setTestingRealtimeCall] = useState(false)
+  const [realtimeTestResult, setRealtimeTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+
   const [enabled, setEnabled] = useState(false)
   const [phoneNumber, setPhoneNumber] = useState('')
   const [agentName, setAgentName] = useState('Aria')
@@ -47,7 +57,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
     setLoading(true)
     supabase
       .from('businesses')
-      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_agent_knowledge, voice_business_hours, voice_provider, voice_id, vapi_assistant_id, voice_sip_username, voice_sip_domain, voice_sip_port, voice_sip_password_encrypted, vapi_sip_phone_number_id')
+      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_agent_knowledge, voice_business_hours, voice_provider, voice_id, vapi_assistant_id, vapi_test_assistant_id, voice_sip_username, voice_sip_domain, voice_sip_port, voice_sip_password_encrypted, vapi_sip_phone_number_id')
       .eq('id', businessId)
       .single()
       .then(({ data }) => {
@@ -59,6 +69,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
           setKnowledgeBase(data.voice_agent_knowledge || '')
           setBusinessHours(data.voice_business_hours || '')
           setVapiAssistantId(data.vapi_assistant_id || null)
+          setVapiTestAssistantId(data.vapi_test_assistant_id || null)
           if (data.voice_id && data.voice_id !== CHARLOTTE_VOICE_ID) {
             setVoicePreset('custom')
             setCustomVoiceId(data.voice_id)
@@ -153,6 +164,43 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
     }
     setVapiAssistantId(data.assistant_id)
     setAssistantStatus({ ok: true, message: 'Voice assistant is live and up to date' })
+  }
+
+  async function handleCreateTestAssistant() {
+    if (!businessId) return
+    setCreatingTestAssistant(true)
+    setTestAssistantStatus(null)
+    const res = await fetch('/api/voice/vapi/create-test-assistant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_id: businessId, voice_id: testRealtimeVoiceId }),
+    })
+    const data = await res.json().catch(() => null)
+    setCreatingTestAssistant(false)
+    if (!res.ok) {
+      setTestAssistantStatus({ ok: false, message: data?.error || `Failed (${res.status})` })
+      return
+    }
+    setVapiTestAssistantId(data.assistant_id)
+    setTestAssistantStatus({ ok: true, message: 'Realtime test assistant is live and up to date' })
+  }
+
+  async function handleTestRealtimeCall() {
+    if (!businessId || !realtimeTestPhone) return
+    setTestingRealtimeCall(true)
+    setRealtimeTestResult(null)
+    const res = await fetch('/api/settings/voice/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_id: businessId, to_phone: realtimeTestPhone, use_realtime: true }),
+    })
+    const data = await res.json().catch(() => null)
+    setTestingRealtimeCall(false)
+    if (!res.ok) {
+      setRealtimeTestResult({ ok: false, message: data?.error || `Test failed (${res.status})` })
+      return
+    }
+    setRealtimeTestResult({ ok: true, message: data?.message || 'Test call started' })
   }
 
   async function handleTestCall() {
@@ -330,6 +378,68 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
         </div>
         {assistantStatus && (
           <p className={`text-xs ${assistantStatus.ok ? 'text-green-600' : 'text-red-600'}`}>{assistantStatus.message}</p>
+        )}
+      </div>
+
+      {/* OpenAI Realtime test assistant — isolated from the live assistant/number above */}
+      <div className="border-t border-gray-100 pt-4 space-y-3 bg-amber-50/40 -mx-5 px-5">
+        <div>
+          <h4 className="text-xs font-semibold text-gray-700">Test: OpenAI Realtime voice (native speech-to-speech)</h4>
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            Creates a separate test assistant only — it never touches your live number or the assistant above. Use this to compare against the current setup before switching anything over.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={testRealtimeVoiceId}
+            onChange={e => setTestRealtimeVoiceId(e.target.value as any)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          >
+            <option value="marin">Marin — professional & clear (realtime-exclusive)</option>
+            <option value="cedar">Cedar — natural & conversational (realtime-exclusive)</option>
+            <option value="alloy">Alloy — neutral & balanced</option>
+            <option value="echo">Echo — warm & engaging</option>
+            <option value="shimmer">Shimmer — energetic & expressive</option>
+          </select>
+          <button
+            onClick={handleCreateTestAssistant}
+            disabled={creatingTestAssistant}
+            className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+          >
+            {creatingTestAssistant && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {vapiTestAssistantId ? 'Update test assistant' : 'Create test assistant'}
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-400">
+          {vapiTestAssistantId ? `Test assistant live — ${vapiTestAssistantId}` : 'Not created yet.'} None of your knowledge base, personality, or booking tools change — only the underlying voice model does.
+        </p>
+        {testAssistantStatus && (
+          <p className={`text-xs ${testAssistantStatus.ok ? 'text-green-600' : 'text-red-600'}`}>{testAssistantStatus.message}</p>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <input
+            type="tel"
+            value={realtimeTestPhone}
+            onChange={e => setRealtimeTestPhone(e.target.value)}
+            placeholder="0421240111 or +61421240111"
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          />
+          <button
+            onClick={handleTestRealtimeCall}
+            disabled={testingRealtimeCall || !realtimeTestPhone || !vapiTestAssistantId}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+          >
+            {testingRealtimeCall && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Call me on Realtime
+          </button>
+        </div>
+        {!vapiTestAssistantId && (
+          <p className="text-[10px] text-gray-400">Create the test assistant above first to enable this call.</p>
+        )}
+        {realtimeTestResult && (
+          <p className={`text-xs ${realtimeTestResult.ok ? 'text-green-600' : 'text-red-600'}`}>{realtimeTestResult.message}</p>
         )}
       </div>
 
