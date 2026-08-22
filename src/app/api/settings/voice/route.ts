@@ -21,6 +21,8 @@ export async function POST(req: Request) {
     voice_business_hours,
     voice_provider,
     voice_id,
+    voice_engine,
+    voice_realtime_voice_id,
     voice_sip_username,
     voice_sip_password,   // optional plaintext
     voice_sip_domain,
@@ -41,6 +43,8 @@ export async function POST(req: Request) {
     voice_business_hours: voice_business_hours || null,
     voice_provider: voice_provider || 'elevenlabs',
     voice_id: voice_id || 'XB0fDUnXU5powFXDhCwa',
+    voice_engine: voice_engine === 'realtime' ? 'realtime' : 'cascaded',
+    voice_realtime_voice_id: voice_realtime_voice_id || 'marin',
     voice_sip_username: voice_sip_username || null,
     voice_sip_domain: voice_sip_domain || null,
     voice_sip_port: voice_sip_port ? Number(voice_sip_port) : 5060,

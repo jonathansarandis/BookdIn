@@ -36,6 +36,12 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
   const [customVoiceId, setCustomVoiceId] = useState('')
   const [vapiAssistantId, setVapiAssistantId] = useState<string | null>(null)
 
+  // Which architecture the LIVE assistant runs on — 'cascaded' is the long-standing
+  // Claude+11labs+Deepgram pipeline, 'realtime' is OpenAI's native speech-to-speech
+  // model. Changing this + Save + "Update assistant" affects real customer calls.
+  const [voiceEngine, setVoiceEngine] = useState<'cascaded' | 'realtime'>('cascaded')
+  const [realtimeVoiceId, setRealtimeVoiceId] = useState<'marin' | 'cedar' | 'alloy' | 'echo' | 'shimmer'>('marin')
+
   const [testPhone, setTestPhone] = useState('')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
@@ -57,7 +63,7 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
     setLoading(true)
     supabase
       .from('businesses')
-      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_agent_knowledge, voice_business_hours, voice_provider, voice_id, vapi_assistant_id, vapi_test_assistant_id, voice_sip_username, voice_sip_domain, voice_sip_port, voice_sip_password_encrypted, vapi_sip_phone_number_id')
+      .select('voice_enabled, voice_phone_number, voice_agent_name, voice_agent_personality, voice_agent_knowledge, voice_business_hours, voice_provider, voice_id, voice_engine, voice_realtime_voice_id, vapi_assistant_id, vapi_test_assistant_id, voice_sip_username, voice_sip_domain, voice_sip_port, voice_sip_password_encrypted, vapi_sip_phone_number_id')
       .eq('id', businessId)
       .single()
       .then(({ data }) => {
@@ -70,6 +76,8 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
           setBusinessHours(data.voice_business_hours || '')
           setVapiAssistantId(data.vapi_assistant_id || null)
           setVapiTestAssistantId(data.vapi_test_assistant_id || null)
+          setVoiceEngine(data.voice_engine === 'realtime' ? 'realtime' : 'cascaded')
+          setRealtimeVoiceId(data.voice_realtime_voice_id || 'marin')
           if (data.voice_id && data.voice_id !== CHARLOTTE_VOICE_ID) {
             setVoicePreset('custom')
             setCustomVoiceId(data.voice_id)
@@ -104,6 +112,8 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
       voice_business_hours: businessHours || null,
       voice_provider: 'elevenlabs',
       voice_id: effectiveVoiceId || CHARLOTTE_VOICE_ID,
+      voice_engine: voiceEngine,
+      voice_realtime_voice_id: realtimeVoiceId,
       voice_sip_username: sipUsername || null,
       voice_sip_domain: sipDomain || null,
       voice_sip_port: sipPort || 5060,
@@ -300,6 +310,38 @@ export default function VoiceAgentConfigCard({ businessId }: { businessId?: stri
         </div>
         <p className="text-[10px] text-gray-400 mt-1">
           Browse more Australian voices in the ElevenLabs Voice Library, then paste the voice ID here.
+        </p>
+      </div>
+
+      <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-2">
+        <label className="block text-xs font-semibold text-gray-700">Voice engine (affects your live number)</label>
+        <div className="flex gap-2">
+          <select
+            value={voiceEngine}
+            onChange={e => setVoiceEngine(e.target.value as any)}
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+          >
+            <option value="cascaded">Cascaded — Claude + ElevenLabs + Deepgram (previous setup)</option>
+            <option value="realtime">Native — OpenAI Realtime speech-to-speech</option>
+          </select>
+          {voiceEngine === 'realtime' && (
+            <select
+              value={realtimeVoiceId}
+              onChange={e => setRealtimeVoiceId(e.target.value as any)}
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            >
+              <option value="marin">Marin — professional & clear</option>
+              <option value="cedar">Cedar — natural & conversational</option>
+              <option value="alloy">Alloy — neutral & balanced</option>
+              <option value="echo">Echo — warm & engaging</option>
+              <option value="shimmer">Shimmer — energetic & expressive</option>
+            </select>
+          )}
+        </div>
+        <p className="text-[10px] text-amber-700">
+          {voiceEngine === 'realtime'
+            ? "Set to Native. When you Update assistant below, this replaces the current setup on your live number — the voice above (ElevenLabs) is ignored while Native is selected."
+            : 'Set to Cascaded — this is the current live setup. Switch to Native and click "Update assistant" below to move your live number onto the OpenAI Realtime model.'}
         </p>
       </div>
 

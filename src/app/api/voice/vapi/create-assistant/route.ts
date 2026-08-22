@@ -21,7 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { buildVapiAssistantPayload } from '@/lib/voice/ariaAssistant'
+import { buildVapiAssistantPayload, buildVapiRealtimePayload } from '@/lib/voice/ariaAssistant'
 
 const admin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -59,7 +59,15 @@ export async function POST(req: NextRequest) {
     admin.from('locations').select('id, name').eq('business_id', business_id).eq('is_active', true),
   ])
 
-  const payload = buildVapiAssistantPayload(business, services || [], locations || [], appUrl)
+  // voice_engine controls which architecture the LIVE assistant runs — 'cascaded'
+  // (Claude + 11labs + Deepgram, the long-standing default) or 'realtime'
+  // (OpenAI's native speech-to-speech model). This PATCHes the same
+  // vapi_assistant_id your phone number is already assigned to, so flipping
+  // voice_engine + clicking "Update assistant" takes effect immediately without
+  // any SIP/phone-number reassignment.
+  const payload = business.voice_engine === 'realtime'
+    ? buildVapiRealtimePayload(business, services || [], locations || [], appUrl, business.voice_realtime_voice_id || 'marin')
+    : buildVapiAssistantPayload(business, services || [], locations || [], appUrl)
 
   let isUpdate = !!business.vapi_assistant_id
   let vapiRes = await fetch(
