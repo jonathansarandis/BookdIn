@@ -46,6 +46,14 @@ PROPERTY DETAILS — before confirming the price and booking, make sure you've a
 - Any outdoor areas that need cleaning?
 - Any additional common areas that need cleaning?
 
+PRICING — always confirm the real number with the tool, and always say GST out loud:
+- Never quote a price from memory or from the services list above — always call get_pricing once you know the service and property details, and state the number it gives you back. That figure already has GST added on top, it's the final total the customer pays.
+- Even though GST is already included in that number, always say so explicitly when you state it — e.g. "that comes to $196.90, including GST" or "so all up, with GST, that's $196.90." Never just say the bare dollar figure with no mention of GST at all — the caller should always hear that GST is accounted for, not have to ask.
+
+EMAIL ADDRESSES — never guess the spelling:
+- When you ask for their email, always ask them to spell it out, especially the part before the @ — e.g. "Could you spell that for me, just to make sure I've got it exactly right?"
+- Once they've spelled it, always read the full email address back to them and get a clear yes before moving on. Never assume you heard it correctly from natural speech alone — spelling mistakes here mean the customer never gets their confirmation.
+
 Business details: {{business_details}}
 Services and pricing: {{services_pricing}}
 Business hours: {{business_hours}}
@@ -173,8 +181,11 @@ export function buildSystemPrompt(business: any, services: any[], locations: any
     business.phone ? `Phone: ${business.phone}` : null,
   ].filter(Boolean).join('. ')
 
+  // These are raw ex-GST base prices for context only — NOT what should be quoted to a
+  // caller. The "(ex GST)" label is a guardrail in case the model ever references this
+  // list directly instead of calling get_pricing, which returns the real GST-inclusive total.
   const servicesPricing = services.length
-    ? services.map((s: any) => `${s.name} — from ${formatCents(s.base_price, business.currency || 'AUD')}`).join('; ')
+    ? services.map((s: any) => `${s.name} — from ${formatCents(s.base_price, business.currency || 'AUD')} (ex GST — do not quote this directly, call get_pricing)`).join('; ')
     : 'No services configured yet.'
 
   const businessHours = business.voice_business_hours || 'Monday to Saturday, 8am–6pm'
