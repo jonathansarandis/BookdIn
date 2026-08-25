@@ -532,9 +532,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const t_email = Date.now()
     try {
       if (jobForEmail?.customer && jobForEmail?.address) {
-        const cardSetupUrl = business.stripe_charges_enabled
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/api/bookings/${job.id}/card-setup`
-          : undefined
+        // Generate the single-use card-setup token the same way the public booking
+        // flow does (bookings/public/route.ts), so the emailed link goes to the
+        // working /secure-card/[token] page instead of the legacy Checkout Session
+        // redirect at /api/bookings/[id]/card-setup — that route never wrote the
+        // saved payment method back to the database, so cards entered via
+        // admin-created bookings' emails were silently lost.
+        let cardSetupUrl: string | undefined
+        if (business.stripe_charges_enabled) {
+          const { randomBytes } = await import('crypto')
+          const cardSetupToken = randomBytes(32).toString('hex')
+          const tokenExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+          await admin.from('jobs').update({
+            card_setup_token: cardSetupToken,
+            card_setup_token_expires_at: tokenExpiresAt.toISOString(),
+          }).eq('id', job.id)
+          cardSetupUrl = `${process.env.NEXT_PUBLIC_APP_URL}/secure-card/${cardSetupToken}`
+        }
 
         const result = await sendBookingConfirmation({
           job: {
