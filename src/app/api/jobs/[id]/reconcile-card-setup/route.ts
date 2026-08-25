@@ -1,23 +1,34 @@
 // @ts-nocheck
 // POST /api/jobs/[id]/reconcile-card-setup
 //
-// Recovery path for the known "card saved on Stripe but never persisted to
-// BookdIn" failure: when a card issuer requires 3D Secure, Stripe.js does a
-// full-page redirect to the bank and back. If that round trip happens inside
-// an email client's in-app browser (Gmail/Outlook WebView), the browser can
-// fail to land back on /secure-card/[token] with the right query params —
-// so neither the client-side save (POST /secure-card/save) nor the
-// setup_intent.succeeded webhook's usual real-time delivery reliably
-// completes, even though the customer's bank already confirmed the card.
+// Recovery path for cards that were genuinely saved on Stripe's side but
+// never persisted back to BookdIn. Two distinct failure modes feed into this:
+//
+// 1. The /secure-card/[token] SetupIntent flow (SMS/staff links): if a card
+//    issuer requires 3D Secure, Stripe.js does a full-page redirect to the
+//    bank and back. If that round trip happens inside an email client's
+//    in-app browser (Gmail/Outlook WebView), the browser can fail to land
+//    back with the right query params — so neither the client-side save
+//    (POST /secure-card/save) nor the setup_intent.succeeded webhook fires.
+//    Recovered here by matching Stripe SetupIntents by customer + metadata.jobId.
+//
+// 2. The legacy /api/bookings/[id]/card-setup flow (used by emailed
+//    confirmation links until this was fixed): that route created a Stripe
+//    Checkout Session in `mode: 'setup'` and, on completion, redirected to
+//    booking-confirmed with NO code path that ever wrote stripe_customer_id
+//    or stripe_payment_method_id back to the database — a systemic gap, not
+//    an edge case. Recovered here by searching completed setup-mode Checkout
+//    Sessions for metadata.job_id (snake_case, as that route wrote it)
+//    matching this job — since these jobs never got a stripe_customer_id
+//    saved, we can't search by customer, only by scanning sessions directly.
 //
 // This route asks Stripe directly, scoped as tightly as possible to avoid
 // touching any other job or customer's data:
 //   - only looks at THIS job (business-ownership checked)
 //   - no-ops immediately if a card is already on file for this job
-//   - only considers Stripe SetupIntents whose metadata.jobId matches this
-//     job's id exactly (set by create-intent/route.ts at creation time) —
-//     never "the customer's most recent card", since one customer can have
-//     several jobs/bookings each with their own SetupIntent
+//   - only considers Stripe objects whose metadata ties them to this exact
+//     job id — never "the customer's most recent card", since one customer
+//     can have several jobs/bookings each with their own SetupIntent/Session
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -68,39 +79,84 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const stripeAccountId = job.business?.stripe_account_id
   const stripeCustomerId = job.customer?.stripe_customer_id || job.stripe_customer_id
-  if (!stripeCustomerId) {
-    return NextResponse.json({ reconciled: false, reason: 'no_stripe_customer' })
-  }
   const stripeOpts = stripeAccountId ? { stripeAccount: stripeAccountId } : {}
 
-  let setupIntents: Stripe.SetupIntent[]
-  try {
-    const list = await stripe.setupIntents.list(
-      { customer: stripeCustomerId, limit: 20 },
-      stripeOpts
-    )
-    setupIntents = list.data
-  } catch (err: any) {
-    console.error('[reconcile-card-setup] Stripe list failed:', err.message)
-    return NextResponse.json({ error: 'Stripe lookup failed' }, { status: 500 })
+  let paymentMethodId: string | undefined
+  let matchSourceId: string | undefined
+  let matchCreated: number | undefined
+  let matchSource: 'setup_intent' | 'legacy_checkout_session' | undefined
+
+  // Path 1: the /secure-card/[token] flow — SetupIntents tied to a known Stripe customer.
+  if (stripeCustomerId) {
+    let setupIntents: Stripe.SetupIntent[] = []
+    try {
+      const list = await stripe.setupIntents.list(
+        { customer: stripeCustomerId, limit: 20 },
+        stripeOpts
+      )
+      setupIntents = list.data
+    } catch (err: any) {
+      console.error('[reconcile-card-setup] Stripe SetupIntent list failed:', err.message)
+      return NextResponse.json({ error: 'Stripe lookup failed' }, { status: 500 })
+    }
+
+    // Strict match on this job's id in metadata — never just "most recent for
+    // this customer". Prefer the most recently created if somehow more than one.
+    const match = setupIntents
+      .filter(si => si.status === 'succeeded' && si.metadata?.jobId === job.id)
+      .sort((a, b) => b.created - a.created)[0]
+
+    if (match) {
+      paymentMethodId = typeof match.payment_method === 'string'
+        ? match.payment_method
+        : match.payment_method?.id
+      matchSourceId = match.id
+      matchCreated = match.created
+      matchSource = 'setup_intent'
+    }
   }
 
-  // Strict match on this job's id in metadata — never just "most recent for
-  // this customer". Prefer the most recently created if somehow more than one.
-  const match = setupIntents
-    .filter(si => si.status === 'succeeded' && si.metadata?.jobId === job.id)
-    .sort((a, b) => b.created - a.created)[0]
-
-  if (!match) {
-    return NextResponse.json({ reconciled: false, reason: 'no_succeeded_setup_intent_for_job' })
-  }
-
-  const paymentMethodId = typeof match.payment_method === 'string'
-    ? match.payment_method
-    : match.payment_method?.id
-
+  // Path 2: the legacy /api/bookings/[id]/card-setup flow — Checkout Sessions in
+  // mode: 'setup' whose metadata.job_id (snake_case, as that route wrote it)
+  // matches this job. These jobs never got a stripe_customer_id saved to BookdIn,
+  // so we can't search by customer — scan completed setup-mode sessions directly,
+  // paginating until we find this job's id or run out of sessions.
   if (!paymentMethodId) {
-    return NextResponse.json({ reconciled: false, reason: 'setup_intent_has_no_payment_method' })
+    try {
+      let startingAfter: string | undefined
+      let found: Stripe.Checkout.Session | undefined
+      for (let page = 0; page < 20 && !found; page++) {
+        const list = await stripe.checkout.sessions.list(
+          { limit: 100, ...(startingAfter ? { starting_after: startingAfter } : {}) },
+          stripeOpts
+        )
+        found = list.data.find(
+          s => s.mode === 'setup' && s.status === 'complete' && s.metadata?.job_id === job.id
+        )
+        if (found) break
+        if (!list.has_more || list.data.length === 0) break
+        startingAfter = list.data[list.data.length - 1].id
+      }
+
+      if (found?.setup_intent) {
+        const setupIntentId = typeof found.setup_intent === 'string' ? found.setup_intent : found.setup_intent.id
+        const si = await stripe.setupIntents.retrieve(setupIntentId, stripeOpts)
+        if (si.status === 'succeeded') {
+          paymentMethodId = typeof si.payment_method === 'string' ? si.payment_method : si.payment_method?.id
+          matchSourceId = found.id
+          matchCreated = found.created
+          matchSource = 'legacy_checkout_session'
+        }
+      }
+    } catch (err: any) {
+      console.error('[reconcile-card-setup] Legacy Checkout Session lookup failed:', err.message)
+      // Don't hard-fail here if path 1 already ran cleanly and just found nothing —
+      // fall through to the "no match" response below.
+    }
+  }
+
+  if (!paymentMethodId || !matchSourceId) {
+    return NextResponse.json({ reconciled: false, reason: 'no_match_found' })
   }
 
   const { error: updateError } = await admin
@@ -137,12 +193,13 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     }
   }
 
-  console.log(`[reconcile-card-setup] Recovered card for job ${job.id} from SetupIntent ${match.id}`)
+  console.log(`[reconcile-card-setup] Recovered card for job ${job.id} via ${matchSource} ${matchSourceId}`)
 
   return NextResponse.json({
     reconciled: true,
     paymentMethodId,
-    setupIntentId: match.id,
-    setupIntentCreatedAt: new Date(match.created * 1000).toISOString(),
+    matchSource,
+    matchSourceId,
+    matchCreatedAt: matchCreated ? new Date(matchCreated * 1000).toISOString() : null,
   })
 }
