@@ -39,6 +39,8 @@ export async function middleware(request: NextRequest) {
     '/pricing',
     '/features',
     '/about',
+    '/privacy',
+    '/terms',
     '/api/webhooks',
     '/api/import',
     '/api/demo',
