@@ -15,6 +15,7 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
   const [customerId, setCustomerId] = useState('')
   const [hasDeveloperToken, setHasDeveloperToken] = useState(false)
   const [connectedEmail, setConnectedEmail] = useState<string | null>(null)
+  const [conversionActionId, setConversionActionId] = useState('')
 
   const [developerToken, setDeveloperToken] = useState('')
   const [showSecret, setShowSecret] = useState(false)
@@ -30,7 +31,7 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
     setLoading(true)
     supabase
       .from('businesses')
-      .select('google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_connected_email')
+      .select('google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_connected_email, google_ads_conversion_action_id')
       .eq('id', businessId)
       .single()
       .then(({ data }) => {
@@ -39,6 +40,7 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
           setCustomerId(data.google_ads_customer_id || '')
           setHasDeveloperToken(!!data.google_ads_developer_token_encrypted)
           setConnectedEmail(data.google_ads_connected_email || null)
+          setConversionActionId(data.google_ads_conversion_action_id || '')
         }
         setLoading(false)
       })
@@ -54,6 +56,7 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
       business_id: businessId,
       google_ads_customer_id: customerId || null,
       google_ads_enabled: enabled,
+      google_ads_conversion_action_id: conversionActionId || null,
     }
     if (developerToken) payload.developer_token = developerToken
 
@@ -207,6 +210,22 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
         The developer token is encrypted at rest and never displayed again once saved — leave the field blank to keep its current value.
         Connecting your Google account handles the rest of the OAuth flow automatically.
       </p>
+
+      <div className="border-t border-gray-100 pt-4">
+        <label className="block text-xs text-gray-600 mb-1">Conversion action (optional)</label>
+        <input
+          type="text" value={conversionActionId} onChange={e => setConversionActionId(e.target.value)}
+          placeholder="e.g. 987654321 or customers/123.../conversionActions/987..."
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          When a job is marked completed, its gclid (if captured at booking) is uploaded to this
+          conversion action, so Google Ads can tell paying customers apart from leads who never
+          proceeded or cancelled. Create it in Google Ads under Tools &amp; Settings → Conversions →
+          New conversion action → Import → Other data sources or CRMs → Track conversions from
+          clicks, then paste its ID or resource name here.
+        </p>
+      </div>
 
       <div className="flex items-center gap-3 pt-2">
         <button

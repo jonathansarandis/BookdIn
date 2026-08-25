@@ -21,6 +21,7 @@ export async function POST(req: Request) {
       business_id,
       google_ads_customer_id,
       google_ads_enabled,
+      google_ads_conversion_action_id, // optional — enables offline conversion upload when set
       developer_token,   // optional plaintext — only present when the user is setting/rotating it
       disconnect,        // optional — clears the refresh token and connected email
     } = body
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
     // leaving isGoogleAdsConfigured() false even though the Google account is connected.
     if (!disconnect) {
       updates.google_ads_customer_id = google_ads_customer_id || null
+      updates.google_ads_conversion_action_id = google_ads_conversion_action_id || null
     }
 
     if (developer_token) {

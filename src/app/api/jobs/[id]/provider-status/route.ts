@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { syncJobConversionToGoogleAds } from '@/lib/googleAdsConversions'
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   assigned:    ['in_progress'],
@@ -62,7 +63,14 @@ export async function POST(
 
   const { error: updateError } = await admin
     .from('jobs')
-    .update({ status })
+    .update({
+      status,
+      // The client-side JobStatusUpdater components already stamp this on
+      // completion; this route didn't, which left completed_at null for
+      // provider-completed jobs. Fixed here so the conversion upload below
+      // (and anything else that relies on completed_at) has an accurate time.
+      ...(status === 'completed' ? { completed_at: new Date().toISOString() } : {}),
+    })
     .eq('id', params.id)
     .eq('provider_id', provider.id)
 
@@ -72,5 +80,14 @@ export async function POST(
   }
 
   console.log(`[provider-status] job ${params.id} → ${status} (provider ${provider.id})`)
+
+  // Best-effort, fire-and-forget: uploads this job's gclid (if any) to
+  // Google Ads as an offline conversion. Never blocks the response.
+  if (status === 'completed') {
+    syncJobConversionToGoogleAds(params.id).catch(err =>
+      console.error(`[provider-status] conversion sync failed for job ${params.id}:`, err.message)
+    )
+  }
+
   return NextResponse.json({ success: true, status })
 }

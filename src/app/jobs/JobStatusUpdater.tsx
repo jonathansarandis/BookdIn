@@ -111,6 +111,14 @@ export default function JobStatusUpdater({ jobId, currentStatus, providers, curr
       })
     }
 
+    // Best-effort, fire-and-forget: uploads this job's gclid (if any) to
+    // Google Ads as an offline conversion so paying customers are counted
+    // separately from leads who never proceeded. Never blocks the status
+    // update itself.
+    if (newStatus === 'completed') {
+      fetch(`/api/jobs/${jobId}/sync-conversion`, { method: 'POST' }).catch(() => {})
+    }
+
     setLoading(false)
     setOpen(false)
     router.refresh()

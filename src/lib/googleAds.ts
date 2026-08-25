@@ -17,7 +17,9 @@ export interface BusinessGoogleAdsConfig {
   google_ads_login_customer_id?: string | null
 }
 
-const API_VERSION = 'v24'
+// Exported (not just used internally) so other Google Ads modules — e.g. the
+// offline conversion upload path — hit the same API version and never drift.
+export const API_VERSION = 'v24'
 
 function getOAuthClientCredentials(): { client_id: string; client_secret: string } {
   const client_id = process.env.GOOGLE_ADS_CLIENT_ID
@@ -72,7 +74,9 @@ export function mapCampaignToLocation(campaignName: string): 'melbourne' | 'pert
   return null
 }
 
-async function getAccessToken(creds: GoogleAdsCredentials): Promise<string> {
+// Exported so the offline conversion upload module can refresh a token the
+// same way reporting does, instead of re-implementing OAuth refresh.
+export async function getAccessToken(creds: GoogleAdsCredentials): Promise<string> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
