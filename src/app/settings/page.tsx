@@ -80,6 +80,10 @@ export default function SettingsPage() {
   useEffect(() => {
     // Check for Stripe Connect redirect params
     const params = new URLSearchParams(window.location.search)
+    const tabParam = params.get('tab') as typeof TABS[number]['key'] | null
+    if (tabParam && TABS.some(t => t.key === tabParam)) {
+      setActiveTab(tabParam)
+    }
     if (params.get('stripe_success') === 'true') {
       setFlashMessage({ type: 'success', text: 'Stripe connected successfully! Your customers can now pay online.' })
       window.history.replaceState({}, '', window.location.pathname)

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import Link from 'next/link'
-import { ChevronLeft, Send, RefreshCw, AlertCircle, CheckCircle2, Loader2, TrendingUp, TrendingDown, Calendar, CreditCard, UserX, PhoneCall, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Send, RefreshCw, AlertCircle, CheckCircle2, Loader2, TrendingUp, TrendingDown, Calendar, CreditCard, UserX, PhoneCall, X } from 'lucide-react'
 import AgentMessageModal from '@/components/AgentMessageModal'
 import AgentIcon from '@/components/AgentIcon'
 
@@ -155,6 +155,17 @@ export default function AgentPage() {
           <RefreshCw className={`w-3.5 h-3.5 ${loadingBrief ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
+
+      {brief?.summary?.googleAds?.error && (
+        <Link
+          href="/settings?tab=integrations"
+          className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-800 hover:bg-amber-100 transition-colors flex-shrink-0"
+        >
+          <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <span className="flex-1">Google Ads connection lost — no ad data coming through. Reconnect now.</span>
+          <ChevronRight className="w-4 h-4 flex-shrink-0" />
+        </Link>
+      )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
         <div className="lg:col-span-2 flex flex-col gap-4 overflow-y-auto">

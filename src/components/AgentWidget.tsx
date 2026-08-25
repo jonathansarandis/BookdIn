@@ -196,6 +196,16 @@ export default function AgentWidget() {
 
   return (
     <div className="space-y-3">
+      {brief.summary?.googleAds?.error && (
+        <Link
+          href="/settings?tab=integrations"
+          className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-800 hover:bg-amber-100 transition-colors"
+        >
+          <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <span className="flex-1">Google Ads connection lost — no ad data coming through. Reconnect now.</span>
+          <ChevronRight className="w-4 h-4 flex-shrink-0" />
+        </Link>
+      )}
       {/* Chat panel */}
       <div className="agent-widget-dark rounded-xl overflow-hidden" style={{ background: '#0A0F1E' }}>
         <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
