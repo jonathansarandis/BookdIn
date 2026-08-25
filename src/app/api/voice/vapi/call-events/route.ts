@@ -45,13 +45,26 @@ export async function POST(request: NextRequest) {
   const call = body?.message?.call ?? body?.call ?? {}
   const rawStatus: string | null = call?.status ?? body?.message?.status ?? null
 
+  // Vapi doesn't guarantee event order, and an early-lifecycle status-update (e.g.
+  // "ringing") can arrive AFTER the end-of-call-report that already finalized this row
+  // as 'completed'. Without this guard, that late event silently regresses the status
+  // back to 'ringing' forever (duration/transcript stay correct since only status gets
+  // overwritten) — this is why completed calls were showing "ringing" on the dashboard.
+  // Once a call is 'completed' it's terminal: only a fresh end-of-call-report (which
+  // re-sets 'completed' itself below) is allowed to touch it again.
+  const { data: existing } = await admin
+    .from('voice_calls')
+    .select('status')
+    .eq('vapi_call_id', vapiCallId)
+    .maybeSingle()
+
   const row: Record<string, any> = {
     business_id: business.id,
     vapi_call_id: vapiCallId,
   }
   if (fromNumber) row.phone_number_from = fromNumber
   if (toNumber) row.phone_number_to = toNumber
-  if (rawStatus) row.status = STATUS_MAP[rawStatus] || rawStatus
+  if (rawStatus && existing?.status !== 'completed') row.status = STATUS_MAP[rawStatus] || rawStatus
 
   if (type === 'end-of-call-report') {
     const durationSeconds = body?.message?.durationSeconds ?? call?.durationSeconds ?? null

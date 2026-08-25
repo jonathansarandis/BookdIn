@@ -6,13 +6,15 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Phone, PhoneIncoming, Clock, CheckCircle2, ArrowRightCircle, XCircle } from 'lucide-react'
 
-function startOfWeek() {
+// Rolling 7-day window rather than "since Monday" — a calendar-week cutoff means the
+// stats card reads 0 for most of Monday/Tuesday every week regardless of actual call
+// volume, which reads as "broken" rather than "just reset." Rolling window stays
+// meaningful every day.
+function last7Days() {
   const d = new Date()
-  const day = d.getDay()
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1) // Monday start
-  const monday = new Date(d.setDate(diff))
-  monday.setHours(0, 0, 0, 0)
-  return monday
+  d.setDate(d.getDate() - 7)
+  d.setHours(0, 0, 0, 0)
+  return d
 }
 
 function formatDuration(seconds: number | null) {
@@ -59,8 +61,8 @@ export default function VoiceDashboardPage() {
     setLoading(false)
   }
 
-  const weekStart = startOfWeek()
-  const callsThisWeek = calls.filter(c => new Date(c.created_at) >= weekStart)
+  const windowStart = last7Days()
+  const callsThisWeek = calls.filter(c => new Date(c.created_at) >= windowStart)
   const bookingsThisWeek = callsThisWeek.filter(c => c.booking_id)
   const conversionRate = callsThisWeek.length > 0 ? Math.round((bookingsThisWeek.length / callsThisWeek.length) * 100) : 0
 
@@ -73,7 +75,7 @@ export default function VoiceDashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-center gap-2 text-gray-400 mb-2"><PhoneIncoming className="w-4 h-4" /><span className="text-xs font-medium">Calls this week</span></div>
+          <div className="flex items-center gap-2 text-gray-400 mb-2"><PhoneIncoming className="w-4 h-4" /><span className="text-xs font-medium">Calls (last 7 days)</span></div>
           <p className="text-2xl font-bold text-gray-900">{callsThisWeek.length}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-5">
