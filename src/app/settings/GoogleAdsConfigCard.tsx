@@ -136,24 +136,40 @@ export default function GoogleAdsConfigCard({ businessId }: { businessId?: strin
             <p className="text-xs text-gray-500 mt-0.5">Not connected</p>
           )}
         </div>
-        {connectedEmail ? (
-          <button
-            type="button"
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-red-600 border border-gray-200 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0 inline-flex items-center gap-1.5"
-          >
-            {disconnecting && <Loader2 className="w-3 h-3 animate-spin" />}
-            Disconnect
-          </button>
-        ) : (
-          <a
-            href="/api/settings/google-ads/connect"
-            className="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors flex-shrink-0 inline-flex items-center gap-1.5"
-          >
-            Connect with Google <ExternalLink className="w-3 h-3" />
-          </a>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {connectedEmail && (
+            // "Connected" only reflects that we have stored credentials — Google can
+            // silently invalidate them (e.g. the OAuth app being in Testing mode expires
+            // refresh tokens after 7 days) without us knowing until the next live API
+            // call fails. Always offering Reconnect here, not just Disconnect, means
+            // fixing a stale connection doesn't require disconnecting first and losing
+            // the Customer ID / developer token fields in the meantime.
+            <a
+              href="/api/settings/google-ads/connect"
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-brand-600 border border-gray-200 rounded-lg transition-colors inline-flex items-center gap-1.5"
+            >
+              Reconnect <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+          {connectedEmail ? (
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-red-600 border border-gray-200 rounded-lg transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {disconnecting && <Loader2 className="w-3 h-3 animate-spin" />}
+              Disconnect
+            </button>
+          ) : (
+            <a
+              href="/api/settings/google-ads/connect"
+              className="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors inline-flex items-center gap-1.5"
+            >
+              Connect with Google <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
       </div>
 
       <div>
