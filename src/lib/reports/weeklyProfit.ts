@@ -22,6 +22,15 @@ export interface LocationProfit {
   revenueIncGst: number
   subcontractorPay: number
   gst: number
+  /** The live-calculated value before any manual override is applied —
+   *  kept around so the UI can show it as a reference/placeholder even
+   *  when a staff-entered override is in effect. */
+  subcontractorPayCalculated: number
+  gstCalculated: number
+  /** True when subcontractorPay/gst above reflect a manually-entered
+   *  override rather than the live calculation. */
+  subcontractorPayOverridden: boolean
+  gstOverridden: boolean
   adminPay: number
   adSpend: number
   subscriptionFees: number
@@ -104,18 +113,23 @@ export async function calculateWeeklyProfit(
   const locationResults: LocationProfit[] = (locations || []).map((loc: any) => {
     const locJobs = (jobs || []).filter((j: any) => j.location_id === loc.id)
 
-    let revenueExGst = 0, revenueIncGst = 0, subcontractorPay = 0
+    let revenueExGst = 0, revenueIncGst = 0, subcontractorPayCalculated = 0
     for (const job of locJobs) {
       const exGst = getExGstAmount(job, taxRate)
       revenueExGst += exGst
       revenueIncGst += job.price_override ?? job.total_price ?? job.price ?? 0
-      subcontractorPay += getProviderPayout(job, job.provider ?? {}, taxRate, taxMode)
+      subcontractorPayCalculated += getProviderPayout(job, job.provider ?? {}, taxRate, taxMode)
     }
 
-    const gst = Math.round(revenueExGst * taxRate / 100)
+    const gstCalculated = Math.round(revenueExGst * taxRate / 100)
     const c = costsByLocation.get(loc.id) as any
     const fallback = fallbackByLocation.get(loc.id) as any
     const carriedForward = !c && !!fallback
+
+    const subcontractorPayOverridden = c?.subcontractor_pay_override != null
+    const gstOverridden = c?.gst_override != null
+    const subcontractorPay = subcontractorPayOverridden ? c.subcontractor_pay_override : subcontractorPayCalculated
+    const gst = gstOverridden ? c.gst_override : gstCalculated
 
     const adminPay = c?.admin_pay ?? fallback?.admin_pay ?? 0
     const adSpend = c?.ad_spend ?? 0
@@ -130,6 +144,7 @@ export async function calculateWeeklyProfit(
     return {
       locationId: loc.id, locationName: loc.name,
       revenueExGst, revenueIncGst, subcontractorPay, gst,
+      subcontractorPayCalculated, gstCalculated, subcontractorPayOverridden, gstOverridden,
       adminPay, adSpend, subscriptionFees, refunds, perfMaxSpend, otherCosts,
       totalExpenses, profit, jobCount: locJobs.length, carriedForward,
     }

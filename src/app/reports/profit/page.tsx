@@ -6,6 +6,7 @@ import { calculateWeeklyProfit, getMonday, toDateString, type WeeklyProfitResult
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Loader2, ExternalLink } from 'lucide-react'
+import EditableAmount from './EditableAmount'
 
 function fmtWeek(start: Date) {
   const end = new Date(start.getTime() + 6 * 86400000)
@@ -72,22 +73,40 @@ export default function ProfitReportPage() {
     setWeekStart(w => new Date(w.getTime() + days * 86400000))
   }
 
+  // Every save below is a full-row upsert against weekly_costs, so each one
+  // snapshots every other currently-displayed value (manual cost fields +
+  // the two override fields) to avoid clobbering fields it isn't editing.
+  function baseCostPayload(locationId: string, weekStartStr: string) {
+    const loc = current?.locations.find(l => l.locationId === locationId)
+    const payload: Record<string, any> = { business_id: businessId, location_id: locationId, week_start: weekStartStr }
+    for (const f of COST_FIELDS) payload[f.dbField] = loc ? loc[f.key] : 0
+    payload.subcontractor_pay_override = loc?.subcontractorPayOverridden ? loc.subcontractorPay : null
+    payload.gst_override = loc?.gstOverridden ? loc.gst : null
+    return payload
+  }
+
   async function saveCost(locationId: string, dbField: string, dollarValue: string) {
     const cents = Math.round((parseFloat(dollarValue) || 0) * 100)
     setSavingKey(`${locationId}-${dbField}`)
     const weekStartStr = toDateString(weekStart)
-
-    // Snapshot every currently-displayed cost value (including any carried-forward
-    // suggestions from last week) so editing one field doesn't zero out the others —
-    // this week's row, once created, becomes the explicit source of truth for all of them.
-    const loc = current?.locations.find(l => l.locationId === locationId)
-    const payload: Record<string, any> = { business_id: businessId, location_id: locationId, week_start: weekStartStr }
-    for (const f of COST_FIELDS) payload[f.dbField] = loc ? loc[f.key] : 0
+    const payload = baseCostPayload(locationId, weekStartStr)
     payload[dbField] = cents
 
     await supabase.from('weekly_costs').upsert(payload, { onConflict: 'location_id,week_start' })
     await load()
     setSavingKey(null)
+  }
+
+  async function saveOverride(locationId: string, dbField: 'subcontractor_pay_override' | 'gst_override', cents: number | null) {
+    setSavingKey(`${locationId}-${dbField}`)
+    const weekStartStr = toDateString(weekStart)
+    const payload = baseCostPayload(locationId, weekStartStr)
+    payload[dbField] = cents
+
+    const { error } = await supabase.from('weekly_costs').upsert(payload, { onConflict: 'location_id,week_start' })
+    await load()
+    setSavingKey(null)
+    if (error) throw new Error(error.message)
   }
 
   const profitChange = current && previous && previous.totalProfit !== 0
@@ -178,14 +197,18 @@ export default function ProfitReportPage() {
 
                     <div className="pt-2 border-t border-gray-100">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Expenses (auto-calculated)</p>
-                      <div className="flex justify-between text-sm py-0.5">
-                        <span className="text-gray-500">Subcontractor pay</span>
-                        <span className="text-gray-700">{formatCurrency(loc.subcontractorPay)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm py-0.5">
-                        <span className="text-gray-500">GST (10% of revenue)</span>
-                        <span className="text-gray-700">{formatCurrency(loc.gst)}</span>
-                      </div>
+                      <EditableAmount
+                        label="Subcontractor pay"
+                        calculatedCents={loc.subcontractorPayCalculated}
+                        overrideCents={loc.subcontractorPayOverridden ? loc.subcontractorPay : null}
+                        onSave={cents => saveOverride(loc.locationId, 'subcontractor_pay_override', cents)}
+                      />
+                      <EditableAmount
+                        label="GST (10% of revenue)"
+                        calculatedCents={loc.gstCalculated}
+                        overrideCents={loc.gstOverridden ? loc.gst : null}
+                        onSave={cents => saveOverride(loc.locationId, 'gst_override', cents)}
+                      />
                     </div>
 
                     <div className="pt-2 border-t border-gray-100">
