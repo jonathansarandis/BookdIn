@@ -23,6 +23,7 @@ import ResendConfirmationButton from '@/app/jobs/[id]/ResendConfirmationButton'
 import ProviderFeeEditor from '@/app/jobs/[id]/ProviderFeeEditor'
 import RefundButton from '@/app/jobs/[id]/RefundButton'
 import DeleteBookingButton from '@/app/jobs/[id]/DeleteBookingButton'
+import MarkPaidButton from '@/app/jobs/[id]/MarkPaidButton'
 import { getChargeableAmount, getProviderPayout } from '@/lib/pricing'
 
 const STATUS_STYLES = {
@@ -466,6 +467,15 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 </p>
                 <ChargeButton jobId={job.id} totalPrice={chargeableCents} />
               </div>
+            )}
+
+            {/* Fallback for payments collected outside Stripe entirely — cash,
+                bank transfer, invoice paid elsewhere, etc. */}
+            {paymentStatus !== 'paid' && job.status !== 'cancelled' && (
+              <>
+                <div className="border-t border-gray-100" />
+                <MarkPaidButton jobId={job.id} />
+              </>
             )}
 
             {['authorized', 'paid'].includes(job.payment_status) && job.stripe_payment_method_id && (

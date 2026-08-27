@@ -38,9 +38,26 @@ export async function POST(request: Request) {
     // when the card was originally saved via the secure-card flow) — Stripe requires that
     // Customer be passed on the PaymentIntent too, or it rejects with "payment_method ...
     // belongs to the Customer ... Please include the Customer in the customer parameter."
-    // A brand new card entered fresh for this booking has no owning Customer yet, so this
-    // is correctly omitted in that case.
-    const stripeCustomerId = job.customer?.stripe_customer_id || undefined
+    //
+    // For a brand new card entered fresh for this booking, we used to omit the customer
+    // entirely — but that meant the card was never actually attached to any Stripe Customer,
+    // even though we'd save it to customer_payment_methods as if it were reusable. The next
+    // booking's "Pre-authorize" (which requires customers.stripe_customer_id) would then fail
+    // with "No card on file" despite the UI showing a saved card. Create the Customer now so
+    // the card this PaymentIntent confirms is genuinely reusable off-session later.
+    let stripeCustomerId = job.customer?.stripe_customer_id || undefined
+    if (!stripeCustomerId && job.customer?.id) {
+      try {
+        const newCustomer = await stripe.customers.create(
+          { email: job.customer.email, name: job.customer.full_name, metadata: { customer_id: job.customer.id } },
+          stripeOpts
+        )
+        stripeCustomerId = newCustomer.id
+        await supabase.from('customers').update({ stripe_customer_id: stripeCustomerId }).eq('id', job.customer.id)
+      } catch (err: any) {
+        console.error('[stripe/intent] Stripe customer create failed (continuing without one):', err.message)
+      }
+    }
 
     // Create PaymentIntent with manual capture (holds funds, captures day before service)
     const paymentIntent = await stripe.paymentIntents.create(
@@ -49,6 +66,10 @@ export async function POST(request: Request) {
         currency,
         customer: stripeCustomerId,
         payment_method: paymentMethodId,
+        // Attaches the payment method to the customer above on successful confirmation,
+        // so it's genuinely available for later off-session preauthorization — without
+        // this, a fresh card would confirm fine here but not be reusable afterwards.
+        ...(stripeCustomerId ? { setup_future_usage: 'off_session' } : {}),
         capture_method: 'manual',
         confirm: true,
         description: `Job ${jobId} - ${job.customer?.full_name || 'Customer'}`,
