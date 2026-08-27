@@ -100,6 +100,16 @@ export default function PayrollPage() {
     setSavingJobId(null)
   }
 
+  // GST is derived elsewhere as total_price - tax_amount, so "editing GST" for a
+  // job means writing tax_amount directly — e.g. setting it to 0 for a cash job
+  // where no GST was actually charged.
+  async function updateJobTaxAmount(jobId: string, taxAmountCents: number) {
+    setSavingJobId(jobId)
+    const { error } = await supabase.from('jobs').update({ tax_amount: taxAmountCents }).eq('id', jobId)
+    if (!error) setJobs(prev => prev.map(j => j.id === jobId ? { ...j, tax_amount: taxAmountCents } : j))
+    setSavingJobId(null)
+  }
+
   async function markProviderPaid(providerId: string, jobIds: string[]) {
     setMarkingPaid(providerId)
     const now = new Date().toISOString()
@@ -246,7 +256,30 @@ export default function PayrollPage() {
                           {!pricesHidden && (
                             <>
                               <td className="px-3 py-2.5 text-right text-gray-600">{formatCurrency(exGst)}</td>
-                              <td className="px-3 py-2.5 text-right text-gray-400">{formatCurrency(gst)}</td>
+                              <td className="px-3 py-2.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-xs text-gray-400">$</span>
+                                  <input
+                                    type="number" min="0" step="0.01"
+                                    defaultValue={(gst / 100).toFixed(2)}
+                                    title="Edit GST for this job — set to 0 if this was a cash job with no GST charged"
+                                    onBlur={e => {
+                                      const v = parseFloat(e.target.value)
+                                      updateJobTaxAmount(job.id, Number.isFinite(v) && v >= 0 ? Math.round(v * 100) : 0)
+                                    }}
+                                    className="w-16 text-right text-xs border border-gray-200 rounded-md px-1.5 py-1 text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  {gst > 0 && (
+                                    <button
+                                      onClick={() => updateJobTaxAmount(job.id, 0)}
+                                      title="Cash job — no GST charged"
+                                      className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap"
+                                    >
+                                      cash
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
                               <td className="px-3 py-2.5 text-right text-gray-600">{formatCurrency(incGst)}</td>
                             </>
                           )}
