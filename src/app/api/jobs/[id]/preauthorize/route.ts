@@ -113,9 +113,8 @@ export async function POST(
       .eq('id', params.id)
   }
 
-  let intent: Stripe.PaymentIntent
-  try {
-    intent = await stripe.paymentIntents.create({
+  async function createIntent() {
+    return stripe.paymentIntents.create({
       amount: getChargeableAmount(job),
       currency,
       customer: stripeCustomerId,
@@ -125,9 +124,37 @@ export async function POST(
       capture_method: 'manual',
       metadata: { jobId: job.id },
     }, stripeOpts)
+  }
+
+  let intent: Stripe.PaymentIntent
+  try {
+    intent = await createIntent()
   } catch (err: any) {
-    console.error(`[preauthorize] Stripe failed for job ${params.id}:`, err.message)
-    return NextResponse.json({ error: err.message || 'Pre-authorization failed' }, { status: 500 })
+    // "cannot be attached ... must attach it to a Customer first" — the PM
+    // genuinely isn't attached to stripeCustomerId on Stripe's side, despite
+    // our records saying it should be (seen with cards recovered from the
+    // legacy card-setup flow). Attach it now and retry once, rather than
+    // failing outright — "already attached to this customer" from a
+    // concurrent/earlier attempt is treated as success, not an error.
+    const looksUnattached = /attach|customer/i.test(err.message || '')
+    if (!looksUnattached) {
+      console.error(`[preauthorize] Stripe failed for job ${params.id}:`, err.message)
+      return NextResponse.json({ error: err.message || 'Pre-authorization failed' }, { status: 500 })
+    }
+    try {
+      await stripe.paymentMethods.attach(stripePaymentMethodId, { customer: stripeCustomerId }, stripeOpts)
+    } catch (attachErr: any) {
+      if (!/already been attached|already attached/i.test(attachErr.message || '')) {
+        console.error(`[preauthorize] Attach retry failed for job ${params.id}:`, attachErr.message)
+        return NextResponse.json({ error: attachErr.message || 'Pre-authorization failed' }, { status: 500 })
+      }
+    }
+    try {
+      intent = await createIntent()
+    } catch (retryErr: any) {
+      console.error(`[preauthorize] Stripe failed after attach retry for job ${params.id}:`, retryErr.message)
+      return NextResponse.json({ error: retryErr.message || 'Pre-authorization failed' }, { status: 500 })
+    }
   }
 
   const { error: updateError } = await supabase
