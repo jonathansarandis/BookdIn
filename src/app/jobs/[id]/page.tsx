@@ -119,6 +119,20 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
   const businessId = profile?.business_id ?? ''
 
+  // Card brand/last4 for display next to the payment status — sourced from
+  // customer_payment_methods (kept in sync whenever a card is saved/reused)
+  // rather than calling Stripe on every page load.
+  let savedCard: { card_brand: string | null; card_last4: string | null } | null = null
+  if (job.customer_id && job.stripe_payment_method_id) {
+    const { data: cpm } = await adminClient
+      .from('customer_payment_methods')
+      .select('card_brand, card_last4')
+      .eq('customer_id', job.customer_id)
+      .eq('business_id', businessId)
+      .single()
+    savedCard = cpm ?? null
+  }
+
   // Photos
   const [beforePhotos, afterPhotos] = await Promise.all([
     listPhotos(adminClient, businessId, job.id, 'before'),
@@ -387,6 +401,15 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 {paymentPillLabel}
               </span>
             </div>
+
+            {job.stripe_payment_method_id && savedCard?.card_last4 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Card on file</span>
+                <span className="text-gray-900 capitalize">
+                  {savedCard.card_brand || 'Card'} •••• {savedCard.card_last4}
+                </span>
+              </div>
+            )}
 
             {job.provider_id && (
               <>
