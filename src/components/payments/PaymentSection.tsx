@@ -37,8 +37,20 @@ function CardForm({ onReady }: { onReady: (fn: () => Promise<string | null>) => 
     return paymentMethod?.id || null
   }
 
-  // Pass the function up to parent on mount
-  useState(() => { onReady(getPaymentMethod) })
+  // Pass the function up to the parent whenever stripe/elements become ready.
+  //
+  // This used to be `useState(() => { onReady(getPaymentMethod) })` — a
+  // useState initializer runs exactly once, on the component's very first
+  // render. Stripe.js/Elements load asynchronously, so on that first render
+  // `stripe`/`elements` from useStripe()/useElements() are still null almost
+  // every time. That first-render closure of getPaymentMethod — permanently
+  // capturing stripe: null, elements: null — is what got registered with the
+  // parent, and never any later render's fresh closure. So getPaymentMethod()
+  // always hit its `if (!stripe || !elements) return null` guard and returned
+  // null even with valid card details entered, which the parent then reports
+  // as "Please enter valid card details" — after the booking (job row) had
+  // already been created, since that happens before this payment step.
+  useEffect(() => { onReady(getPaymentMethod) }, [stripe, elements])
 
   return (
     <div className="space-y-3 mt-4">
