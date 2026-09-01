@@ -1,21 +1,27 @@
 // @ts-nocheck
 // src/app/api/providers/invite/route.ts
-// Generates a fresh portal access link for a provider and returns it so the
-// admin can copy/share it directly (email delivery still happens if Supabase
-// SMTP is configured). Fixes: links no longer point at a stale/localhost URL
-// (we use the request origin), and invites can be re-sent any number of times
-// (generateLink is repeatable; existing users fall back to a magic link).
+// Returns a provider's persistent portal link (generating one if they don't
+// have one yet) so the admin can copy/share it directly. No Supabase Auth
+// involved — see src/lib/providerPortal.ts for the full reasoning: the old
+// invite/magiclink + password flow forced subcontractors to recreate their
+// password on every re-sent link, on top of the link itself expiring on
+// Supabase's ~1hr OTP TTL. The portal_token link has no expiry and needs no
+// password — click it once, stay logged in.
 //
 // Auth accepts EITHER a cookie session (web admin UI) OR a Bearer token
-// (mobile app — same pattern as /api/providers/accept, which already needed
-// this because the invite-accept flow itself uses a bearer-only session).
+// (mobile app).
 //
 // Optional `channel` ('email' | 'sms' | 'both', default 'email') sends the
-// portal link via the business's configured Dialpad SMS in addition to (or
-// instead of) Supabase's invite email.
+// portal link via the business's configured Dialpad SMS. 'email' here just
+// means "no SMS" — there's no Supabase invite email anymore, so the admin UI
+// copies the link to the clipboard for the admin to paste wherever they like.
+//
+// Optional `regenerate: true` invalidates the OLD link and issues a brand new
+// one — for when a provider's link has leaked or they've left the business.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 import { sendDialpadSmsRaw } from '@/lib/sms/dialpad'
 
 const serviceClient = createServiceClient(
@@ -38,7 +44,7 @@ export async function POST(request: NextRequest) {
   }
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { provider_id, channel = 'email' } = await request.json()
+  const { provider_id, channel = 'email', regenerate = false } = await request.json()
   if (!provider_id) return NextResponse.json({ error: 'Missing provider_id' }, { status: 400 })
   if (!['email', 'sms', 'both'].includes(channel)) {
     return NextResponse.json({ error: 'channel must be "email", "sms", or "both"' }, { status: 400 })
@@ -60,80 +66,45 @@ export async function POST(request: NextRequest) {
   if (!callerProfile?.business_id || callerProfile.business_id !== provider.business_id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (channel !== 'sms' && !provider.email) {
-    return NextResponse.json({ error: 'Provider has no email address' }, { status: 400 })
+  // No Supabase Auth user to create, so — unlike the old flow — an email
+  // address genuinely isn't required unless SMS wasn't requested either.
+  if (channel === 'email' && !provider.email) {
+    return NextResponse.json({ error: 'Provider has no email address — use SMS instead, or add an email' }, { status: 400 })
   }
   if (channel !== 'email' && !provider.phone) {
     return NextResponse.json({ error: 'Provider has no phone number' }, { status: 400 })
   }
-  // Supabase invite links require an email even when the primary delivery channel is SMS
-  // (the invite creates/identifies the auth user by email).
-  if (!provider.email) {
-    return NextResponse.json({ error: 'Provider needs an email address — required to create their login even when inviting by SMS' }, { status: 400 })
-  }
 
-  // Build the redirect from the actual domain the admin is on, not the
+  // Build the link from the actual domain the admin is on, not the
   // NEXT_PUBLIC_APP_URL env (which is localhost in this codebase).
   const origin =
     request.headers.get('origin') ||
     (() => { try { return new URL(request.url).origin } catch { return '' } })() ||
     process.env.NEXT_PUBLIC_APP_URL ||
     ''
-  const redirectTo = `${origin}/provider/accept`
 
-  const metadata = {
-    provider_id: provider.id,
-    display_name: provider.display_name,
-    is_provider: true,
+  // Reuse the existing token unless this is an explicit regenerate (link
+  // leaked, provider left the business, etc.) — mirrors card_setup_token's
+  // "reuse if still valid" behaviour, just with no expiry to check at all.
+  let portalToken = regenerate ? null : provider.portal_token
+  if (!portalToken) {
+    portalToken = crypto.randomBytes(32).toString('hex')
+    const { error: tokenErr } = await serviceClient
+      .from('providers')
+      .update({ portal_token: portalToken })
+      .eq('id', provider_id)
+    if (tokenErr) return NextResponse.json({ error: tokenErr.message }, { status: 500 })
   }
 
-  // We hand out our own /provider/accept link built from the raw hashed_token
-  // rather than Supabase's action_link: the action_link's GET /auth/v1/verify
-  // redirect only honours `redirectTo` when it's on the project's Redirect
-  // URLs allowlist, and silently falls back to the Site URL otherwise (this
-  // is what was bouncing invites to the admin login). Verifying the token
-  // ourselves via verifyOtp() on /provider/accept sidesteps that allowlist
-  // entirely — the browser never leaves bookdin.co.
-  let hashedToken: string | null = null
-  let mode: 'invite' | 'magiclink' = 'invite'
+  const actionLink = `${origin}/provider/portal/${portalToken}`
 
-  const { data: inviteData, error: inviteError } = await serviceClient.auth.admin.generateLink({
-    type: 'invite',
-    email: provider.email,
-    options: { redirectTo, data: metadata },
-  })
-
-  if (inviteError) {
-    // Most common cause: the user already exists (a re-invite). Fall back to a
-    // magic link so the admin can still hand them a working portal link.
-    const { data: magicData, error: magicError } = await serviceClient.auth.admin.generateLink({
-      type: 'magiclink',
-      email: provider.email,
-      options: { redirectTo },
-    })
-    if (magicError) {
-      return NextResponse.json({ error: magicError.message }, { status: 500 })
-    }
-    hashedToken = magicData?.properties?.hashed_token ?? null
-    mode = 'magiclink'
-  } else {
-    hashedToken = inviteData?.properties?.hashed_token ?? null
+  if (provider.email) {
+    await serviceClient.from('providers').update({ invite_email: provider.email }).eq('id', provider_id)
   }
-
-  if (!hashedToken) {
-    return NextResponse.json({ error: 'Failed to generate invite link' }, { status: 500 })
-  }
-
-  const actionLink = `${origin}/provider/accept?token=${hashedToken}&type=${mode}`
-
-  await serviceClient
-    .from('providers')
-    .update({ invite_email: provider.email })
-    .eq('id', provider_id)
 
   // Optional SMS delivery of the same link.
   let smsResult: { attempted: boolean; sent: boolean; error?: string } = { attempted: false, sent: false }
-  if ((channel === 'sms' || channel === 'both') && actionLink) {
+  if (channel === 'sms' || channel === 'both') {
     smsResult.attempted = true
     const { data: business } = await serviceClient
       .from('businesses')
@@ -141,7 +112,7 @@ export async function POST(request: NextRequest) {
       .eq('id', provider.business_id).single()
 
     if (business) {
-      const [first, ...rest] = (provider.display_name || '').trim().split(/\s+/)
+      const [first] = (provider.display_name || '').trim().split(/\s+/)
       const result = await sendDialpadSmsRaw({
         business: {
           sms_provider: business.sms_provider,
@@ -152,7 +123,7 @@ export async function POST(request: NextRequest) {
           sms_enabled: business.sms_enabled,
         },
         toPhone: provider.phone,
-        text: `Hi ${first || 'there'}! ${business.name || 'Your team'} has set you up on the BookdIn provider app. Tap this link to get started: ${actionLink}`,
+        text: `Hi ${first || 'there'}! Here's your BookdIn provider portal link — bookmark it, no password needed and it never expires: ${actionLink}`,
         businessName: business.name,
       })
       smsResult.sent = result.status === 'sent'
@@ -169,13 +140,13 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     success: true,
     link: actionLink,
-    mode,
     channel,
+    regenerated: regenerate,
     sms: smsResult,
     message: channel === 'sms'
-      ? `Invite SMS sent to ${provider.phone}`
+      ? `Portal link sent to ${provider.phone}`
       : channel === 'both'
-      ? `Invite sent to ${provider.email}${smsResult.sent ? ` and ${provider.phone}` : ' (SMS failed — link still generated below)'}`
-      : `Portal link ready for ${provider.email}`,
+      ? `Portal link sent to ${provider.phone}${smsResult.sent ? '' : ' (SMS failed — link still generated below)'}`
+      : `Portal link ready — copy and send it to ${provider.display_name || 'the provider'}`,
   })
 }

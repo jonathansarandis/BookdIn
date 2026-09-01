@@ -4,28 +4,39 @@
 // stripe_*, payment_status) are fetched via admin client for payout computation and
 // then stripped before the response is returned — they never reach the client.
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getProviderPayout } from '@/lib/pricing'
+import { getProviderFromPortalCookie } from '@/lib/providerPortal'
+
+const PROVIDER_SELECT = 'id, display_name, color, is_active, payout_percent, business_id'
 
 export async function GET() {
-  // Cookie-based session set by @supabase/ssr when provider signed in via /provider/login
-  const userClient = createClient()
-  const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const admin = createAdminClient()
 
-  // Resolve provider — providers are not in profiles, so get_my_business_id() = NULL
-  // for them. Use admin client to bypass the business-scoped RLS.
-  const { data: provider, error: provErr } = await admin
-    .from('providers')
-    .select('id, display_name, color, is_active, payout_percent, business_id')
-    .eq('user_id', user.id)
-    .single()
+  // Primary path: persistent portal-token cookie set by /provider/portal/[token]
+  // — no Supabase Auth involved at all. Falls back to a legacy Supabase Auth
+  // session for any provider still on an old password account.
+  let provider = await getProviderFromPortalCookie(cookies(), admin, PROVIDER_SELECT)
 
-  if (provErr || !provider) {
-    return NextResponse.json({ error: 'Provider not found' }, { status: 403 })
+  if (!provider) {
+    const userClient = createClient()
+    const { data: { user } } = await userClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // Resolve provider — providers are not in profiles, so get_my_business_id() = NULL
+    // for them. Use admin client to bypass the business-scoped RLS.
+    const { data: legacyProvider, error: provErr } = await admin
+      .from('providers')
+      .select(PROVIDER_SELECT)
+      .eq('user_id', user.id)
+      .single()
+
+    if (provErr || !legacyProvider) {
+      return NextResponse.json({ error: 'Provider not found' }, { status: 403 })
+    }
+    provider = legacyProvider
   }
 
   // Business tax settings needed for override-aware payout computation

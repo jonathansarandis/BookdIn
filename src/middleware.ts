@@ -2,6 +2,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getProviderFromPortalCookie } from '@/lib/providerPortal'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -55,6 +56,8 @@ export async function middleware(request: NextRequest) {
     '/api/notify/job-event',
     '/provider/login',
     '/provider/accept',
+    '/provider/portal',
+    '/provider/link-invalid',
     '/.well-known',
   ]
   const isPublic = publicPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -67,8 +70,19 @@ export async function middleware(request: NextRequest) {
   // fixed for the logged-in-no-profile case further down.
   if (!user && !isPublic && !pathname.startsWith('/api/')) {
     if (pathname.startsWith('/provider')) {
+      // No Supabase Auth session — check the persistent portal-token cookie
+      // before bouncing them out. This is the primary auth path for
+      // providers now (src/lib/providerPortal.ts); Supabase Auth is only a
+      // legacy fallback for any provider still on an old password account.
+      const admin = createServiceRoleClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const provider = await getProviderFromPortalCookie(request.cookies, admin, 'id')
+      if (provider) return supabaseResponse
+
       const url = request.nextUrl.clone()
-      url.pathname = '/provider/login'
+      url.pathname = '/provider/link-invalid'
       return NextResponse.redirect(url)
     }
     const url = request.nextUrl.clone()

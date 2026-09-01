@@ -1,8 +1,10 @@
 // @ts-nocheck
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncJobConversionToGoogleAds } from '@/lib/googleAdsConversions'
+import { getProviderFromPortalCookie } from '@/lib/providerPortal'
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   assigned:    ['in_progress'],
@@ -14,10 +16,6 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const userClient = createClient()
-  const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   let status: string
   try {
     const body = await req.json()
@@ -30,15 +28,25 @@ export async function POST(
 
   const admin = createAdminClient()
 
-  // Identify this user's provider record — providers are not in profiles
-  const { data: provider, error: provErr } = await admin
-    .from('providers')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
+  // Primary path: persistent portal-token cookie (see /api/provider/jobs for
+  // the same pattern). Falls back to a legacy Supabase Auth session.
+  let provider = await getProviderFromPortalCookie(cookies(), admin, 'id')
 
-  if (provErr || !provider) {
-    return NextResponse.json({ error: 'Provider not found' }, { status: 403 })
+  if (!provider) {
+    const userClient = createClient()
+    const { data: { user } } = await userClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: legacyProvider, error: provErr } = await admin
+      .from('providers')
+      .select('id')
+      .eq('user_id', user.id)
+      .single()
+
+    if (provErr || !legacyProvider) {
+      return NextResponse.json({ error: 'Provider not found' }, { status: 403 })
+    }
+    provider = legacyProvider
   }
 
   // Verify job is assigned to this provider — explicit ownership check before write

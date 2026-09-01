@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Calendar, Clock, MapPin, CheckCircle2, LogOut, User } from 'lucide-react'
@@ -39,7 +38,6 @@ export default function ProviderDashboard() {
   const [defaultTimezone, setDefaultTimezone] = useState('Australia/Sydney')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
   const [activeTab, setActiveTab] = useState<'upcoming' | 'today' | 'completed'>('today')
 
   useEffect(() => {
@@ -47,14 +45,13 @@ export default function ProviderDashboard() {
   }, [])
 
   async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/provider/login'); return }
-
+    // No separate "am I logged in" check up front — /api/provider/jobs itself
+    // resolves identity from the portal-token cookie (or a legacy Supabase
+    // session) and returns 401/403 if neither works. There's no password
+    // login to send them back to anymore, so an invalid/expired session sends
+    // them to link-invalid, which tells them to ask for a fresh portal link.
     const res = await fetch('/api/provider/jobs')
-    if (res.status === 401) { router.push('/provider/login'); return }
-    // Never bounce a provider into the admin dashboard — if their own jobs API
-    // rejects them, send them back to provider login rather than a dead end.
-    if (res.status === 403) { router.push('/provider/login'); return }
+    if (res.status === 401 || res.status === 403) { router.push('/provider/link-invalid'); return }
     if (!res.ok) { setLoading(false); return }
 
     const data = await res.json()
@@ -76,8 +73,8 @@ export default function ProviderDashboard() {
   }
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
-    router.push('/provider/login')
+    await fetch('/api/provider/logout', { method: 'POST' }).catch(() => {})
+    router.push('/provider/link-invalid')
   }
 
   // "Today" is bucketed against the business's own timezone, not the viewing

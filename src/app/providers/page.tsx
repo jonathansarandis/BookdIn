@@ -91,19 +91,24 @@ export default function ProvidersPage() {
     if (!error) setProviders(prev => prev.filter(p => p.id !== id))
   }
 
-  async function handleInvite(provider: any) {
-    if (!provider.email) { alert('Please add an email address first.'); return }
+  async function handleInvite(provider: any, { regenerate = false } = {}) {
+    if (!provider.email && !provider.phone) { alert('Please add an email or phone number first.'); return }
+    if (regenerate && !confirm(`Regenerate ${provider.display_name || "this provider"}'s portal link? Their current link will stop working immediately — only do this if it's been compromised or they've left.`)) {
+      return
+    }
     setInviting(provider.id)
+    // Prefer email (matches the previous default) but fall back to SMS for a
+    // phone-only provider — the portal link no longer needs an email at all.
+    const channel = provider.email ? 'email' : 'sms'
     const res = await fetch('/api/providers/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider_id: provider.id }),
+      body: JSON.stringify({ provider_id: provider.id, channel, regenerate }),
     })
     const data = await res.json()
     setInviting(null)
     if (res.ok) {
-      // Copy the portal link so the admin can paste it straight to the cleaner
-      // (works even if invite email delivery isn't configured).
+      // Copy the portal link so the admin can paste it straight to the cleaner.
       if (data.link) {
         try {
           await navigator.clipboard.writeText(data.link)
@@ -306,20 +311,29 @@ export default function ProvidersPage() {
                           {provider.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </button>
-                      {provider.user_id && (
+                      {provider.portal_token && (
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">Portal access</span>
                       )}
                     </div>
-                    {provider.email && (
-                      <button onClick={() => handleInvite(provider)} disabled={inviting === provider.id}
-                        title={provider.user_id ? 'Send a fresh portal link — useful if they lost access or forgot their password' : undefined}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all"
-                        style={{ borderColor: '#2563FF', color: inviteSuccess === provider.id ? '#16a34a' : '#2563FF', background: inviteSuccess === provider.id ? '#f0fdf4' : 'transparent', borderColor: inviteSuccess === provider.id ? '#16a34a' : '#2563FF' }}>
-                        {inviting === provider.id ? <><Loader2 className="w-3 h-3 animate-spin" /> Sending...</>
-                          : inviteSuccess === provider.id ? <><CheckCircle2 className="w-3 h-3" /> Sent!</>
-                          : provider.user_id ? <><Send className="w-3 h-3" /> Resend portal link</>
-                          : <><Send className="w-3 h-3" /> Invite to portal</>}
-                      </button>
+                    {(provider.email || provider.phone) && (
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => handleInvite(provider)} disabled={inviting === provider.id}
+                          title={provider.portal_token ? "Copy their portal link again — it's the same one, no need to sign in again" : undefined}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all"
+                          style={{ borderColor: '#2563FF', color: inviteSuccess === provider.id ? '#16a34a' : '#2563FF', background: inviteSuccess === provider.id ? '#f0fdf4' : 'transparent', borderColor: inviteSuccess === provider.id ? '#16a34a' : '#2563FF' }}>
+                          {inviting === provider.id ? <><Loader2 className="w-3 h-3 animate-spin" /> Sending...</>
+                            : inviteSuccess === provider.id ? <><CheckCircle2 className="w-3 h-3" /> Sent!</>
+                            : provider.portal_token ? <><Send className="w-3 h-3" /> Resend portal link</>
+                            : <><Send className="w-3 h-3" /> Invite to portal</>}
+                        </button>
+                        {provider.portal_token && (
+                          <button onClick={() => handleInvite(provider, { regenerate: true })} disabled={inviting === provider.id}
+                            title="Invalidate their current link and issue a new one — only if it's been compromised or they've left"
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
