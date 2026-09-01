@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing token' }, { status: 400 })
   }
 
+  // See validate/route.ts for why this deliberately doesn't filter on
+  // stripe_payment_method_id IS NULL — that broke the "replace card" flow.
   const { data: job, error: jobError } = await supabase
     .from('jobs')
     .select(`
@@ -38,7 +40,6 @@ export async function POST(request: NextRequest) {
       business:businesses(stripe_account_id)
     `)
     .eq('card_setup_token', token)
-    .is('stripe_payment_method_id', null)
     .single()
 
   if (jobError || !job) {

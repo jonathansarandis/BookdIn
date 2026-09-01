@@ -33,12 +33,15 @@ export async function POST(request: NextRequest) {
 
   console.log(`[secure-card/save] received token=${token?.slice(0,8)}... pm=${paymentMethodId}`)
 
-  // Re-validate token (expired check + not-yet-saved guard)
+  // Re-validate token (expiry check only — see validate/route.ts for why this
+  // doesn't also require stripe_payment_method_id IS NULL; that guard broke
+  // the "replace card" flow for jobs that already have a card on file. Single
+  // use is still enforced below: card_setup_token is nulled out on success, so
+  // this lookup naturally fails for anyone replaying an already-consumed link.)
   const { data: job, error: jobError } = await supabase
     .from('jobs')
     .select('id, business_id, scheduled_at, card_setup_token_expires_at, customer:customers(id, full_name), business:businesses(timezone, stripe_account_id)')
     .eq('card_setup_token', token)
-    .is('stripe_payment_method_id', null)
     .single()
 
   if (jobError || !job) {

@@ -15,6 +15,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'invalid' }, { status: 404 })
   }
 
+  // NOTE: deliberately NOT filtering on stripe_payment_method_id IS NULL here.
+  // That filter used to double as "single-use" enforcement, but it also silently
+  // broke every "Replace card manually" / "Generate replacement link" flow —
+  // those mint a fresh token specifically for a job that ALREADY has a card on
+  // file, so the filter rejected them with a false "Link expired or already
+  // used". Single-use is enforced correctly by /api/secure-card/save nulling
+  // out card_setup_token on success, which makes this lookup naturally fail
+  // for anyone revisiting a consumed link — no separate PM-null check needed.
   const { data: job, error } = await supabase
     .from('jobs')
     .select(`
@@ -31,7 +39,6 @@ export async function GET(request: NextRequest) {
       service:services(name)
     `)
     .eq('card_setup_token', token)
-    .is('stripe_payment_method_id', null)
     .single()
 
   if (error || !job) {
