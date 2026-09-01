@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getProviderPayout, getExGstAmount } from '@/lib/pricing'
+import { getProviderPayout, getExGstAmount, calcTaxSplit } from '@/lib/pricing'
 import { getMonday, toDateString } from '@/lib/reports/weeklyProfit'
 import { formatCurrency } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Users, DollarSign, Eye, EyeOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Users, DollarSign, Eye, EyeOff, Pencil } from 'lucide-react'
 
 interface Job {
   id: string
@@ -48,6 +48,7 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true)
   const [markingPaid, setMarkingPaid] = useState<string | null>(null)
   const [savingJobId, setSavingJobId] = useState<string | null>(null)
+  const [editingPriceJobId, setEditingPriceJobId] = useState<string | null>(null)
   // Hides the Price ex-GST / GST / Price inc-GST columns — for when this
   // table is about to be screenshotted or shared with a contractor, who
   // should only see their own payout, not the underlying job price.
@@ -107,6 +108,29 @@ export default function PayrollPage() {
     setSavingJobId(jobId)
     const { error } = await supabase.from('jobs').update({ tax_amount: taxAmountCents }).eq('id', jobId)
     if (!error) setJobs(prev => prev.map(j => j.id === jobId ? { ...j, tax_amount: taxAmountCents } : j))
+    setSavingJobId(null)
+  }
+
+  // Price ex-GST is derived (getExGstAmount), not a stored column, so "editing"
+  // it means writing back whichever field actually drives that derivation for
+  // this job — mirrors getExGstAmount's own branching:
+  //   - price_override set (manually-priced job): re-derive price_override so
+  //     that dividing back out by taxRate reproduces the entered ex-GST figure.
+  //   - otherwise: write total_price directly, holding tax_amount fixed — same
+  //     approach as updateJobTaxAmount above but solving for the other side.
+  // This is for jobs whose price changed after booking (customer request,
+  // late-arrival discount, etc.) that never got reflected here.
+  async function updateJobPriceExGst(job: Job, newExGstCents: number) {
+    setSavingJobId(job.id)
+    if (job.price_override != null) {
+      const { total } = calcTaxSplit(newExGstCents, 'exclusive', taxRate)
+      const { error } = await supabase.from('jobs').update({ price_override: total }).eq('id', job.id)
+      if (!error) setJobs(prev => prev.map(j => j.id === job.id ? { ...j, price_override: total } : j))
+    } else {
+      const newTotalPrice = newExGstCents + (job.tax_amount ?? 0)
+      const { error } = await supabase.from('jobs').update({ total_price: newTotalPrice }).eq('id', job.id)
+      if (!error) setJobs(prev => prev.map(j => j.id === job.id ? { ...j, total_price: newTotalPrice } : j))
+    }
     setSavingJobId(null)
   }
 
@@ -258,7 +282,40 @@ export default function PayrollPage() {
                           <td className="px-4 py-2.5 text-gray-900">{job.customer?.full_name || '—'}</td>
                           {!pricesHidden && (
                             <>
-                              <td className="px-3 py-2.5 text-right text-gray-600">{formatCurrency(exGst)}</td>
+                              <td className="px-3 py-2.5 text-right text-gray-600">
+                                {editingPriceJobId === job.id ? (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span className="text-xs text-gray-400">$</span>
+                                    <input
+                                      type="number" min="0" step="0.01"
+                                      autoFocus
+                                      defaultValue={(exGst / 100).toFixed(2)}
+                                      title="Ex-GST price for this job — edit if it was adjusted after booking (discount, customer request, etc.)"
+                                      onBlur={e => {
+                                        const v = parseFloat(e.target.value)
+                                        if (Number.isFinite(v) && v >= 0) updateJobPriceExGst(job, Math.round(v * 100))
+                                        setEditingPriceJobId(null)
+                                      }}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') e.currentTarget.blur()
+                                        if (e.key === 'Escape') setEditingPriceJobId(null)
+                                      }}
+                                      className="w-20 text-right text-xs border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 justify-end">
+                                    {formatCurrency(exGst)}
+                                    <button
+                                      onClick={() => setEditingPriceJobId(job.id)}
+                                      title="Edit price ex-GST"
+                                      className="p-0.5 text-gray-300 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                )}
+                              </td>
                               <td className="px-3 py-2.5 text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-xs text-gray-400">$</span>
