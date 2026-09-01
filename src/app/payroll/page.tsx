@@ -151,7 +151,7 @@ export default function PayrollPage() {
           </button>
           <button
             onClick={() => setPricesHidden(v => !v)}
-            title="Hide price/GST columns before sharing this with a contractor"
+            title="Hide price/GST/rate columns before sharing this with a contractor"
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border ${
               pricesHidden
                 ? 'bg-gray-900 text-white border-gray-900'
@@ -241,9 +241,12 @@ export default function PayrollPage() {
                             <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Price ex-GST</th>
                             <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">GST</th>
                             <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Price inc-GST</th>
+                            {/* Rate is hidden along with prices — a subcontractor who sees both
+                                Rate and Payout can back out the full job price and their margin,
+                                which is exactly what "Hide prices" is meant to keep from them. */}
+                            <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Rate</th>
                           </>
                         )}
-                        <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Rate</th>
                         <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Extras</th>
                         <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Payout</th>
                         <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Cash paid</th>
@@ -281,21 +284,21 @@ export default function PayrollPage() {
                                 </div>
                               </td>
                               <td className="px-3 py-2.5 text-right text-gray-600">{formatCurrency(incGst)}</td>
+                              <td className="px-3 py-2.5 text-right">
+                                <input
+                                  type="number" min="0" max="100" step="1"
+                                  defaultValue={job.pay_rate_override ?? ''}
+                                  placeholder={String(provider.payout_percent ?? 0)}
+                                  onBlur={e => {
+                                    const v = e.target.value.trim()
+                                    updateJobField(job.id, 'pay_rate_override', v === '' ? null : Number(v))
+                                  }}
+                                  className="w-16 text-right text-xs border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-gray-400 ml-0.5">%</span>
+                              </td>
                             </>
                           )}
-                          <td className="px-3 py-2.5 text-right">
-                            <input
-                              type="number" min="0" max="100" step="1"
-                              defaultValue={job.pay_rate_override ?? ''}
-                              placeholder={String(provider.payout_percent ?? 0)}
-                              onBlur={e => {
-                                const v = e.target.value.trim()
-                                updateJobField(job.id, 'pay_rate_override', v === '' ? null : Number(v))
-                              }}
-                              className="w-16 text-right text-xs border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <span className="text-xs text-gray-400 ml-0.5">%</span>
-                          </td>
                           <td className="px-3 py-2.5 text-right">
                             <div className="flex items-center justify-end gap-1">
                               <span className="text-xs text-gray-400">+$</span>
@@ -336,12 +339,12 @@ export default function PayrollPage() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-gray-200 bg-gray-50">
-                        <td colSpan={pricesHidden ? 3 : 6} className="px-4 py-3 text-right text-xs font-semibold text-gray-500">Total payout owed</td>
+                        <td colSpan={pricesHidden ? 2 : 6} className="px-4 py-3 text-right text-xs font-semibold text-gray-500">Total payout owed</td>
                         <td className="px-3 py-3 text-right text-sm font-bold text-gray-900">{formatCurrency(totalPayout)}</td>
                         <td className="px-3 py-3 text-right text-xs text-gray-500">{formatCurrency(totalCash)} cash</td>
                       </tr>
                       <tr className="bg-gray-50">
-                        <td colSpan={pricesHidden ? 3 : 6} className="px-4 py-2.5 text-right text-xs font-semibold text-gray-700">Net payable (payout − cash paid)</td>
+                        <td colSpan={pricesHidden ? 2 : 6} className="px-4 py-2.5 text-right text-xs font-semibold text-gray-700">Net payable (payout − cash paid)</td>
                         <td colSpan={2} className="px-3 py-2.5 text-right text-sm font-bold" style={{ color: '#2563FF' }}>{formatCurrency(netPayable)}</td>
                       </tr>
                     </tfoot>
