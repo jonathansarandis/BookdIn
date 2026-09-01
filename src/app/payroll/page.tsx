@@ -16,6 +16,7 @@ interface Job {
   tax_amount: number | null
   provider_fee_extra: number | null
   pay_rate_override: number | null
+  provider_refund_deduction: number | null
   cash_paid: number
   provider_paid_at: string | null
   provider_id: string
@@ -75,7 +76,7 @@ export default function PayrollPage() {
     const [{ data: provData }, { data: jobData }] = await Promise.all([
       supabase.from('providers').select('id, display_name, color, payout_percent').eq('business_id', businessId).order('display_name'),
       supabase.from('jobs')
-        .select('id, customer:customers(full_name), price, total_price, price_override, tax_amount, provider_fee_extra, pay_rate_override, cash_paid, provider_paid_at, provider_id, completed_at')
+        .select('id, customer:customers(full_name), price, total_price, price_override, tax_amount, provider_fee_extra, pay_rate_override, provider_refund_deduction, cash_paid, provider_paid_at, provider_id, completed_at')
         .eq('business_id', businessId)
         .eq('status', 'completed')
         .not('provider_id', 'is', null)
@@ -94,7 +95,7 @@ export default function PayrollPage() {
     setWeekStart(w => new Date(w.getTime() + days * 86400000))
   }
 
-  async function updateJobField(jobId: string, field: 'cash_paid' | 'pay_rate_override' | 'provider_fee_extra', value: number | null) {
+  async function updateJobField(jobId: string, field: 'cash_paid' | 'pay_rate_override' | 'provider_fee_extra' | 'provider_refund_deduction', value: number | null) {
     setSavingJobId(jobId)
     const { error } = await supabase.from('jobs').update({ [field]: value }).eq('id', jobId)
     if (!error) setJobs(prev => prev.map(j => j.id === jobId ? { ...j, [field]: value } : j))
@@ -272,6 +273,7 @@ export default function PayrollPage() {
                           </>
                         )}
                         <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Extras</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Refund</th>
                         <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Payout</th>
                         <th className="text-right px-3 py-2.5 text-xs font-medium text-gray-500">Cash paid</th>
                       </tr>
@@ -374,6 +376,24 @@ export default function PayrollPage() {
                               />
                             </div>
                           </td>
+                          <td className="px-3 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-xs text-gray-400">-$</span>
+                              <input
+                                type="number" min="0" step="0.01"
+                                defaultValue={job.provider_refund_deduction ? (job.provider_refund_deduction / 100).toFixed(2) : ''}
+                                placeholder="0.00"
+                                title="Deduct from this provider's payout — e.g. the customer got a partial refund after the job and it comes off their pay."
+                                onBlur={e => {
+                                  const v = e.target.value.trim()
+                                  if (v === '') { updateJobField(job.id, 'provider_refund_deduction', null); return }
+                                  const n = parseFloat(v)
+                                  updateJobField(job.id, 'provider_refund_deduction', Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null)
+                                }}
+                                className="w-16 text-right text-xs border border-gray-200 rounded-md px-1.5 py-1 text-red-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          </td>
                           <td className="px-3 py-2.5 text-right font-semibold text-gray-900">{formatCurrency(payout)}</td>
                           <td className="px-3 py-2.5 text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -396,12 +416,12 @@ export default function PayrollPage() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-gray-200 bg-gray-50">
-                        <td colSpan={pricesHidden ? 2 : 6} className="px-4 py-3 text-right text-xs font-semibold text-gray-500">Total payout owed</td>
+                        <td colSpan={pricesHidden ? 3 : 7} className="px-4 py-3 text-right text-xs font-semibold text-gray-500">Total payout owed</td>
                         <td className="px-3 py-3 text-right text-sm font-bold text-gray-900">{formatCurrency(totalPayout)}</td>
                         <td className="px-3 py-3 text-right text-xs text-gray-500">{formatCurrency(totalCash)} cash</td>
                       </tr>
                       <tr className="bg-gray-50">
-                        <td colSpan={pricesHidden ? 2 : 6} className="px-4 py-2.5 text-right text-xs font-semibold text-gray-700">Net payable (payout − cash paid)</td>
+                        <td colSpan={pricesHidden ? 3 : 7} className="px-4 py-2.5 text-right text-xs font-semibold text-gray-700">Net payable (payout − cash paid)</td>
                         <td colSpan={2} className="px-3 py-2.5 text-right text-sm font-bold" style={{ color: '#2563FF' }}>{formatCurrency(netPayable)}</td>
                       </tr>
                     </tfoot>

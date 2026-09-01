@@ -217,6 +217,7 @@ export function getProviderPayout(
     tax_amount?: number | null
     provider_fee_extra?: number | null
     pay_rate_override?: number | null
+    provider_refund_deduction?: number | null
   },
   provider: { payout_percent?: number | null },
   taxRate: number,
@@ -224,7 +225,12 @@ export function getProviderPayout(
 ): number {
   const preGstBase = getExGstAmount(job, taxRate)
   const pct = job.pay_rate_override ?? provider.payout_percent ?? 0
-  return Math.round(preGstBase * pct / 100) + (job.provider_fee_extra ?? 0)
+  // provider_refund_deduction is a manual deduction from THIS provider's payout for this job —
+  // e.g. the customer got a partial refund after the fact and that comes off the
+  // subcontractor's pay rather than the business eating it alone. Not clamped at
+  // zero: a refund bigger than the computed payout should show as negative here
+  // so it's visible and still nets out correctly in the weekly total.
+  return Math.round(preGstBase * pct / 100) + (job.provider_fee_extra ?? 0) - (job.provider_refund_deduction ?? 0)
 }
 
 // ─── Post-calcJobPrice helpers ────────────────────────────────────────────────

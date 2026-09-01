@@ -75,7 +75,7 @@ export async function calculateWeeklyProfit(
     supabase.from('businesses').select('tax_rate, tax_mode').eq('id', businessId).single(),
     supabase.from('locations').select('id, name').eq('business_id', businessId).eq('is_active', true).order('name'),
     supabase.from('jobs')
-      .select('id, location_id, provider_id, price, total_price, price_override, tax_amount, provider_fee_extra, pay_rate_override, provider:providers(payout_percent)')
+      .select('id, location_id, provider_id, price, total_price, price_override, tax_amount, provider_fee_extra, pay_rate_override, provider_refund_deduction, provider:providers(payout_percent)')
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .gte('completed_at', weekStart.toISOString())
