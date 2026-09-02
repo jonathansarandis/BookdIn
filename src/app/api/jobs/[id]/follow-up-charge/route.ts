@@ -115,31 +115,73 @@ export async function POST(
     )
   }
 
-  // Create child job
-  const { data: child, error: childError } = await supabase
+  // Idempotency: reuse an unresolved (auth_failed) child job for this parent
+  // instead of inserting a new one every time staff retries. Without this,
+  // clicking "Additional charge" → failed pre-auth (declined, insufficient
+  // funds, etc.) → "Additional charge" again created a SECOND "Custom" /
+  // Unassigned job every time — both stuck around and both counted toward
+  // booking totals and projected revenue even though only one could ever
+  // actually be paid. Only reuses a row that's still unresolved; a job that
+  // already succeeded (authorized/paid) is left alone and a genuinely new
+  // charge gets its own new row, same as before.
+  const { data: existingFailed } = await supabase
     .from('jobs')
-    .insert({
-      business_id:              parent.business_id,
-      customer_id:              parent.customer_id,
-      location_id:              parent.location_id,
-      address_id:               parent.address_id,
-      service_id:               customService.id,
-      parent_job_id:            parent.id,
-      total_price:              amount_cents,
-      scheduled_at:             new Date().toISOString(),
-      status:                   'confirmed',
-      payment_status:           'card_on_file',
-      booking_source:           'manual',
-      customer_notes:           notes,
-      stripe_customer_id:       parent.customer.stripe_customer_id,
-      stripe_payment_method_id: paymentMethodIdToUse,
-    })
     .select('id')
-    .single()
+    .eq('parent_job_id', parent.id)
+    .eq('payment_status', 'auth_failed')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  if (childError || !child) {
-    console.error(`[follow-up-charge] Failed to create child job:`, childError?.message)
-    return NextResponse.json({ error: 'Failed to create follow-up job' }, { status: 500 })
+  let child: { id: string } | null = null
+
+  if (existingFailed) {
+    const { data: updated, error: updateError } = await supabase
+      .from('jobs')
+      .update({
+        total_price:              amount_cents,
+        customer_notes:           notes,
+        scheduled_at:             new Date().toISOString(),
+        stripe_customer_id:       parent.customer.stripe_customer_id,
+        stripe_payment_method_id: paymentMethodIdToUse,
+        payment_status:           'card_on_file',
+      })
+      .eq('id', existingFailed.id)
+      .select('id')
+      .single()
+
+    if (updateError || !updated) {
+      console.error(`[follow-up-charge] Failed to reuse child job ${existingFailed.id}:`, updateError?.message)
+      return NextResponse.json({ error: 'Failed to retry follow-up charge' }, { status: 500 })
+    }
+    child = updated
+  } else {
+    const { data: inserted, error: childError } = await supabase
+      .from('jobs')
+      .insert({
+        business_id:              parent.business_id,
+        customer_id:              parent.customer_id,
+        location_id:              parent.location_id,
+        address_id:               parent.address_id,
+        service_id:               customService.id,
+        parent_job_id:            parent.id,
+        total_price:              amount_cents,
+        scheduled_at:             new Date().toISOString(),
+        status:                   'confirmed',
+        payment_status:           'card_on_file',
+        booking_source:           'manual',
+        customer_notes:           notes,
+        stripe_customer_id:       parent.customer.stripe_customer_id,
+        stripe_payment_method_id: paymentMethodIdToUse,
+      })
+      .select('id')
+      .single()
+
+    if (childError || !inserted) {
+      console.error(`[follow-up-charge] Failed to create child job:`, childError?.message)
+      return NextResponse.json({ error: 'Failed to create follow-up job' }, { status: 500 })
+    }
+    child = inserted
   }
 
   // Stripe PaymentIntent — authorize only, capture later

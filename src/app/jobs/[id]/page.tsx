@@ -23,6 +23,7 @@ import ResendConfirmationButton from '@/app/jobs/[id]/ResendConfirmationButton'
 import ProviderFeeEditor from '@/app/jobs/[id]/ProviderFeeEditor'
 import RefundButton from '@/app/jobs/[id]/RefundButton'
 import DeleteBookingButton from '@/app/jobs/[id]/DeleteBookingButton'
+import RemoveChargeButton from '@/app/jobs/[id]/RemoveChargeButton'
 import MarkPaidButton from '@/app/jobs/[id]/MarkPaidButton'
 import { getChargeableAmount, getProviderPayout } from '@/lib/pricing'
 
@@ -545,13 +546,20 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                       <p className="text-xs text-green-600">✓ Payment received</p>
                     )}
                     {child.payment_status === 'auth_failed' && (
-                      <p className="text-xs text-red-600">Authorization failed</p>
+                      <div className="space-y-1.5 pt-2 border-t border-gray-100">
+                        <p className="text-xs text-red-600">Authorization failed</p>
+                        <PreauthorizeButton jobId={child.id} label="Try again" />
+                        <RemoveChargeButton jobId={child.id} />
+                      </div>
                     )}
                     {child.payment_status === 'capture_failed' && (
                       <p className="text-xs text-red-600">Capture failed</p>
                     )}
                     {child.payment_status === 'auth_released' && (
-                      <p className="text-xs text-gray-500">Authorization released</p>
+                      <div className="space-y-1.5 pt-2 border-t border-gray-100">
+                        <p className="text-xs text-gray-500">Authorization released</p>
+                        <RemoveChargeButton jobId={child.id} />
+                      </div>
                     )}
                   </div>
                 ))}

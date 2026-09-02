@@ -55,7 +55,17 @@ export default function FollowUpChargeButton({ jobId }: Props) {
       if (data.success) {
         router.push(`/jobs/${data.child_job_id}`)
       } else {
-        setError(data.error || 'Authorization failed — check child job for details')
+        // Failed attempts are visible below under "Additional charges" with
+        // their own Try again / Remove actions (the API reuses this same
+        // failed row on the next attempt, so resubmitting this form is also
+        // safe — it won't create a duplicate).
+        setError(data.error || 'Authorization failed — see "Additional charges" below to retry or remove it')
+        if (data.child_job_id) {
+          router.refresh()
+          setTimeout(() => {
+            document.getElementById(`charge-${data.child_job_id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }, 300)
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Network error')
