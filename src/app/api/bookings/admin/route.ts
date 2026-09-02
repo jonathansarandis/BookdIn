@@ -416,6 +416,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             provider_id: provider_id ?? null,
             frequency: effectiveFrequency,
             next_scheduled_at: nextOccurrence.toISOString(),
+            // The just-booked job itself (linked below via recurring_schedule_id)
+            // is this schedule's true first occurrence — anchor phase-locks to
+            // its actual date, not next_occurrence, so day-of-week/day-of-month
+            // stays correct from the very start. Immutable after this.
+            anchor_date: new Date(scheduled_at).toISOString(),
             is_active: true,
             price: taxSplit.subtotal,
             auto_charge: (payment_method ?? 'card') === 'card',

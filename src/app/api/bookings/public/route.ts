@@ -382,6 +382,9 @@ export async function POST(request: NextRequest) {
             address_id: addr?.id ?? null,
             frequency: effectiveFrequency,
             next_scheduled_at: nextOccurrence.toISOString(),
+            // See admin booking route for why this anchors to the just-booked
+            // job's own date rather than next_occurrence.
+            anchor_date: new Date(scheduledAtIso).toISOString(),
             is_active: true,
             price: taxSplit.subtotal,
             auto_charge: true,

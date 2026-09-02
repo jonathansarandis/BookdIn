@@ -103,6 +103,9 @@ export default function RecurringPage() {
         provider_id: form.provider_id || null,
         frequency: form.frequency,
         next_scheduled_at: new Date(form.next_scheduled_at).toISOString(),
+        // First occurrence entered on this form — phase-locks the schedule's
+        // cadence from here on (immutable after creation).
+        anchor_date: new Date(form.next_scheduled_at).toISOString(),
         is_active: true,
         price,
         auto_charge: form.auto_charge,
