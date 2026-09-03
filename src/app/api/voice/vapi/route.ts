@@ -204,27 +204,22 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
     return 'I need the full address — street, suburb and state — to book this in.'
   }
 
-  const loc = await resolveLocation(admin, business.id, location || state || suburb)
+  // Independent lookups — run in parallel instead of chaining, since the
+  // caller is waiting live on the phone for this whole tool call to finish.
+  const [loc, service] = await Promise.all([
+    resolveLocation(admin, business.id, location || state || suburb),
+    resolveService(admin, business.id, service_type),
+  ])
   if (!loc) return "We don't have any active service locations set up — let me transfer you to a team member."
-
-  const service = await resolveService(admin, business.id, service_type)
   if (!service) return `I couldn't find a service matching "${service_type}".`
 
-  const { data: locService } = await admin
-    .from('location_services')
-    .select('base_price, is_enabled')
-    .eq('location_id', loc.id)
-    .eq('service_id', service.id)
-    .maybeSingle()
+  const effectiveFrequency = service.allows_recurring === false ? 'one_time' : (frequency || 'one_time')
+  const [{ data: locService }, { data: freqRow }] = await Promise.all([
+    admin.from('location_services').select('base_price, is_enabled').eq('location_id', loc.id).eq('service_id', service.id).maybeSingle(),
+    admin.from('frequency_discounts').select('discount_percent').eq('service_id', service.id).eq('frequency', effectiveFrequency).maybeSingle(),
+  ])
   if (!locService?.is_enabled) return `${service.name} isn't available at that location.`
 
-  const effectiveFrequency = service.allows_recurring === false ? 'one_time' : (frequency || 'one_time')
-  const { data: freqRow } = await admin
-    .from('frequency_discounts')
-    .select('discount_percent')
-    .eq('service_id', service.id)
-    .eq('frequency', effectiveFrequency)
-    .maybeSingle()
   const discountPct = service.frequency_discount_eligible
     ? (freqRow?.discount_percent ?? HARDCODED_DISCOUNTS[effectiveFrequency] ?? 0)
     : 0
@@ -302,8 +297,48 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
     await admin.from('voice_calls').update({ booking_id: job.id }).eq('vapi_call_id', callCtx.vapiCallId)
   }
 
-  // Everything below is best-effort — the booking already exists, so none of
-  // these should fail the tool call back to the caller.
+  // Everything below is genuinely non-blocking now — CRM, staff notification,
+  // confirmation email, and SMS all used to be awaited right here, one after
+  // another, including two live third-party API calls (Resend, then Dialpad)
+  // with no timeout on either. That chain is exactly what was making Aria go
+  // silent: the booking itself was already created by this point, but the
+  // tool call kept running underneath it, and Vapi's own tool-call timeout is
+  // shorter than that full chain can take on a slow day. Vapi gives up
+  // waiting, drops the (correct) result, and the model improvises "technical
+  // issue... team will call you back" — even though the job was booked fine
+  // seconds earlier. Firing these without awaiting them (same pattern already
+  // used for the Google Ads conversion sync in provider-status/route.ts)
+  // means the caller hears their confirmation immediately, and these
+  // side-effects still happen a moment later in the background.
+  notifyBookingCreated({
+    business, customerId, full_name, email, callerPhone, service, date, time,
+    taxSplit, scheduledAtIso, tz, job, address_line1, suburb, state, postcode,
+    bedrooms, bathrooms,
+  }).catch(e => console.error('[vapi create_booking] post-booking notifications failed (non-blocking):', e))
+
+  return {
+    success: true,
+    booking_id: job.id,
+    confirmation_summary: `Booked ${service.name} for ${formatBusinessDateTime(scheduledAtIso, tz)} at ${address_line1}, ${suburb}. Total ${formatCents(taxSplit.total, business.currency)}. A confirmation SMS and email are on the way.`,
+  }
+}
+
+// Fire-and-forget side effects after a voice booking is created: CRM upsert,
+// staff notification, confirmation email, confirmation SMS. Deliberately NOT
+// awaited by the caller — see the comment above the call site. Each step
+// keeps its own try/catch so one failure (e.g. SMS) never blocks the others.
+async function notifyBookingCreated(ctx: {
+  business: any; customerId: string; full_name: string; email: string | null; callerPhone: string | null
+  service: any; date: string; time: string; taxSplit: any; scheduledAtIso: string; tz: string; job: { id: string }
+  address_line1: string; suburb: string; state: string; postcode: string | null
+  bedrooms: number | null | undefined; bathrooms: number | null | undefined
+}) {
+  const {
+    business, customerId, full_name, email, callerPhone, service, date, time,
+    taxSplit, scheduledAtIso, tz, job, address_line1, suburb, state, postcode,
+    bedrooms, bathrooms,
+  } = ctx
+
   try {
     const crmResult = await upsertCrmContact(admin, {
       business_id: business.id,
@@ -402,12 +437,6 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
     } catch (e) {
       console.error('[vapi create_booking] SMS failed (non-blocking):', e)
     }
-  }
-
-  return {
-    success: true,
-    booking_id: job.id,
-    confirmation_summary: `Booked ${service.name} for ${formatBusinessDateTime(scheduledAtIso, tz)} at ${address_line1}, ${suburb}. Total ${formatCents(taxSplit.total, business.currency)}. A confirmation SMS and email are on the way.`,
   }
 }
 
