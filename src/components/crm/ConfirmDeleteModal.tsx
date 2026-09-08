@@ -8,15 +8,21 @@ interface Props {
   message: string
   confirmLabel?: string
   onCancel: () => void
-  onConfirm: () => void | Promise<void>
+  onConfirm: (checkboxChecked: boolean) => void | Promise<void>
+  // Optional opt-in/opt-out checkbox (e.g. "Send cancellation email to customer").
+  // When provided, its current value is passed to onConfirm — callers that don't
+  // need it can just ignore the argument.
+  checkboxLabel?: string
+  checkboxDefault?: boolean
 }
 
-export default function ConfirmDeleteModal({ title, message, confirmLabel = 'Delete', onCancel, onConfirm }: Props) {
+export default function ConfirmDeleteModal({ title, message, confirmLabel = 'Delete', onCancel, onConfirm, checkboxLabel, checkboxDefault = true }: Props) {
   const [deleting, setDeleting] = useState(false)
+  const [checked, setChecked] = useState(checkboxDefault)
 
   async function handleConfirm() {
     setDeleting(true)
-    await onConfirm()
+    await onConfirm(checked)
     setDeleting(false)
   }
 
@@ -42,6 +48,18 @@ export default function ConfirmDeleteModal({ title, message, confirmLabel = 'Del
         </div>
 
         <p className="text-sm text-gray-600">{message}</p>
+
+        {checkboxLabel && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={e => setChecked(e.target.checked)}
+              className="w-4 h-4 accent-brand-600"
+            />
+            <span className="text-sm text-gray-700">{checkboxLabel}</span>
+          </label>
+        )}
 
         <div className="flex gap-2 pt-1">
           <button

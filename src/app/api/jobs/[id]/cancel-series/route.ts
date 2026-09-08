@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendCancellation } from '@/lib/email'
 
 const NON_CANCELLABLE_STATUSES = ['completed', 'cancelled']
 
@@ -30,6 +31,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Defaults to NOT emailing the customer — this action exists largely to clean up
+  // duplicate/orphaned bookings left over from the location_id bug, and staff
+  // flagged that a genuine regular customer getting a "your service was cancelled"
+  // email at night for what's actually just a data cleanup is confusing, not
+  // helpful. Pass notify: true explicitly for an actual customer-requested
+  // cancellation.
+  let notify = false
+  try {
+    const body = await request.json()
+    notify = body?.notify === true
+  } catch { /* no body sent — keep default */ }
 
   const admin = createAdminClient()
   const { data: profile } = await admin.from('profiles').select('business_id').eq('id', user.id).single()
@@ -98,5 +111,36 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     entity_id: job.id,
   })
 
-  return NextResponse.json({ cancelled_count: cancelledJobIds.length, cancelled_job_ids: cancelledJobIds })
+  // Only if explicitly requested — a single email about the job being viewed,
+  // not one per cancelled occurrence (nobody wants 9 near-identical "your
+  // booking was cancelled" emails for one series).
+  let emailStatus: 'sent' | 'failed' | 'skipped' = 'skipped'
+  if (notify) {
+    const { data: jobForEmail } = await admin
+      .from('jobs')
+      .select(`
+        id, scheduled_at, total_price, tax_amount,
+        customer:customers(full_name, email),
+        service:services(name),
+        address:addresses(line1, city, state, postcode),
+        business:businesses(name, brand_color, logo_url, contact_email, timezone, currency, plan, tax_name)
+      `)
+      .eq('id', job.id)
+      .single()
+
+    if (jobForEmail?.customer && jobForEmail?.service && jobForEmail?.address && jobForEmail?.business) {
+      const result = await sendCancellation({
+        job: { id: jobForEmail.id, scheduled_at: jobForEmail.scheduled_at, total_price: jobForEmail.total_price, tax_amount: jobForEmail.tax_amount },
+        customer: jobForEmail.customer,
+        business: jobForEmail.business,
+        address: jobForEmail.address,
+        service: jobForEmail.service,
+      })
+      emailStatus = result.success ? 'sent' : 'failed'
+    } else {
+      emailStatus = 'failed'
+    }
+  }
+
+  return NextResponse.json({ cancelled_count: cancelledJobIds.length, cancelled_job_ids: cancelledJobIds, emailStatus })
 }

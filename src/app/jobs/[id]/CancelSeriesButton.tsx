@@ -21,9 +21,13 @@ export default function CancelSeriesButton({ jobId, customerName }: Props) {
   const [showModal, setShowModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleConfirm() {
+  async function handleConfirm(notify: boolean) {
     setError(null)
-    const res = await fetch(`/api/jobs/${jobId}/cancel-series`, { method: 'POST' })
+    const res = await fetch(`/api/jobs/${jobId}/cancel-series`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notify }),
+    })
     const data = await res.json()
     setShowModal(false)
     if (!res.ok) {
@@ -54,6 +58,8 @@ export default function CancelSeriesButton({ jobId, customerName }: Props) {
           title="Cancel entire recurring series?"
           message={`This cancels this booking and every future booking for ${customerName || 'this customer'} in the same recurring series, and removes the schedule so it won't generate any more. Past and completed bookings are not affected. This can't be undone.`}
           confirmLabel="Cancel series"
+          checkboxLabel="Send cancellation email to customer"
+          checkboxDefault={false}
           onCancel={() => setShowModal(false)}
           onConfirm={handleConfirm}
         />

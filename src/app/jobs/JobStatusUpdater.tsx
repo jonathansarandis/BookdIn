@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { JOB_STATUS_LABELS } from '@/lib/utils'
 import { advanceCrmStage } from '@/lib/crm/stageAutomation'
+import ConfirmDeleteModal from '@/components/crm/ConfirmDeleteModal'
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   pending:     ['confirmed'],
@@ -32,15 +33,20 @@ interface Props {
 export function CancelBookingButton({ jobId, status }: { jobId: string; status: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [showModal, setShowModal] = useState(false)
 
   const isDisabled = ['completed', 'cancelled'].includes(status)
 
-  async function handleCancel() {
-    if (!window.confirm('Cancel this booking? This will mark it as cancelled and cannot be undone here.')) return
+  async function handleCancel(notify: boolean) {
     setLoading(true)
-    const res = await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' })
+    const res = await fetch(`/api/jobs/${jobId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notify }),
+    })
     const data = await res.json()
     setLoading(false)
+    setShowModal(false)
     if (!res.ok) {
       alert('Failed to cancel booking. Please try again.')
       return
@@ -62,13 +68,26 @@ export function CancelBookingButton({ jobId, status }: { jobId: string; status: 
   }
 
   return (
-    <button
-      onClick={handleCancel}
-      disabled={loading}
-      className="px-3 py-1.5 text-sm font-medium border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-    >
-      {loading ? 'Cancelling...' : 'Cancel'}
-    </button>
+    <>
+      <button
+        onClick={() => setShowModal(true)}
+        disabled={loading}
+        className="px-3 py-1.5 text-sm font-medium border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+      >
+        {loading ? 'Cancelling...' : 'Cancel'}
+      </button>
+      {showModal && (
+        <ConfirmDeleteModal
+          title="Cancel this booking?"
+          message="This marks the booking as cancelled and cannot be undone here."
+          confirmLabel="Cancel booking"
+          checkboxLabel="Send cancellation email to customer"
+          checkboxDefault={true}
+          onCancel={() => setShowModal(false)}
+          onConfirm={handleCancel}
+        />
+      )}
+    </>
   )
 }
 

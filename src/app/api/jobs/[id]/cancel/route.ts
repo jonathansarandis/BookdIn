@@ -47,9 +47,19 @@ interface JobCancelRow {
 }
 
 export async function POST(
-  _: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } },
 ): Promise<NextResponse> {
+  // Defaults to true — the customer-facing "your booking was cancelled" email is
+  // the expected behavior for a genuine cancellation. Staff can pass
+  // notify: false to skip it (e.g. cleaning up a data-entry duplicate rather than
+  // an actual cancellation the customer should be told about).
+  let notify = true
+  try {
+    const body = await request.json()
+    if (body?.notify === false) notify = false
+  } catch { /* no body sent — keep default */ }
+
   const supabase = createClient()
 
   // 1. Require authenticated session
@@ -125,7 +135,14 @@ export async function POST(
     })
   }
 
-  // 5. Email action: independent of status — send if column is null
+  // 5. Email action: independent of status — send if column is null and notify wasn't declined
+  if (!notify) {
+    return NextResponse.json({
+      success: true,
+      alreadyCancelled,
+      emailStatus: 'skipped',
+    })
+  }
   if (emailAlreadySent) {
     return NextResponse.json({
       success: true,
