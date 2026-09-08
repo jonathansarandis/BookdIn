@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { RefreshCw, Plus, Pause, Play, X, Loader2 } from 'lucide-react'
+import { RefreshCw, Plus, Pause, Play, X, Loader2, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 
 const CANCELLABLE_STATUSES = '("completed","cancelled")'
@@ -35,6 +35,15 @@ export default function RecurringPage() {
   const [businessId, setBusinessId] = useState('')
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  // Regression guard for the "phantom recurring booking" class of bug (job's
+  // frequency says weekly/fortnightly/monthly but nothing ever created a
+  // recurring_schedules row for it, so nothing generates the following
+  // occurrences). Two separate code paths were found doing this — admin-edit
+  // and the voice/Aria booking flow — both fixed, but this check stays so any
+  // future code path that makes the same mistake gets caught here instead of
+  // by a customer noticing they were skipped.
+  const [orphanJobs, setOrphanJobs] = useState<any[]>([])
+  const [fixingOrphans, setFixingOrphans] = useState(false)
   const supabase = createClient()
 
   const [form, setForm] = useState({
@@ -64,12 +73,17 @@ export default function RecurringPage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user.id).single()
       setBusinessId(profile?.business_id)
 
-      const [{ data: scheds }, { data: custs }, { data: locSvcs }, { data: prvs }, { data: locs }] = await Promise.all([
+      const [{ data: scheds }, { data: custs }, { data: locSvcs }, { data: prvs }, { data: locs }, { data: orphans }] = await Promise.all([
         supabase.from('recurring_schedules').select('*, customer:customers(full_name), service:services(name), provider:providers(display_name), location:locations(id, name)').eq('business_id', profile?.business_id).order('next_scheduled_at'),
         supabase.from('customers').select('id, full_name').eq('business_id', profile?.business_id).order('full_name'),
         supabase.from('location_services').select('location_id, base_price, is_enabled, services!inner(id, name, business_id, is_active)').eq('services.business_id', profile?.business_id).eq('is_enabled', true).eq('services.is_active', true),
         supabase.from('providers').select('id, display_name').eq('business_id', profile?.business_id).eq('is_active', true),
         supabase.from('locations').select('id, name').eq('business_id', profile?.business_id).eq('is_active', true).order('name'),
+        supabase.from('jobs').select('id, frequency, scheduled_at, customer:customers(full_name)')
+          .eq('business_id', profile?.business_id)
+          .in('frequency', ['weekly', 'fortnightly', 'monthly'])
+          .is('recurring_schedule_id', null)
+          .neq('status', 'cancelled'),
       ])
 
       setSchedules(scheds || [])
@@ -77,6 +91,7 @@ export default function RecurringPage() {
       setLocationServices(locSvcs || [])
       setProviders(prvs || [])
       setLocations(locs || [])
+      setOrphanJobs(orphans || [])
       if (locs && locs.length > 0) {
         setForm(f => ({ ...f, location_id: locs[0].id }))
       }
@@ -146,6 +161,34 @@ export default function RecurringPage() {
       alert(`Sync failed: ${err.message}`)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  // Backfills a missing recurring_schedules row for every orphaned job flagged above,
+  // then reloads both lists so the banner clears once they're all fixed.
+  async function fixOrphans() {
+    setFixingOrphans(true)
+    try {
+      const res = await fetch('/api/admin/backfill-recurring-schedules', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Fix failed')
+
+      const [{ data: scheds }, { data: orphans }] = await Promise.all([
+        supabase.from('recurring_schedules').select('*, customer:customers(full_name), service:services(name), provider:providers(display_name), location:locations(id, name)').eq('business_id', businessId).order('next_scheduled_at'),
+        supabase.from('jobs').select('id, frequency, scheduled_at, customer:customers(full_name)')
+          .eq('business_id', businessId)
+          .in('frequency', ['weekly', 'fortnightly', 'monthly'])
+          .is('recurring_schedule_id', null)
+          .neq('status', 'cancelled'),
+      ])
+      setSchedules(scheds || [])
+      setOrphanJobs(orphans || [])
+
+      alert(`Fixed ${data.schedules_created} booking${data.schedules_created === 1 ? '' : 's'}${data.schedules_failed ? ` (${data.schedules_failed} failed — check logs)` : ''}. Materialized ${data.materialize?.jobsCreated || 0} upcoming occurrence(s).`)
+    } catch (err: any) {
+      alert(`Fix failed: ${err.message}`)
+    } finally {
+      setFixingOrphans(false)
     }
   }
 
@@ -226,6 +269,29 @@ export default function RecurringPage() {
           </button>
         </div>
       </div>
+
+      {/* Regression guard banner — flags jobs marked recurring with no schedule behind them */}
+      {orphanJobs.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">
+              {orphanJobs.length} booking{orphanJobs.length === 1 ? '' : 's'} marked recurring with no schedule behind {orphanJobs.length === 1 ? 'it' : 'them'}
+            </p>
+            <p className="text-xs text-red-700 mt-0.5">
+              These will not generate future visits automatically — the customer thinks they're on a regular schedule, but nothing creates the next booking. Affected: {orphanJobs.slice(0, 5).map(j => j.customer?.full_name || 'Unknown').join(', ')}{orphanJobs.length > 5 ? `, +${orphanJobs.length - 5} more` : ''}.
+            </p>
+          </div>
+          <button
+            onClick={fixOrphans}
+            disabled={fixingOrphans}
+            className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
+          >
+            {fixingOrphans ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            {fixingOrphans ? 'Fixing...' : 'Fix now'}
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">

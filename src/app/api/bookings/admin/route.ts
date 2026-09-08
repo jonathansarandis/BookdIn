@@ -54,16 +54,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const admin = createAdminClient()
 
-  // 2. Verify edit job ownership (404 avoids leaking job existence)
+  // 2. Verify edit job ownership (404 avoids leaking job existence). Also pull the
+  // fields the recurring-schedule backfill below needs (customer/address/schedule
+  // link) — cheaper to grab them here than re-query later.
+  let existingJob: { business_id: string; customer_id: string; address_id: string; recurring_schedule_id: string | null } | null = null
   if (editJobId) {
-    const { data: existingJob } = await admin
+    const { data: fetchedJob } = await admin
       .from('jobs')
-      .select('business_id')
+      .select('business_id, customer_id, address_id, recurring_schedule_id')
       .eq('id', editJobId)
       .single()
-    if (!existingJob || existingJob.business_id !== businessId) {
+    if (!fetchedJob || fetchedJob.business_id !== businessId) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+    existingJob = fetchedJob
   }
 
   // 3. Fetch business (pricing fields + email fields)
@@ -345,6 +349,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } catch (e: any) {
         await logStep(admin, submissionId!, { step: 'job_update', status: 'failed', error: e.message, duration_ms: Date.now() - t_job_update })
         throw e
+      }
+
+      // Recurring backfill for edits — this was the actual root cause of customers
+      // silently getting missed on the calendar: staff routinely book a job as
+      // one-time first, then edit it to set Weekly/Fortnightly/Monthly once the
+      // customer confirms. The frequency picker in the admin UI is shown for edits
+      // exactly the same as for a brand-new booking, but this branch previously only
+      // ever wrote `jobs.frequency` — an inert label — with nothing that created the
+      // recurring_schedules row the materializer actually reads. So the job LOOKED
+      // recurring in the UI, but no future occurrences were ever generated, and
+      // nothing logged an error because nothing ran at all. Mirrors the create-branch
+      // logic below; only fires when frequency is newly set to a recurring value and
+      // this job isn't already linked to a schedule (avoids creating duplicates on
+      // every subsequent edit of an already-recurring job).
+      if (['weekly', 'fortnightly', 'monthly'].includes(effectiveFrequency) && existingJob && !existingJob.recurring_schedule_id) {
+        const t_recurring_edit = Date.now()
+        try {
+          const { getNextDate, materializeRecurringJobs } = await import('@/lib/recurring/materialize')
+          const nextOccurrence = getNextDate(new Date(scheduled_at), effectiveFrequency)
+          const { data: scheduleRow, error: scheduleErr } = await admin
+            .from('recurring_schedules')
+            .insert({
+              business_id: businessId,
+              customer_id: existingJob.customer_id,
+              service_id,
+              address_id: existingJob.address_id,
+              provider_id: provider_id ?? null,
+              frequency: effectiveFrequency,
+              next_scheduled_at: nextOccurrence.toISOString(),
+              anchor_date: new Date(scheduled_at).toISOString(),
+              is_active: true,
+              price: taxSplit.subtotal,
+              auto_charge: (payment_method ?? 'card') === 'card',
+              notes: notes ?? null,
+            })
+            .select('id')
+            .single()
+
+          if (scheduleErr) {
+            console.error('[admin booking] recurring_schedules insert (edit) failed:', scheduleErr)
+          } else {
+            await admin.from('jobs').update({ recurring_schedule_id: scheduleRow.id }).eq('id', editJobId)
+            const result = await materializeRecurringJobs(admin, { businessId })
+            console.log(`[admin booking] materialized ${result.jobsCreated} future occurrence(s) for edit-created recurring schedule ${scheduleRow.id}`)
+          }
+          await logStep(admin, submissionId!, { step: 'recurring_schedule_edit', status: scheduleErr ? 'failed' : 'ok', duration_ms: Date.now() - t_recurring_edit, error: scheduleErr?.message })
+        } catch (e: any) {
+          console.error('[admin booking] recurring schedule backfill on edit failed (non-blocking):', e.message)
+          await logStep(admin, submissionId!, { step: 'recurring_schedule_edit', status: 'failed', duration_ms: Date.now() - t_recurring_edit, error: e.message })
+        }
       }
 
       await markProcessed(admin, submissionId!, editJobId)

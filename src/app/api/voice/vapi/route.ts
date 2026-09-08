@@ -297,6 +297,22 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
     await admin.from('voice_calls').update({ booking_id: job.id }).eq('vapi_call_id', callCtx.vapiCallId)
   }
 
+  // Recurring bookings — this path never created a recurring_schedules row at all,
+  // unlike the admin/public booking routes (which got this fix earlier). Aria would
+  // happily take "every week" from a caller, store `frequency: 'weekly'` on the one
+  // job as an inert label, and nothing ever generated the following occurrences —
+  // exactly the same class of bug as the admin-edit gap, just a separate code path
+  // that was missed. Fire-and-forget (not awaited) for the same reason as the
+  // notifications below: it's not required to confirm the booking back to the
+  // caller, and a schedule insert + full materialize run shouldn't be able to delay
+  // that response.
+  if (['weekly', 'fortnightly', 'monthly'].includes(effectiveFrequency)) {
+    createRecurringScheduleForVoiceBooking({
+      business, job, customerId, serviceId: service.id, addressId: addr.id,
+      effectiveFrequency, scheduledAtIso, taxSplit,
+    }).catch(e => console.error('[vapi create_booking] recurring schedule setup failed (non-blocking):', e))
+  }
+
   // Everything below is genuinely non-blocking now — CRM, staff notification,
   // confirmation email, and SMS all used to be awaited right here, one after
   // another, including two live third-party API calls (Resend, then Dialpad)
@@ -321,6 +337,48 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
     booking_id: job.id,
     confirmation_summary: `Booked ${service.name} for ${formatBusinessDateTime(scheduledAtIso, tz)} at ${address_line1}, ${suburb}. Total ${formatCents(taxSplit.total, business.currency)}. A confirmation SMS and email are on the way.`,
   }
+}
+
+// Creates the recurring_schedules row a phone-booked recurring job needs so the
+// materializer (cron + manual /recurring sync) actually generates its future
+// occurrences, then materializes immediately so they show up without waiting for
+// tomorrow's cron. Mirrors the identical logic in bookings/admin/route.ts and
+// bookings/public/route.ts — kept here rather than shared purely because those
+// routes' local variable shapes differ enough that inlining was clearer than a
+// generic helper with a wide parameter surface.
+async function createRecurringScheduleForVoiceBooking(ctx: {
+  business: any; job: { id: string }; customerId: string; serviceId: string; addressId: string
+  effectiveFrequency: string; scheduledAtIso: string; taxSplit: any
+}) {
+  const { business, job, customerId, serviceId, addressId, effectiveFrequency, scheduledAtIso, taxSplit } = ctx
+  const { getNextDate, materializeRecurringJobs } = await import('@/lib/recurring/materialize')
+  const nextOccurrence = getNextDate(new Date(scheduledAtIso), effectiveFrequency)
+  const { data: scheduleRow, error: scheduleErr } = await admin
+    .from('recurring_schedules')
+    .insert({
+      business_id: business.id,
+      customer_id: customerId,
+      service_id: serviceId,
+      address_id: addressId,
+      provider_id: null,
+      frequency: effectiveFrequency,
+      next_scheduled_at: nextOccurrence.toISOString(),
+      anchor_date: new Date(scheduledAtIso).toISOString(),
+      is_active: true,
+      price: taxSplit.subtotal,
+      auto_charge: true,
+      notes: null,
+    })
+    .select('id')
+    .single()
+
+  if (scheduleErr) {
+    console.error('[vapi create_booking] recurring_schedules insert failed:', scheduleErr)
+    return
+  }
+  await admin.from('jobs').update({ recurring_schedule_id: scheduleRow.id }).eq('id', job.id)
+  const result = await materializeRecurringJobs(admin, { businessId: business.id })
+  console.log(`[vapi create_booking] materialized ${result.jobsCreated} future occurrence(s) for voice-created recurring schedule ${scheduleRow.id}`)
 }
 
 // Fire-and-forget side effects after a voice booking is created: CRM upsert,
