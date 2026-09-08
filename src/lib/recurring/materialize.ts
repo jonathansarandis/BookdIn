@@ -174,6 +174,16 @@ export async function materializeRecurringJobs(
         .from('jobs')
         .insert({
           business_id: schedule.business_id,
+          // location_id: same schema-drift NOT NULL column as recurring_schedules
+          // (see migrations/20260908_document_recurring_schedules_location_id.sql)
+          // — jobs.location_id is also NOT NULL on the live DB and also missing
+          // from tracked schema.sql/migrations. Every job insert here was failing
+          // this constraint, silently swallowed by the catch below: schedules were
+          // (once the recurring_schedules fix landed) finally being created
+          // successfully, but every one of their future occurrences failed to
+          // insert, so nothing ever showed up on the calendar. schedule.location_id
+          // is already in scope from the `select('*', ...)` above.
+          location_id: schedule.location_id,
           customer_id: schedule.customer_id,
           service_id: schedule.service_id,
           provider_id: schedule.provider_id || null,
