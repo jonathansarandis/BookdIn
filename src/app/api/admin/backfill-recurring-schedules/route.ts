@@ -28,7 +28,7 @@ const RECURRING_FREQUENCIES = ['weekly', 'fortnightly', 'monthly']
 async function findOrphans(admin: ReturnType<typeof createAdminClient>, businessId: string) {
   const { data: jobs, error } = await admin
     .from('jobs')
-    .select('id, customer_id, service_id, address_id, provider_id, frequency, scheduled_at, price, total_price, payment_method, notes, status, customer:customers(full_name, email, phone)')
+    .select('id, customer_id, service_id, address_id, provider_id, location_id, frequency, scheduled_at, price, total_price, payment_method, notes, status, customer:customers(full_name, email, phone)')
     .eq('business_id', businessId)
     .in('frequency', RECURRING_FREQUENCIES)
     .is('recurring_schedule_id', null)
@@ -88,6 +88,10 @@ export async function POST(request: NextRequest) {
         .from('recurring_schedules')
         .insert({
           business_id: businessId,
+          // location_id: NOT NULL on the live DB (schema drift, never in a tracked
+          // migration) — this is why all 9 backfill attempts failed the first time
+          // this route ran. See the matching comment in bookings/admin/route.ts.
+          location_id: job.location_id,
           customer_id: job.customer_id,
           service_id: job.service_id,
           address_id: job.address_id,

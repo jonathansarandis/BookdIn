@@ -308,7 +308,7 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
   // that response.
   if (['weekly', 'fortnightly', 'monthly'].includes(effectiveFrequency)) {
     createRecurringScheduleForVoiceBooking({
-      business, job, customerId, serviceId: service.id, addressId: addr.id,
+      business, job, customerId, serviceId: service.id, addressId: addr.id, locationId: loc.id,
       effectiveFrequency, scheduledAtIso, taxSplit,
     }).catch(e => console.error('[vapi create_booking] recurring schedule setup failed (non-blocking):', e))
   }
@@ -347,16 +347,21 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
 // routes' local variable shapes differ enough that inlining was clearer than a
 // generic helper with a wide parameter surface.
 async function createRecurringScheduleForVoiceBooking(ctx: {
-  business: any; job: { id: string }; customerId: string; serviceId: string; addressId: string
+  business: any; job: { id: string }; customerId: string; serviceId: string; addressId: string; locationId: string
   effectiveFrequency: string; scheduledAtIso: string; taxSplit: any
 }) {
-  const { business, job, customerId, serviceId, addressId, effectiveFrequency, scheduledAtIso, taxSplit } = ctx
+  const { business, job, customerId, serviceId, addressId, locationId, effectiveFrequency, scheduledAtIso, taxSplit } = ctx
   const { getNextDate, materializeRecurringJobs } = await import('@/lib/recurring/materialize')
   const nextOccurrence = getNextDate(new Date(scheduledAtIso), effectiveFrequency)
   const { data: scheduleRow, error: scheduleErr } = await admin
     .from('recurring_schedules')
     .insert({
       business_id: business.id,
+      // location_id: NOT NULL on the live DB (schema drift — never captured in a
+      // tracked migration). Every recurring_schedules insert across the codebase
+      // was missing this and silently failing until this fix — see the matching
+      // comment in bookings/admin/route.ts for the full story.
+      location_id: locationId,
       customer_id: customerId,
       service_id: serviceId,
       address_id: addressId,

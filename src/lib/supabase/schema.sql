@@ -180,6 +180,7 @@ create table if not exists recurring_schedules (
   id                  uuid primary key default uuid_generate_v4(),
   created_at          timestamptz default now(),
   business_id         uuid not null references businesses(id) on delete cascade,
+  location_id         uuid references locations(id), -- NOT NULL on the live DB; see migrations/20260908_document_recurring_schedules_location_id.sql
   customer_id         uuid not null references customers(id),
   service_id          uuid not null references services(id),
   address_id          uuid not null references addresses(id),

@@ -372,6 +372,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             .from('recurring_schedules')
             .insert({
               business_id: businessId,
+              location_id, // see the matching comment on the create-branch insert above — NOT NULL on the live DB
               customer_id: existingJob.customer_id,
               service_id,
               address_id: existingJob.address_id,
@@ -464,6 +465,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           .from('recurring_schedules')
           .insert({
             business_id: businessId,
+            // location_id: the actual root cause of the whole "recurring bookings
+            // silently never repeat" saga. recurring_schedules.location_id is a
+            // NOT NULL column on the live database that was never captured in the
+            // tracked migrations (schema drift) — every insert into this table
+            // from every code path (this one included, since it was first added)
+            // has been failing on this exact NOT NULL violation. The error was
+            // caught by the try/catch below and only ever console.error'd, so it
+            // never surfaced anywhere a human would see it — the job still got
+            // booked fine, so nothing looked broken until a customer noticed they
+            // were never rebooked.
+            location_id,
             customer_id: resolvedCustomerId,
             service_id,
             address_id: resolvedAddressId,
