@@ -123,10 +123,36 @@ export async function POST(
     return NextResponse.json({ error: 'No PaymentIntent on record' }, { status: 409 })
   }
 
+  // Bug fix (Sep 2026): capture must default to the CURRENT booking price, not
+  // whatever Stripe authorized at booking time. Previously, when the caller didn't
+  // pass amountToCapture (i.e. every normal "Capture payment" click that wasn't
+  // using the manual "charge a different amount" override), captureParams was left
+  // empty and Stripe's default behavior is to capture the full originally-authorized
+  // amount — silently ignoring any price_override/total_price edit made in BookdIn
+  // after the authorization but before capture. That overcharged customers whenever
+  // staff discounted or reduced a booking's price before capturing (reported: $20
+  // and $88 overcharges on real bookings). getChargeableAmount is the same
+  // price_override ?? total_price ?? price precedence used everywhere else the
+  // "current" job price is needed (direct-charge branch above, payroll, profit
+  // report), so this keeps capture consistent with what staff see on the job page.
+  const currentChargeableAmount = getChargeableAmount(job)
+  const resolvedAmountToCapture = amountToCapture ?? currentChargeableAmount
+
   let intent: Stripe.PaymentIntent
   try {
-    const captureParams: Stripe.PaymentIntentCaptureParams = {}
-    if (amountToCapture !== undefined) captureParams.amount_to_capture = amountToCapture
+    // Guard against trying to capture more than Stripe actually authorized — that's
+    // a distinct scenario (price was INCREASED after auth) that capture() itself
+    // can't fix; Stripe will reject amount_to_capture > the authorized amount. Fail
+    // with a clear, actionable message instead of a raw Stripe error, since this
+    // needs a new authorization (e.g. re-run the card) rather than a bigger capture.
+    const existingIntent = await stripe.paymentIntents.retrieve(job.stripe_payment_intent_id, stripeOpts)
+    if (resolvedAmountToCapture > existingIntent.amount) {
+      return NextResponse.json({
+        error: `Booking price ($${(resolvedAmountToCapture / 100).toFixed(2)}) is higher than the authorized amount ($${(existingIntent.amount / 100).toFixed(2)}). Re-authorize the card for the new amount before capturing.`,
+      }, { status: 409 })
+    }
+
+    const captureParams: Stripe.PaymentIntentCaptureParams = { amount_to_capture: resolvedAmountToCapture }
     intent = await stripe.paymentIntents.capture(
       job.stripe_payment_intent_id,
       captureParams,
