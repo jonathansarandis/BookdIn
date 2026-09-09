@@ -153,55 +153,63 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Payroll</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Subcontractor pay by week</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => shiftWeek(-7)} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-            <ChevronLeft className="w-4 h-4 text-gray-500" />
-          </button>
-          <div className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-900 min-w-[180px] text-center">
-            {fmtWeek(weekStart)}
+      {/* Sticky header — week selector + grand totals stay pinned to the top of the
+          scroll container while the per-provider tables scroll underneath. The
+          negative margins + matching padding cancel out the parent <main>'s p-6 so
+          this band sits flush with the viewport edges (no gap, no side bleed-through)
+          instead of floating at `top-6` with a visible strip of content peeking
+          above it. */}
+      <div className="sticky top-0 z-20 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-gray-100 space-y-5">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Payroll</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Subcontractor pay by week</p>
           </div>
-          <button onClick={() => shiftWeek(7)} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-            <ChevronRight className="w-4 h-4 text-gray-500" />
-          </button>
-          <button
-            onClick={() => setWeekStart(getMonday(new Date()))}
-            className="px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
-          >
-            This week
-          </button>
-          <button
-            onClick={() => setPricesHidden(v => !v)}
-            title="Hide price/GST/rate columns before sharing this with a contractor"
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border ${
-              pricesHidden
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            {pricesHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            {pricesHidden ? 'Prices hidden' : 'Hide prices'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => shiftWeek(-7)} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white">
+              <ChevronLeft className="w-4 h-4 text-gray-500" />
+            </button>
+            <div className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-900 min-w-[180px] text-center">
+              {fmtWeek(weekStart)}
+            </div>
+            <button onClick={() => shiftWeek(7)} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white">
+              <ChevronRight className="w-4 h-4 text-gray-500" />
+            </button>
+            <button
+              onClick={() => setWeekStart(getMonday(new Date()))}
+              className="px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+            >
+              This week
+            </button>
+            <button
+              onClick={() => setPricesHidden(v => !v)}
+              title="Hide price/GST/rate columns before sharing this with a contractor"
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border ${
+                pricesHidden
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {pricesHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {pricesHidden ? 'Prices hidden' : 'Hide prices'}
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Grand totals */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-gray-400 mb-1"><DollarSign className="w-3.5 h-3.5" /><span className="text-xs">Total payout owed</span></div>
-          <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotalPayout)}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-gray-400 mb-1"><DollarSign className="w-3.5 h-3.5" /><span className="text-xs">Cash already paid</span></div>
-          <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotalCash)}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 text-gray-400 mb-1"><Users className="w-3.5 h-3.5" /><span className="text-xs">Net payable</span></div>
-          <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotalPayout - grandTotalCash)}</p>
+        {/* Grand totals */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-gray-400 mb-1"><DollarSign className="w-3.5 h-3.5" /><span className="text-xs">Total payout owed</span></div>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotalPayout)}</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-gray-400 mb-1"><DollarSign className="w-3.5 h-3.5" /><span className="text-xs">Cash already paid</span></div>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotalCash)}</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-gray-400 mb-1"><Users className="w-3.5 h-3.5" /><span className="text-xs">Net payable</span></div>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotalPayout - grandTotalCash)}</p>
+          </div>
         </div>
       </div>
 
