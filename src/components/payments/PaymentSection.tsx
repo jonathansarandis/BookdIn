@@ -1,12 +1,40 @@
 // @ts-nocheck
 'use client'
 
-import { useEffect, useState } from 'react'
-import { loadStripe } from '@stripe/stripe-js'
+import { useEffect, useMemo, useState } from 'react'
+import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { CreditCard, Banknote, Lock, CheckCircle2 } from 'lucide-react'
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+// Bug fix (Sep 2026): this used to be a single module-level `loadStripe(...)` call with
+// no stripeAccount, which loads Stripe.js scoped to BookdIn's own platform account. Every
+// business here is a Stripe Connect connected account, so a PaymentMethod created that
+// way lives on the PLATFORM account — but every server-side call that uses it
+// (/api/stripe/intent, capture, etc.) passes `{ stripeAccount: business.stripe_account_id }`.
+// Stripe rejects that combination with "No such PaymentMethod ... OAuth key or
+// Stripe-Account header was used but API request was provided with a platform-owned
+// payment method ID" (reported by Reyan on a manual phone booking). The booking still
+// went through because job creation happens before the card step, but the card was
+// never actually attached.
+//
+// Fix: load Stripe.js scoped to the business's OWN connected account via the
+// `stripeAccount` option, so createPaymentMethod() creates the PaymentMethod directly on
+// that account and every later server call agrees with it. Cached per-account (not
+// per-render) since loadStripe() returns a promise that should only be created once for
+// a given key.
+const stripePromiseCache = new Map<string, Promise<Stripe | null>>()
+function getStripePromise(stripeAccountId: string | null) {
+  const cacheKey = stripeAccountId || '__platform__'
+  let cached = stripePromiseCache.get(cacheKey)
+  if (!cached) {
+    cached = loadStripe(
+      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+      stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+    )
+    stripePromiseCache.set(cacheKey, cached)
+  }
+  return cached
+}
 
 const CARD_ELEMENT_OPTIONS = {
   style: {
@@ -95,9 +123,14 @@ interface PaymentSectionProps {
   onPaymentMethodChange: (method: 'card' | 'saved' | 'other') => void
   onCardReady: (fn: () => Promise<string | null>) => void
   savedCard?: SavedCard | null
+  // The business's Stripe Connect account ID — see getStripePromise above for why this
+  // matters. null/undefined while the business record is still loading is fine (falls
+  // back to the platform account momentarily); pass it as soon as it's known.
+  stripeAccountId?: string | null
 }
 
-export default function PaymentSection({ paymentMethod, onPaymentMethodChange, onCardReady, savedCard }: PaymentSectionProps) {
+export default function PaymentSection({ paymentMethod, onPaymentMethodChange, onCardReady, savedCard, stripeAccountId }: PaymentSectionProps) {
+  const stripePromise = useMemo(() => getStripePromise(stripeAccountId ?? null), [stripeAccountId])
   // "Saved card" skips Stripe Elements entirely — the getter just resolves to
   // the customer's stored payment method ID.
   useEffect(() => {

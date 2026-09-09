@@ -73,6 +73,7 @@ export default function BookingPage() {
   const [overrideCents, setOverrideCents] = useState<number | null>(null)
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
   const [businessId, setBusinessId] = useState('')
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null)
   const [savedCard, setSavedCard] = useState<any>(null)
 
   const [editAddressId, setEditAddressId] = useState('')
@@ -113,7 +114,7 @@ export default function BookingPage() {
         supabase.from('customers').select('id, full_name, email, phone').eq('business_id', bid).order('full_name'),
         supabase.from('providers').select('id, display_name').eq('business_id', bid).eq('is_active', true),
         supabase.from('lead_sources').select('manual_campaign_label').eq('business_id', bid).not('manual_campaign_label', 'is', null),
-        supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax, tax_mode').eq('id', bid).single(),
+        supabase.from('businesses').select('timezone, tax_rate, tax_name, show_tax, tax_mode, stripe_account_id').eq('id', bid).single(),
         supabase.from('frequency_discounts').select('frequency, discount_percent, is_enabled').eq('business_id', bid),
         supabase.from('locations').select('id, name, timezone').eq('business_id', bid).eq('is_active', true).order('name'),
       ])
@@ -130,6 +131,7 @@ export default function BookingPage() {
         setTaxName(biz.tax_name?.trim() || 'Tax')
         setShowTax(biz.show_tax ?? false)
         setTaxMode(biz.tax_mode ?? 'exclusive')
+        setStripeAccountId(biz.stripe_account_id ?? null)
       }
       const freqMap: Record<string, { discount_percent: number; is_enabled: boolean }> = {}
       for (const row of fdData || []) freqMap[row.frequency] = { discount_percent: row.discount_percent, is_enabled: row.is_enabled }
@@ -980,6 +982,7 @@ export default function BookingPage() {
               onPaymentMethodChange={setPaymentMethod}
               onCardReady={(fn) => setGetCardPaymentMethod(() => fn)}
               savedCard={savedCard}
+              stripeAccountId={stripeAccountId}
             />
           )}
 
