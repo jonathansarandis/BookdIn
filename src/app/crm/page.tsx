@@ -78,7 +78,12 @@ export default function CRMPage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between">
+      {/* Sticky page header — title/count/actions stay pinned above the board while
+          scrolling, same treatment as the per-column stage headers below (which are
+          already sticky top-0 themselves). z-20 keeps this row above those (z-10),
+          and the column headers' top-[88px] offset is this bar's rendered height so
+          the two sticky layers stack cleanly instead of overlapping. */}
+      <div className="sticky top-0 z-20 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-gray-100 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">CRM</h1>
           <p className="text-sm text-gray-500 mt-0.5">{contacts.length} contacts</p>
@@ -114,8 +119,10 @@ export default function CRMPage() {
               <div key={stage.key} className="flex-shrink-0 w-68" style={{ width: '272px' }}>
                 {/* Sticky so the stage name/count/add-contact stay visible while scrolling
                     down a long column of leads — was scrolling away with everything else,
-                    making it hard to tell which stage you were looking at. */}
-                <div className="sticky top-0 z-10 bg-gray-100 flex items-center justify-between mb-3 px-1 py-1.5 -mx-1">
+                    making it hard to tell which stage you were looking at. top-[88px] (not
+                    top-0) so this sits just below the sticky page header above instead of
+                    overlapping it — both are sticky within the same scroll container. */}
+                <div className="sticky top-[88px] z-10 bg-gray-100 flex items-center justify-between mb-3 px-1 py-1.5 -mx-1">
                   <div className="flex items-center gap-2 px-1">
                     <div className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
                     <span className="text-sm font-semibold text-gray-900">{stage.label}</span>
