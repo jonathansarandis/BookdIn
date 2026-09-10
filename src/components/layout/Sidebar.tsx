@@ -97,7 +97,7 @@ export default function Sidebar({ profile, business }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href!}
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-0.5"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all mb-0.5 w-full"
               style={{
                 background: isActive ? 'rgba(37,99,255,0.12)' : 'transparent',
                 color: isActive ? '#FFFFFF' : '#E8EEF8',
