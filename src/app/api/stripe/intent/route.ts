@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@/lib/supabase/server'
+import { syncBookingConversionToGoogleAds } from '@/lib/googleAdsConversions'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
@@ -88,6 +89,15 @@ export async function POST(request: Request) {
         payment_method: 'card',
       })
       .eq('id', jobId)
+
+    // Best-effort: same booking-stage conversion upload as the other card-capture
+    // paths — this route only records it when the auth actually succeeded
+    // ('requires_capture' -> 'authorized'), matching the gate in the sync function.
+    if (paymentIntent.status === 'requires_capture') {
+      syncBookingConversionToGoogleAds(jobId).catch((err: any) =>
+        console.error('[stripe/intent] syncBookingConversionToGoogleAds failed (non-blocking):', err?.message)
+      )
+    }
 
     // Successful auth on a fresh card (not one already reused from customer_payment_methods) —
     // save it so it's offered as "saved card" next time this customer is booked.

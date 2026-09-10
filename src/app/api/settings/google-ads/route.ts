@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       google_ads_customer_id,
       google_ads_enabled,
       google_ads_conversion_action_id, // optional — enables offline conversion upload when set
+      google_ads_booking_conversion_action_id, // optional — enables the earlier, booking-stage conversion upload
       developer_token,   // optional plaintext — only present when the user is setting/rotating it
       disconnect,        // optional — clears the refresh token and connected email
     } = body
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
     if (!disconnect) {
       updates.google_ads_customer_id = google_ads_customer_id || null
       updates.google_ads_conversion_action_id = google_ads_conversion_action_id || null
+      updates.google_ads_booking_conversion_action_id = google_ads_booking_conversion_action_id || null
     }
 
     if (developer_token) {

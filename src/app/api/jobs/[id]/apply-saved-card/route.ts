@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { syncBookingConversionToGoogleAds } from '@/lib/googleAdsConversions'
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -81,6 +82,10 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   }
 
   console.log(`[apply-saved-card] Applied saved card to job ${job.id}`)
+
+  syncBookingConversionToGoogleAds(job.id).catch((err: any) =>
+    console.error('[apply-saved-card] syncBookingConversionToGoogleAds failed (non-blocking):', err?.message)
+  )
 
   return NextResponse.json({
     applied: true,

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { syncBookingConversionToGoogleAds } from '@/lib/googleAdsConversions'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -70,6 +71,14 @@ export async function POST(request: NextRequest) {
     console.error('[secure-card/save] DB update failed:', updateError.message)
     return NextResponse.json({ error: 'Failed to record card — please contact support' }, { status: 500 })
   }
+
+  // Best-effort: tell Google Ads this lead actually booked and put a card
+  // down (a much stronger signal than the lead-form submission), so Smart
+  // Bidding can tell it apart from a lead who never proceeded. Non-blocking —
+  // the card is already saved above regardless of whether this succeeds.
+  syncBookingConversionToGoogleAds(job.id).catch(err =>
+    console.error('[secure-card/save] syncBookingConversionToGoogleAds failed (non-blocking):', err?.message)
+  )
 
   // Upsert customer_payment_methods: one record per (customer, business), keyed on the unique constraint.
   if (job.customer?.id && job.business_id) {

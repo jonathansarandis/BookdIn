@@ -174,3 +174,97 @@ export async function syncJobConversionToGoogleAds(jobId: string): Promise<SyncR
   await admin.from('jobs').update({ conversion_upload_error: result.error?.slice(0, 2000) }).eq('id', jobId)
   return { uploaded: false, reason: 'upload_failed', error: result.error }
 }
+
+/**
+ * Given a job that just had a card captured (payment_status -> 'card_on_file',
+ * i.e. the customer actually booked and put a card down — not merely
+ * submitted a lead form), looks up its gclid and uploads a SEPARATE
+ * conversion to Google Ads under google_ads_booking_conversion_action_id.
+ *
+ * This is intentionally a distinct conversion action from the job-completion
+ * one above: Jonathan wants Google to be able to tell a lead who books and
+ * pays apart from one who merely fills out a form, without waiting weeks for
+ * the job itself to be completed. Firing this early is a much faster signal
+ * back to Smart Bidding than the completion-based conversion.
+ *
+ * Best-effort and idempotent — safe to call more than once for the same job
+ * (a second call is a no-op once booking_conversion_uploaded_at is set), and
+ * never throws; every failure mode is returned as a result plus recorded on
+ * the job row for visibility. Called from both places a card can actually
+ * get captured (POST /api/secure-card/save, and the setup_intent.succeeded
+ * webhook fallback for 3DS redirects) so it fires exactly once regardless of
+ * which path completes the capture.
+ */
+export async function syncBookingConversionToGoogleAds(jobId: string): Promise<SyncResult> {
+  const admin = createAdminClient()
+
+  const { data: job } = await admin
+    .from('jobs')
+    .select('id, business_id, customer_id, payment_status, price, total_price, created_at, booking_conversion_uploaded_at')
+    .eq('id', jobId)
+    .single()
+
+  if (!job) return { uploaded: false, reason: 'job_not_found' }
+  // Any of these means a real card is on record for this booking — either
+  // saved for later (card_on_file), already put on hold (authorized), or
+  // already charged (paid). 'pending'/no card yet doesn't count.
+  if (!['card_on_file', 'authorized', 'paid'].includes(job.payment_status)) {
+    return { uploaded: false, reason: 'card_not_captured' }
+  }
+  if (job.booking_conversion_uploaded_at) return { uploaded: false, reason: 'already_uploaded' }
+
+  const { data: business } = await admin
+    .from('businesses')
+    .select('google_ads_customer_id, google_ads_enabled, google_ads_developer_token_encrypted, google_ads_developer_token_iv, google_ads_refresh_token_encrypted, google_ads_refresh_token_iv, google_ads_login_customer_id, google_ads_booking_conversion_action_id')
+    .eq('id', job.business_id)
+    .single()
+
+  if (!business || !isGoogleAdsConfigured(business) || !business.google_ads_booking_conversion_action_id) {
+    return { uploaded: false, reason: 'google_ads_not_configured' }
+  }
+
+  // Same lookup order as the completion sync: booking-level gclid first
+  // (more precise for repeat customers with different gclids per booking),
+  // falling back to the customer-level one.
+  let gclid: string | null = null
+  const { data: leadSource } = await admin
+    .from('lead_sources')
+    .select('gclid')
+    .eq('booking_id', jobId)
+    .maybeSingle()
+  if (leadSource?.gclid) gclid = leadSource.gclid
+
+  if (!gclid && job.customer_id) {
+    const { data: customer } = await admin
+      .from('customers')
+      .select('gclid')
+      .eq('id', job.customer_id)
+      .maybeSingle()
+    if (customer?.gclid) gclid = customer.gclid
+  }
+
+  if (!gclid) return { uploaded: false, reason: 'no_gclid' } // organic/referral booking — expected, not an error
+
+  const conversionValueCents = job.total_price ?? job.price ?? 0
+  // Conversion date is "now" (the moment the card was captured), not
+  // created_at — the conversion should timestamp the paid/booked moment
+  // Google is being told about, matching what actually happened.
+  const conversionDate = new Date()
+
+  const result = await uploadClickConversion(business, {
+    gclid,
+    conversionActionId: business.google_ads_booking_conversion_action_id,
+    conversionDateTime: toGoogleAdsDateTime(conversionDate),
+    conversionValue: conversionValueCents / 100,
+    currencyCode: 'AUD',
+    orderId: jobId,
+  })
+
+  if (result.success) {
+    await admin.from('jobs').update({ booking_conversion_uploaded_at: new Date().toISOString(), booking_conversion_upload_error: null }).eq('id', jobId)
+    return { uploaded: true }
+  }
+
+  await admin.from('jobs').update({ booking_conversion_upload_error: result.error?.slice(0, 2000) }).eq('id', jobId)
+  return { uploaded: false, reason: 'upload_failed', error: result.error }
+}

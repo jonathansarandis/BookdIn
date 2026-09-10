@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendReceipt } from '@/lib/email'
+import { syncBookingConversionToGoogleAds } from '@/lib/googleAdsConversions'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
@@ -205,6 +206,14 @@ export async function POST(request: Request) {
               .eq('id', jobId)
 
             console.log('[webhook] setup_intent.succeeded fallback persisted card for job', jobId)
+
+            // Best-effort: same booking-stage conversion upload /save does — this is the
+            // 3DS-redirect fallback path, so it needs to fire here too, not just there.
+            // syncBookingConversionToGoogleAds is idempotent (gated on
+            // booking_conversion_uploaded_at), so it's harmless if /save already fired.
+            syncBookingConversionToGoogleAds(jobId).catch((err: any) =>
+              console.error('[webhook] syncBookingConversionToGoogleAds failed (non-blocking):', err?.message)
+            )
 
             // Best-effort: mirror the customer_payment_methods upsert /save does, so the
             // card brand/last4 show up in the UI too. Not critical — the job update above

@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { syncBookingConversionToGoogleAds } from '@/lib/googleAdsConversions'
 
 const admin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -85,6 +86,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .eq('id', params.id)
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+
+  // Best-effort: same booking-stage conversion upload as a fresh card capture —
+  // a rebooking customer reusing a saved card still counts as "booked + card down".
+  syncBookingConversionToGoogleAds(params.id).catch((err: any) =>
+    console.error('[attach-saved-card] syncBookingConversionToGoogleAds failed (non-blocking):', err?.message)
+  )
 
   // Cron only authorizes jobs scheduled for "tomorrow" — a same-day booking needs a
   // human to hit Pre-authorize manually, so flag it the same way secure-card/save does.
