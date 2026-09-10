@@ -528,19 +528,26 @@ export default function BookingPage() {
         })
       }
 
-      // Card payment handling differs by method:
-      // - 'saved' reuses the customer's stored payment method. This used to call
-      //   /api/stripe/intent immediately, which authorizes (holds funds on) the card the
-      //   instant the job is created — even if the job is weeks out. That's the rebook
-      //   bug: rebooking a returning customer auto-selects "saved card" and was
-      //   silently pre-authorizing it on the spot. Now it just records the card as
-      //   card_on_file, same as every other booking path, and the nightly cron
-      //   authorizes it the day before the job (or same-day bookings get flagged for
-      //   a manual pre-auth).
-      // - 'card' (fresh entry) still authorizes immediately — unchanged for now.
-      if (paymentMethod === 'saved' && getCardPaymentMethod) {
+      // Card payment handling — both 'saved' (reusing a stored card) and 'card' (a
+      // brand-new card entered on this form) route through the same attach-saved-card
+      // call now. That endpoint just records the PaymentMethod as card_on_file and lets
+      // the nightly cron authorize it the day before the job (or flags same-day bookings
+      // for a manual "Pre-authorize"); it self-heals a missing Stripe customer, which is
+      // exactly the case for a fresh card (its PaymentMethod isn't attached to any
+      // customer yet).
+      //
+      // 'card' used to call /api/stripe/intent directly instead, which creates+confirms
+      // a manual-capture PaymentIntent immediately — a real authorization against the
+      // card issuer the instant the job is created, no matter how far out the service
+      // date is. That's what let a genuine "insufficient funds" decline surface on a
+      // booking scheduled weeks away (reported by Reyan on an 18 Sept test booking
+      // entered on 10 Sept). 'saved' already got this fix earlier (see the rebook bug);
+      // this brings 'card' in line with it.
+      if ((paymentMethod === 'saved' || paymentMethod === 'card') && getCardPaymentMethod) {
         const paymentMethodId = await getCardPaymentMethod()
-        if (!paymentMethodId) throw new Error('Please select a saved card')
+        if (!paymentMethodId) {
+          throw new Error(paymentMethod === 'saved' ? 'Please select a saved card' : 'Please enter valid card details')
+        }
         const attachRes = await fetch(`/api/jobs/${jobId}/attach-saved-card`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -548,16 +555,6 @@ export default function BookingPage() {
         })
         const attachData = await attachRes.json()
         if (!attachRes.ok) throw new Error(attachData.error || 'Failed to save card on file')
-      } else if (paymentMethod === 'card' && getCardPaymentMethod) {
-        const paymentMethodId = await getCardPaymentMethod()
-        if (!paymentMethodId) throw new Error('Please enter valid card details')
-        const intentRes = await fetch('/api/stripe/intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId, paymentMethodId }),
-        })
-        const intentData = await intentRes.json()
-        if (intentData.error) throw new Error(intentData.error)
       }
 
       // Update customer stats

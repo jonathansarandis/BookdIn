@@ -28,6 +28,21 @@ interface Props {
   currentProviderId: string | null
   customerId?: string | null
   businessId?: string | null
+  scheduledAt?: string | null
+  timezone?: string
+}
+
+// Compares calendar dates in the job's own timezone — not a raw timestamp diff — so a
+// job scheduled for earlier today is still completable; only a date that hasn't
+// arrived yet is blocked. Mirrors the same guard added to the provider-status API
+// route, after a subcontractor accidentally marked a job scheduled for 15 Sept
+// completed while working on the 10th, which silently dropped it off the upcoming
+// list until the actual day.
+function isDateInFuture(scheduledAt: string | null | undefined, timezone: string) {
+  if (!scheduledAt) return false
+  const jobDate = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(scheduledAt))
+  const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  return jobDate > todayDate
 }
 
 export function CancelBookingButton({ jobId, status }: { jobId: string; status: string }) {
@@ -91,15 +106,23 @@ export function CancelBookingButton({ jobId, status }: { jobId: string; status: 
   )
 }
 
-export default function JobStatusUpdater({ jobId, currentStatus, providers, currentProviderId, customerId, businessId }: Props) {
+export default function JobStatusUpdater({ jobId, currentStatus, providers, currentProviderId, customerId, businessId, scheduledAt, timezone }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState(currentProviderId || '')
   const [open, setOpen] = useState(false)
 
-  const nextStatuses = STATUS_TRANSITIONS[currentStatus] || []
+  const jobIsFuture = isDateInFuture(scheduledAt, timezone || 'Australia/Melbourne')
+  const nextStatuses = (STATUS_TRANSITIONS[currentStatus] || []).filter(s => s !== 'completed' || !jobIsFuture)
 
   async function updateStatus(newStatus: string) {
+    // Belt-and-braces alongside the dropdown filter above (which already hides this
+    // option) — this writes straight to Supabase from the browser rather than through
+    // an API route, so there's no server-side check unless it's here too.
+    if (newStatus === 'completed' && jobIsFuture) {
+      alert("This job isn't scheduled until its date arrives — it can't be marked completed early.")
+      return
+    }
     setLoading(true)
     const supabase = createClient()
 

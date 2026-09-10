@@ -254,13 +254,29 @@ export default function ProviderDashboard() {
                         </button>
                       )}
                       {job.status === 'in_progress' && (
-                        <button
-                          onClick={() => updateStatus(job.id, 'completed')}
-                          className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
-                          style={{ background: '#16a34a' }}
-                        >
-                          Mark complete
-                        </button>
+                        job.scheduled_at < todayEnd ? (
+                          <button
+                            onClick={() => updateStatus(job.id, 'completed')}
+                            className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
+                            style={{ background: '#16a34a' }}
+                          >
+                            Mark complete
+                          </button>
+                        ) : (
+                          // A future-dated job can still be started early, but "Complete"
+                          // only becomes selectable on the day it's actually scheduled —
+                          // marking it done ahead of time silently moved it to the
+                          // Completed tab, where it dropped off the upcoming list and got
+                          // missed on the real day (reported after Shayne completed a job
+                          // scheduled for 15 Sept while working on the 10th).
+                          <button
+                            disabled
+                            title="This job isn't scheduled until its date arrives"
+                            className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-gray-400 bg-gray-100 cursor-not-allowed"
+                          >
+                            Not yet due
+                          </button>
+                        )
                       )}
                     </div>
                   )}

@@ -52,7 +52,7 @@ export async function POST(
   // Verify job is assigned to this provider — explicit ownership check before write
   const { data: job, error: jobErr } = await admin
     .from('jobs')
-    .select('id, status')
+    .select('id, status, scheduled_at, business:businesses(timezone)')
     .eq('id', params.id)
     .eq('provider_id', provider.id)
     .single()
@@ -67,6 +67,26 @@ export async function POST(
       { error: `Cannot transition from '${job.status}' to '${status}'` },
       { status: 409 }
     )
+  }
+
+  // A job accidentally marked 'completed' before its actual service date used to be
+  // easy to do (a subcontractor tapped the wrong job) and caused real fallout: it
+  // fires the completion conversion upload early and, worse, moves the job into the
+  // provider portal's "Completed" tab where it's no longer visible on the upcoming
+  // list — so the provider forgets to show up. Compare by calendar date in the
+  // business's own timezone (not a raw timestamp diff), so a job scheduled for
+  // earlier today can still be completed — only a job whose date hasn't arrived yet
+  // is blocked.
+  if (status === 'completed' && job.scheduled_at) {
+    const tz = job.business?.timezone || 'Australia/Melbourne'
+    const jobDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(job.scheduled_at))
+    const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    if (jobDate > todayDate) {
+      return NextResponse.json(
+        { error: `This job is scheduled for ${jobDate}, which hasn't arrived yet — it can't be marked completed early.` },
+        { status: 409 }
+      )
+    }
   }
 
   const { error: updateError } = await admin
