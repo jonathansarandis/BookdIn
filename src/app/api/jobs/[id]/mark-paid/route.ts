@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const { data: job, error: jobError } = await admin
     .from('jobs')
-    .select('id, business_id, payment_status')
+    .select('id, business_id, payment_status, parent_job_id')
     .eq('id', params.id)
     .single()
 
@@ -58,6 +58,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       payment_status: 'paid',
       paid_at: new Date().toISOString(),
       payment_method: method,
+      // Same fix as /api/jobs/[id]/charge — an additional-charge child job
+      // (parent_job_id set) never runs through the normal job-status lifecycle,
+      // so without this it'd sit at status='confirmed' forever and be silently
+      // dropped from the weekly profit report, which only counts status='completed'.
+      ...(job.parent_job_id ? { status: 'completed', completed_at: new Date().toISOString() } : {}),
     })
     .eq('id', params.id)
 

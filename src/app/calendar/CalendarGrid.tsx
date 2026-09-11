@@ -72,6 +72,42 @@ function JobChip({ job, businessTimezone, onOpen }: { job: any; businessTimezone
   )
 }
 
+// Same drag wiring as JobChip, just with the "+N more" modal's larger
+// name/time row layout instead of the compact day-cell chip styling.
+function ModalJobRow({ job, businessTimezone, onOpen }: { job: any; businessTimezone: string; onOpen: (job: any) => void }) {
+  const draggable = DRAGGABLE_STATUSES.has(job.status)
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: job.id, disabled: !draggable })
+  const tz = job.location?.timezone || businessTimezone
+
+  return (
+    <button
+      ref={setNodeRef}
+      {...(draggable ? attributes : {})}
+      {...(draggable ? listeners : {})}
+      onClick={() => onOpen(job)}
+      title={draggable ? 'Drag to reschedule, or click for details' : undefined}
+      className={cn(
+        'block w-full text-left px-3 py-2 rounded-lg hover:opacity-80 transition-opacity',
+        draggable ? 'cursor-grab active:cursor-grabbing' : '',
+        isDragging ? 'opacity-30' : '',
+        STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-800'
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold truncate">
+          {job.location?.name && (
+            <span className="opacity-60 mr-2 text-xs">{job.location.name.slice(0,3).toUpperCase()}</span>
+          )}
+          {job.customer?.full_name || 'Unknown'}
+        </span>
+        <span className="text-sm font-medium flex-shrink-0">
+          {job.is_flexible_time ? 'Flexible' : formatBusinessDateTime(job.scheduled_at, tz, 'h:mm a')}
+        </span>
+      </div>
+    </button>
+  )
+}
+
 function DayCell({
   day, dayJobs, isToday, isWeekend, businessTimezone, onOpen, onMore,
 }: {
@@ -193,7 +229,13 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
 
       <DndContext
         sensors={sensors}
-        onDragStart={e => setActiveJob(localJobs.find(j => j.id === e.active.id) || null)}
+        onDragStart={e => {
+          setActiveJob(localJobs.find(j => j.id === e.active.id) || null)
+          // Close the "+N more" popover so the day grid underneath is visible
+          // and droppable — it's a fixed full-screen overlay that would
+          // otherwise sit on top of every day cell during the drag.
+          setDayModal(null)
+        }}
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveJob(null)}
       >
@@ -246,59 +288,46 @@ export default function CalendarGrid({ jobs, businessTimezone, year, month }: Pr
             </div>
           )}
         </DragOverlay>
-      </DndContext>
 
-      {dayModal && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4"
-          onClick={() => setDayModal(null)}
-        >
+        {/* The "+N more" popover has to live inside DndContext, not after it —
+            useDraggable is a no-op on elements outside the provider, which is
+            why these overflow rows couldn't be dragged to reschedule before
+            (they were also plain non-draggable <button>s; see ModalJobRow). */}
+        {dayModal && (
           <div
-            className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col"
-            onClick={e => e.stopPropagation()}
+            className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4"
+            onClick={() => setDayModal(null)}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-900">
-                {dayModal.jobs.length} {dayModal.jobs.length === 1 ? 'booking' : 'bookings'} on day {dayModal.day}
-              </h3>
-              <button
-                onClick={() => setDayModal(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <div className="overflow-y-auto p-3 space-y-2">
-              {dayModal.jobs.map((job: any) => (
+            <div
+              className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  {dayModal.jobs.length} {dayModal.jobs.length === 1 ? 'booking' : 'bookings'} on day {dayModal.day}
+                </h3>
                 <button
-                  key={job.id}
-                  onClick={() => {
-                    setSelectedJob(job)
-                    setDayModal(null)
-                  }}
-                  className={cn(
-                    'block w-full text-left px-3 py-2 rounded-lg hover:opacity-80 transition-opacity',
-                    STATUS_CHIP[job.status] || 'bg-gray-100 text-gray-800'
-                  )}
+                  onClick={() => setDayModal(null)}
+                  className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                  aria-label="Close"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold truncate">
-                      {job.location?.name && (
-                        <span className="opacity-60 mr-2 text-xs">{job.location.name.slice(0,3).toUpperCase()}</span>
-                      )}
-                      {job.customer?.full_name || 'Unknown'}
-                    </span>
-                    <span className="text-sm font-medium flex-shrink-0">
-                      {job.is_flexible_time ? 'Flexible' : formatBusinessDateTime(job.scheduled_at, job.location?.timezone || businessTimezone, 'h:mm a')}
-                    </span>
-                  </div>
+                  ×
                 </button>
-              ))}
+              </div>
+              <div className="overflow-y-auto p-3 space-y-2">
+                {dayModal.jobs.map((job: any) => (
+                  <ModalJobRow
+                    key={job.id}
+                    job={job}
+                    businessTimezone={businessTimezone}
+                    onOpen={(j) => { setSelectedJob(j); setDayModal(null) }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </DndContext>
 
       <JobPopover
         job={selectedJob}

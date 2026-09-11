@@ -50,6 +50,7 @@ export async function POST(
       price_override,
       total_price,
       price,
+      parent_job_id,
       stripe_payment_intent_id,
       stripe_payment_method_id,
       customer:customers(stripe_customer_id),
@@ -96,6 +97,15 @@ export async function POST(
         paid_at: new Date().toISOString(),
         final_charged_amount: intent.amount_received,
         stripe_payment_intent_id: intent.id,
+        // Additional-charge ("follow-up charge") jobs are created as child rows
+        // with status 'confirmed' and never go through the normal
+        // confirmed→assigned→...→completed flow — there's no provider portal
+        // step for them. Left at 'confirmed' forever, they were silently
+        // excluded from the weekly profit report and payroll, which both
+        // filter on status='completed' + completed_at. A follow-up charge is
+        // fully realized the moment it's actually paid, so mark it completed
+        // right here instead of leaving it in permanent limbo.
+        ...(job.parent_job_id ? { status: 'completed', completed_at: new Date().toISOString() } : {}),
       })
       .eq('id', params.id)
 
@@ -169,6 +179,10 @@ export async function POST(
       payment_status: 'paid',
       paid_at: new Date().toISOString(),
       final_charged_amount: intent.amount_received,
+      // See the same guard in the direct-charge branch above — a follow-up
+      // charge child job otherwise never reaches status='completed', so it
+      // never shows up in the weekly profit report or payroll.
+      ...(job.parent_job_id ? { status: 'completed', completed_at: new Date().toISOString() } : {}),
     })
     .eq('id', params.id)
 
