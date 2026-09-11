@@ -77,13 +77,20 @@ export default function CRMPage() {
   }, {} as Record<string, any[]>)
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Sticky page header — title/count/actions stay pinned above the board while
-          scrolling, same treatment as the per-column stage headers below (which are
-          already sticky top-0 themselves). z-20 keeps this row above those (z-10),
-          and the column headers' top-[88px] offset is this bar's rendered height so
-          the two sticky layers stack cleanly instead of overlapping. */}
-      <div className="sticky top-0 z-20 -mx-6 -mt-6 px-6 pt-6 pb-4 bg-gray-100 flex items-center justify-between">
+    // h-full + flex-col: the board below gets its own bounded, independently
+    // scrolling area (flex-1 min-h-0) instead of relying on the page (`main`)
+    // to scroll. That matters because the board row also needs overflow-x-auto
+    // for horizontal scrolling — and per the CSS overflow spec, any element
+    // with overflow-x set to auto/scroll has its overflow-y silently forced to
+    // auto too (you can't mix 'auto' on one axis with 'visible' on the other).
+    // That forced overflow-y made the board row itself a scroll container, which
+    // meant the column headers' `sticky` offset was computed relative to the
+    // (never-actually-scrolling) board row instead of the page — so the header
+    // rendered pinned partway down over the first card instead of staying above
+    // the list. Giving the board a real, bounded scroll area of its own makes it
+    // the correct — and only — scroll container for those sticky headers.
+    <div className="h-full flex flex-col gap-5 animate-fade-in">
+      <div className="flex-shrink-0 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">CRM</h1>
           <p className="text-sm text-gray-500 mt-0.5">{contacts.length} contacts</p>
@@ -112,17 +119,17 @@ export default function CRMPage() {
           </Link>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto overflow-y-visible pb-4" style={{ minHeight: '60vh' }}>
+        <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto overflow-y-auto pb-4">
           {STAGES.map(stage => {
             const stageContacts = contactsByStage[stage.key] || []
             return (
               <div key={stage.key} className="flex-shrink-0 w-68" style={{ width: '272px' }}>
                 {/* Sticky so the stage name/count/add-contact stay visible while scrolling
                     down a long column of leads — was scrolling away with everything else,
-                    making it hard to tell which stage you were looking at. top-[88px] (not
-                    top-0) so this sits just below the sticky page header above instead of
-                    overlapping it — both are sticky within the same scroll container. */}
-                <div className="sticky top-[88px] z-10 bg-gray-100 flex items-center justify-between mb-3 px-1 py-1.5 -mx-1">
+                    making it hard to tell which stage you were looking at. top-0 because
+                    this board div (not the page) is now the actual scroll container — see
+                    the comment above the outer wrapper. */}
+                <div className="sticky top-0 z-10 bg-gray-100 flex items-center justify-between mb-3 px-1 py-1.5 -mx-1">
                   <div className="flex items-center gap-2 px-1">
                     <div className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
                     <span className="text-sm font-semibold text-gray-900">{stage.label}</span>
