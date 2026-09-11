@@ -136,7 +136,15 @@ export default function CRMPage() {
               // exactly as tall as the board means its header now has "room" to
               // stay stuck for the column's *entire* scroll, no matter how short
               // or long that column is.
-              <div key={stage.key} className="flex-shrink-0 w-68 h-full overflow-y-auto" style={{ width: '272px' }}>
+              // overflow-x-hidden here (not the default 'visible') because of the same
+              // CSS overflow quirk noted for the board container above: pairing
+              // overflow-y:auto with overflow-x:visible makes the browser silently
+              // force overflow-x to auto too, which is what put an unwanted horizontal
+              // scrollbar on every column (the page/board should be the only thing
+              // that scrolls sideways). Setting overflow-x to 'hidden' explicitly
+              // avoids that forcing rule — it only kicks in when one axis is left at
+              // 'visible' — so each column scrolls vertically only.
+              <div key={stage.key} className="flex-shrink-0 w-68 h-full overflow-y-auto overflow-x-hidden" style={{ width: '272px' }}>
                 <div className="sticky top-0 z-10 bg-gray-100 flex items-center justify-between mb-3 px-1 py-1.5 -mx-1">
                   <div className="flex items-center gap-2 px-1">
                     <div className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
