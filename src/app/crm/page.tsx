@@ -112,7 +112,7 @@ export default function CRMPage() {
           </Link>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '60vh' }}>
+        <div className="flex gap-4 overflow-x-auto overflow-y-visible pb-4" style={{ minHeight: '60vh' }}>
           {STAGES.map(stage => {
             const stageContacts = contactsByStage[stage.key] || []
             return (
