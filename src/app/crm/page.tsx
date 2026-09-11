@@ -119,16 +119,24 @@ export default function CRMPage() {
           </Link>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto overflow-y-auto pb-4">
+        <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto pb-4">
           {STAGES.map(stage => {
             const stageContacts = contactsByStage[stage.key] || []
             return (
-              <div key={stage.key} className="flex-shrink-0 w-68" style={{ width: '272px' }}>
-                {/* Sticky so the stage name/count/add-contact stay visible while scrolling
-                    down a long column of leads — was scrolling away with everything else,
-                    making it hard to tell which stage you were looking at. top-0 because
-                    this board div (not the page) is now the actual scroll container — see
-                    the comment above the outer wrapper. */}
+              // h-full + its own overflow-y-auto: each column scrolls independently
+              // instead of sharing one scrollbar for the whole board. That matters
+              // for the sticky header below — a `position: sticky` element can only
+              // stay stuck while it's within its OWN parent's box, and columns are
+              // wildly different lengths (e.g. "Lead" with 2 cards vs. "Won" with
+              // 175). With one shared board-height scroll, a short column's box was
+              // only as tall as its few cards, so its header ran out of room to
+              // stick to almost immediately and vanished on further scroll — even
+              // though the board as a whole kept scrolling (driven by the longest
+              // column). Giving each column a real, independently-scrolling box
+              // exactly as tall as the board means its header now has "room" to
+              // stay stuck for the column's *entire* scroll, no matter how short
+              // or long that column is.
+              <div key={stage.key} className="flex-shrink-0 w-68 h-full overflow-y-auto" style={{ width: '272px' }}>
                 <div className="sticky top-0 z-10 bg-gray-100 flex items-center justify-between mb-3 px-1 py-1.5 -mx-1">
                   <div className="flex items-center gap-2 px-1">
                     <div className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
