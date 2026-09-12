@@ -70,6 +70,11 @@ export default function BookingPage() {
   const [junctions, setJunctions] = useState<any[]>([])
   const [locServiceMap, setLocServiceMap] = useState<Record<string, number>>({})
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'saved' | 'other'>('card')
+  // Defaults on — staff can uncheck this when rebooking to fix a mistake (wrong
+  // date, wrong address, etc.) so the customer doesn't get a second, confusing
+  // confirmation email/SMS for a booking they already got notified about. Same
+  // pattern as the "Send cancellation email" checkbox on the cancel-booking flow.
+  const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [overrideCents, setOverrideCents] = useState<number | null>(null)
   const [getCardPaymentMethod, setGetCardPaymentMethod] = useState<(() => Promise<string | null>) | null>(null)
   const [businessId, setBusinessId] = useState('')
@@ -489,6 +494,7 @@ export default function BookingPage() {
           payment_method: paymentMethod === 'saved' ? 'card' : paymentMethod,
           rebook_source_job_id: rebookJobId || null,
           lead_source: leadSource || null,
+          notify: notifyCustomer,
         }),
       })
       const createData = await createRes.json()
@@ -971,6 +977,20 @@ export default function BookingPage() {
               />
             </div>
           </div>
+
+          {/* Create/rebook mode only — the edit-booking flow never sends a customer
+              email/SMS in the first place, so there's nothing to toggle there. */}
+          {!editJobId && (
+            <label className="flex items-center gap-2.5 px-1 text-sm text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={notifyCustomer}
+                onChange={e => setNotifyCustomer(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              />
+              Send confirmation email &amp; text to customer
+            </label>
+          )}
 
           {/* Payment section — create mode only */}
           {!editJobId && (

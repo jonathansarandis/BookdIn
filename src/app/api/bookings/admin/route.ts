@@ -49,7 +49,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     is_flexible_time,
     custom_items,
     lead_source,
+    notify,
   } = body
+  // Same default-on pattern as /api/jobs/[id]/cancel's `notify` flag — only an
+  // explicit `false` opts out, so older/other callers that don't send this
+  // field at all keep sending the confirmation email/SMS exactly as before.
+  const shouldNotifyCustomer = notify !== false
   let location_id = body.location_id
 
   const admin = createAdminClient()
@@ -602,7 +607,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const t_email = Date.now()
     try {
-      if (jobForEmail?.customer && jobForEmail?.address) {
+      if (shouldNotifyCustomer && jobForEmail?.customer && jobForEmail?.address) {
         // Generate the single-use card-setup token the same way the public booking
         // flow does (bookings/public/route.ts), so the emailed link goes to the
         // working /secure-card/[token] page instead of the legacy Checkout Session
@@ -716,7 +721,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Customer SMS (non-critical)
     const t_sms = Date.now()
-    try {
+    if (!shouldNotifyCustomer) {
+      try {
+        await admin.from('jobs').update({ sms_status: 'skipped' }).eq('id', job.id)
+      } catch (e: any) {
+        console.error('Failed to persist skipped-SMS audit:', e.message)
+      }
+      await logStep(admin, submissionId!, { step: 'sms', status: 'ok', duration_ms: Date.now() - t_sms })
+    } else try {
       const { sendDialpadSms } = await import('@/lib/sms/dialpad')
       const { formatDateForSms, formatTimeForSms } = await import('@/lib/sms/format')
       const smsCustomer = jobForEmail?.customer
