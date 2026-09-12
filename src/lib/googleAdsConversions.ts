@@ -1,14 +1,32 @@
 // @ts-nocheck
-// Uploads a completed job's outcome back to Google Ads as an offline click
+// Uploads a completed job's outcome back to Google Ads as an offline
 // conversion, so Google Ads (and Smart Bidding, if pointed at this
 // conversion action) can tell a paying customer apart from a lead who never
 // proceeded or cancelled — the specific goal Jonathan asked for. Nothing is
 // uploaded for cancelled/no-show jobs; they simply never produce a
 // conversion, which is enough on its own to stop those leads being counted
 // as wins.
+//
+// This goes through Google's Data Manager API (events:ingest), not the
+// Google Ads API's ConversionUploadService. As of June 15, 2026 Google
+// blocks *new* integrations from uploading click conversions through the
+// legacy Google Ads API endpoint — every upload attempt through it fails
+// with an INVALID_ARGUMENT telling the caller to move to the Data Manager
+// API. Since this pipeline started calling that endpoint after the cutoff,
+// every single upload was silently rejected (see conversion_upload_error on
+// affected jobs) until this rewrite.
+//
+// The Data Manager API needs a *different* OAuth scope
+// (https://www.googleapis.com/auth/datamanager) than the Google Ads API
+// scope (adwords) used for reporting. A business's existing refresh token —
+// minted before this scope was added to the connect flow's SCOPE — does NOT
+// carry it; Google bakes granted scopes into the token at consent time, so
+// getAccessToken() will happily return a token that works for reporting but
+// gets rejected here. Each business must reconnect Google Ads once (Settings
+// → Google Ads → Reconnect) after this ships, to re-grant consent with the
+// wider scope.
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
-  API_VERSION,
   decryptGoogleAdsCredentials,
   getAccessToken,
   isGoogleAdsConfigured,
@@ -22,81 +40,70 @@ export interface SyncResult {
 }
 
 /**
- * Builds the conversionAction resource name Google Ads' upload endpoint
- * expects. Accepts either the full resource name (if Jonathan pastes it
- * as-is from Google Ads) or just the bare numeric conversion action ID.
+ * The Data Manager API's `productDestinationId` wants the bare numeric
+ * conversion action ID — not the "customers/.../conversionActions/123"
+ * resource name the old Google Ads API endpoint used. Accepts either, in
+ * case Jonathan has a full resource name pasted into settings from before.
  */
-function resolveConversionActionResourceName(customerId: string, conversionActionIdOrResourceName: string): string {
+function bareConversionActionId(conversionActionIdOrResourceName: string): string {
   const trimmed = conversionActionIdOrResourceName.trim()
-  if (trimmed.includes('/')) return trimmed
-  return `customers/${customerId}/conversionActions/${trimmed}`
-}
-
-/**
- * Formats a JS Date as the "yyyy-MM-dd HH:mm:ss+00:00" string the Google Ads
- * API requires for conversionDateTime. Always in UTC — Google resolves the
- * actual local time from the offset, so a fixed +00:00 offset is valid even
- * though the business itself isn't in UTC.
- */
-function toGoogleAdsDateTime(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const y = date.getUTCFullYear()
-  const mo = pad(date.getUTCMonth() + 1)
-  const d = pad(date.getUTCDate())
-  const h = pad(date.getUTCHours())
-  const mi = pad(date.getUTCMinutes())
-  const s = pad(date.getUTCSeconds())
-  return `${y}-${mo}-${d} ${h}:${mi}:${s}+00:00`
+  const parts = trimmed.split('/')
+  return parts[parts.length - 1]
 }
 
 async function uploadClickConversion(
   business: BusinessGoogleAdsConfig,
-  opts: { gclid: string; conversionActionId: string; conversionDateTime: string; conversionValue: number; currencyCode: string; orderId: string },
+  opts: { gclid: string; conversionActionId: string; conversionDateTime: Date; conversionValue: number; currencyCode: string; orderId: string },
 ): Promise<{ success: boolean; error?: string }> {
   const creds = decryptGoogleAdsCredentials(business)
   const accessToken = await getAccessToken(creds)
   const customerId = business.google_ads_customer_id!.replace(/-/g, '')
 
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${accessToken}`,
-    'developer-token': creds.developer_token,
-    'Content-Type': 'application/json',
+  const destination: Record<string, any> = {
+    operatingAccount: { accountId: customerId, accountType: 'GOOGLE_ADS' },
+    productDestinationId: bareConversionActionId(opts.conversionActionId),
   }
   if (business.google_ads_login_customer_id) {
-    headers['login-customer-id'] = business.google_ads_login_customer_id.replace(/-/g, '')
+    destination.loginAccount = {
+      accountId: business.google_ads_login_customer_id.replace(/-/g, ''),
+      accountType: 'GOOGLE_ADS',
+    }
   }
 
   const body = {
-    conversions: [
+    destinations: [destination],
+    events: [
       {
-        gclid: opts.gclid,
-        conversionAction: resolveConversionActionResourceName(customerId, opts.conversionActionId),
-        conversionDateTime: opts.conversionDateTime,
+        transactionId: opts.orderId, // job id — lets Google dedupe retries
+        eventTimestamp: opts.conversionDateTime.toISOString(), // RFC 3339, e.g. 2026-08-26T23:07:22.220Z
+        adIdentifiers: { gclid: opts.gclid },
+        currency: opts.currencyCode,
         conversionValue: opts.conversionValue,
-        currencyCode: opts.currencyCode,
-        orderId: opts.orderId, // job id — Google dedupes retries on this
       },
     ],
-    partialFailure: true,
   }
 
-  const res = await fetch(`https://googleads.googleapis.com/${API_VERSION}/customers/${customerId}:uploadClickConversions`, {
+  const res = await fetch('https://datamanager.googleapis.com/v1/events:ingest', {
     method: 'POST',
-    headers,
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(body),
   })
 
   if (!res.ok) {
     const text = await res.text().catch(() => '<no body>')
-    return { success: false, error: `Google Ads API request failed (${res.status}): ${text.slice(0, 800)}` }
+    return { success: false, error: `Data Manager API request failed (${res.status}): ${text.slice(0, 1500)}` }
   }
 
-  const data = await res.json()
-  // partialFailure:true means Google still returns 200 even when the single
-  // conversion in this batch fails — the actual per-item error lives in
-  // partialFailureError, so a 200 alone doesn't mean success.
-  if (data.partialFailureError) {
-    return { success: false, error: JSON.stringify(data.partialFailureError).slice(0, 800) }
+  // Unlike the old endpoint's partialFailure model, the Data Manager API
+  // fast-fails: any request that reaches a 2xx was accepted for processing.
+  // fieldWarnings are non-fatal per-field notices, not failures — worth
+  // logging but not worth treating as an upload failure.
+  const data = await res.json().catch(() => ({}))
+  if (Array.isArray(data.fieldWarnings) && data.fieldWarnings.length > 0) {
+    console.warn('[uploadClickConversion] Data Manager API field warnings:', JSON.stringify(data.fieldWarnings).slice(0, 500))
   }
 
   return { success: true }
@@ -160,7 +167,7 @@ export async function syncJobConversionToGoogleAds(jobId: string): Promise<SyncR
   const result = await uploadClickConversion(business, {
     gclid,
     conversionActionId: business.google_ads_conversion_action_id,
-    conversionDateTime: toGoogleAdsDateTime(conversionDate),
+    conversionDateTime: conversionDate,
     conversionValue: conversionValueCents / 100,
     currencyCode: 'AUD',
     orderId: jobId,
@@ -254,7 +261,7 @@ export async function syncBookingConversionToGoogleAds(jobId: string): Promise<S
   const result = await uploadClickConversion(business, {
     gclid,
     conversionActionId: business.google_ads_booking_conversion_action_id,
-    conversionDateTime: toGoogleAdsDateTime(conversionDate),
+    conversionDateTime: conversionDate,
     conversionValue: conversionValueCents / 100,
     currencyCode: 'AUD',
     orderId: jobId,

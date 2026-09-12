@@ -7,7 +7,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const SCOPE = 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.email'
+// datamanager: needed for the conversion-upload pipeline (googleAdsConversions.ts),
+// which as of mid-2026 must go through the Data Manager API — a separate,
+// sensitive OAuth scope from the Google Ads API's own `adwords` scope. Any
+// business that connected before this scope was added needs to reconnect
+// once to re-grant consent with it; their existing refresh token won't have it.
+const SCOPE = 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/datamanager https://www.googleapis.com/auth/userinfo.email'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
