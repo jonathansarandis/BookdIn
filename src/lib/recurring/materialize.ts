@@ -44,33 +44,17 @@ export const LOOKBACK_DAYS = 30
 // Safety cap on occurrences reconciled for a single schedule in one call.
 const MAX_OCCURRENCES_PER_RUN = 40
 
-// anchorDay: the day-of-month to always target for 'monthly' schedules,
-// defaulting to current's own day when omitted (fine for a single, unchained
-// call). Chained callers (the reconciliation loop below) MUST pass the
-// schedule's true anchor_date day-of-month on every call — otherwise a
-// schedule anchored on the 29th/30th/31st permanently drifts downward the
-// first time it clamps into a short month (e.g. hits Feb, clamps to 28, and
-// every month after that keeps targeting the 28th forever instead of
-// returning to 31 once a long month comes around again).
+// anchorDay is no longer used for 'monthly' (kept as a param for call-site
+// compatibility) — the business wants "Monthly" to mean a strict 4-week
+// (28-day) rotation, not calendar-month arithmetic. Same fixed-interval
+// pattern as 'weekly'/'fortnightly', just a longer interval, so there's no
+// month-length clamping/drift concern to begin with.
 export function getNextDate(current: Date, frequency: string, anchorDay?: number): Date {
   const next = new Date(current)
   switch (frequency) {
     case 'weekly':      next.setDate(next.getDate() + 7); break
     case 'fortnightly': next.setDate(next.getDate() + 14); break
-    case 'monthly': {
-      // setMonth alone drifts on short months — e.g. Jan 31 + 1 month rolls
-      // over to Mar 3 (skipping February) because JS overflows the extra days
-      // into the following month instead of clamping. Clamp to the target
-      // month's actual last day instead, so a schedule anchored on the
-      // 29th/30th/31st lands on that month's last day rather than sliding
-      // forward and desyncing from the customer's real cadence.
-      const day = anchorDay ?? next.getDate()
-      next.setDate(1)
-      next.setMonth(next.getMonth() + 1)
-      const lastDayOfTargetMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-      next.setDate(Math.min(day, lastDayOfTargetMonth))
-      break
-    }
+    case 'monthly':     next.setDate(next.getDate() + 28); break
   }
   return next
 }
@@ -79,9 +63,35 @@ export function getNextDate(current: Date, frequency: string, anchorDay?: number
 // its expected date still counts as covering that occurrence. Wide enough to
 // absorb a normal reschedule, narrow enough that two genuinely separate
 // occurrences of a weekly schedule can never be mistaken for one.
-function toleranceMs(frequency: string): number {
+export function toleranceMs(frequency: string): number {
   const days = frequency === 'weekly' ? 3 : frequency === 'fortnightly' ? 5 : 10
   return days * 24 * 60 * 60 * 1000
+}
+
+// Shared with the one-off monthly-drift backfill (src/app/api/recurring/fix-monthly-drift)
+// so both this reconciliation loop and that backfill walk the exact same phase-locked
+// sequence from anchor_date — two independent implementations of "what dates should
+// exist" is exactly the kind of drift that caused the original bug.
+export function computeExpectedDates(anchorDate: Date, frequency: string, now: Date): Date[] {
+  const horizon = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * 60 * 1000)
+  const lookbackFloor = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+  const anchorDay = anchorDate.getDate()
+
+  let cursor = new Date(anchorDate)
+  let skipGuard = 0
+  while (cursor < lookbackFloor && skipGuard < 1000) {
+    cursor = getNextDate(cursor, frequency, anchorDay)
+    skipGuard++
+  }
+
+  const expectedDates: Date[] = []
+  let occurrenceGuard = 0
+  while (cursor <= horizon && occurrenceGuard < MAX_OCCURRENCES_PER_RUN) {
+    expectedDates.push(new Date(cursor))
+    cursor = getNextDate(cursor, frequency, anchorDay)
+    occurrenceGuard++
+  }
+  return expectedDates
 }
 
 export interface MaterializeResult {
@@ -97,7 +107,6 @@ export async function materializeRecurringJobs(
 ): Promise<MaterializeResult> {
   const now = new Date()
   const horizon = new Date(now.getTime() + HORIZON_DAYS * 24 * 60 * 60 * 1000)
-  const lookbackFloor = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
 
   // Deliberately NOT filtered by next_scheduled_at anymore — that field is no
   // longer load-bearing for correctness (see file header), so a schedule
@@ -119,26 +128,9 @@ export async function materializeRecurringJobs(
 
   for (const schedule of schedules || []) {
     const anchor = new Date(schedule.anchor_date || schedule.next_scheduled_at || schedule.created_at)
-
-    // Fast-forward to the first occurrence within the lookback window, while
-    // staying phase-locked to the anchor (pure date math, no DB calls, so a
-    // generous guard here is cheap and just protects against an infinite
-    // loop on a malformed row).
     const anchorDay = anchor.getDate()
-    let cursor = new Date(anchor)
-    let skipGuard = 0
-    while (cursor < lookbackFloor && skipGuard < 1000) {
-      cursor = getNextDate(cursor, schedule.frequency, anchorDay)
-      skipGuard++
-    }
 
-    const expectedDates: Date[] = []
-    let occurrenceGuard = 0
-    while (cursor <= horizon && occurrenceGuard < MAX_OCCURRENCES_PER_RUN) {
-      expectedDates.push(new Date(cursor))
-      cursor = getNextDate(cursor, schedule.frequency, anchorDay)
-      occurrenceGuard++
-    }
+    const expectedDates = computeExpectedDates(anchor, schedule.frequency, now)
     if (expectedDates.length === 0) continue
 
     const tolerance = toleranceMs(schedule.frequency)
