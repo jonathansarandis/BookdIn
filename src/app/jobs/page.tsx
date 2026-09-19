@@ -77,20 +77,10 @@ export default async function JobsPage({
   ])
   const tz = business?.timezone || 'Australia/Melbourne'
 
-  let query = supabase
-    .from('jobs')
-    .select('*, customer:customers(full_name, email), service:services(name), provider:providers(display_name, color), address:addresses(line1, city), location:locations(id, name)')
-    .eq('business_id', profile!.business_id!)
-    .order('scheduled_at', { ascending: false })
-
   // status can now be a comma-separated list (multi-select), e.g. "pending,confirmed" —
   // Cancelled is kept mutually exclusive of everything else client-side (StatusFilter),
   // so a list containing "cancelled" here will only ever be exactly ["cancelled"].
   const selectedStatuses = searchParams.status ? searchParams.status.split(',').filter(Boolean) : []
-  if (selectedStatuses.length === 1) query = query.eq('status', selectedStatuses[0])
-  else if (selectedStatuses.length > 1) query = query.in('status', selectedStatuses)
-
-  if (searchParams.location) query = query.eq('location_id', searchParams.location)
 
   // Date-range boundaries must be computed in the BUSINESS's local timezone,
   // not raw UTC — new Date("2026-08-10") parses as UTC midnight, which is
@@ -102,23 +92,48 @@ export default async function JobsPage({
   // Bookings page total to disagree with a manual count off the Calendar.
   const { today: todayStr } = getCurrentDateTimeInfo(tz)
 
-  // An explicit date range takes priority over the quick filters below.
-  if (searchParams.from || searchParams.to) {
-    if (searchParams.from) query = query.gte('scheduled_at', fromBusinessDateTime(searchParams.from, '00:00', tz))
-    if (searchParams.to) {
-      query = query.lt('scheduled_at', fromBusinessDateTime(addDaysToDateStr(searchParams.to, 1), '00:00', tz))
+  // Applies every list/status/location/date filter identically to whatever base
+  // query (and column selection) is passed in. Pulled out into one function so
+  // the capped display query and the uncapped stats query below can never drift
+  // apart from each other — that drift is exactly what caused the header stats
+  // bug (see git history): each status tab ran its own independently-.limit(100)
+  // query, so "All" silently truncated to the 100 most-recent rows while a
+  // narrower status like "Completed" fit entirely under the cap and returned its
+  // full, real total — making a subset's revenue appear higher than "All".
+  function applyJobFilters(base: any) {
+    let q = base.eq('business_id', profile!.business_id!)
+
+    if (selectedStatuses.length === 1) q = q.eq('status', selectedStatuses[0])
+    else if (selectedStatuses.length > 1) q = q.in('status', selectedStatuses)
+
+    if (searchParams.location) q = q.eq('location_id', searchParams.location)
+
+    // An explicit date range takes priority over the quick filters below.
+    if (searchParams.from || searchParams.to) {
+      if (searchParams.from) q = q.gte('scheduled_at', fromBusinessDateTime(searchParams.from, '00:00', tz))
+      if (searchParams.to) {
+        q = q.lt('scheduled_at', fromBusinessDateTime(addDaysToDateStr(searchParams.to, 1), '00:00', tz))
+      }
+    } else if (searchParams.filter === 'today') {
+      q = q
+        .gte('scheduled_at', fromBusinessDateTime(todayStr, '00:00', tz))
+        .lt('scheduled_at', fromBusinessDateTime(addDaysToDateStr(todayStr, 1), '00:00', tz))
+    } else if (searchParams.filter === 'upcoming') {
+      q = q
+        .gte('scheduled_at', fromBusinessDateTime(todayStr, '00:00', tz))
+        .lte('scheduled_at', fromBusinessDateTime(addDaysToDateStr(todayStr, 7), '23:59', tz))
+    } else if (searchParams.filter === 'unassigned') {
+      q = q.is('provider_id', null).not('status', 'in', '("completed","cancelled")')
     }
-  } else if (searchParams.filter === 'today') {
-    query = query
-      .gte('scheduled_at', fromBusinessDateTime(todayStr, '00:00', tz))
-      .lt('scheduled_at', fromBusinessDateTime(addDaysToDateStr(todayStr, 1), '00:00', tz))
-  } else if (searchParams.filter === 'upcoming') {
-    query = query
-      .gte('scheduled_at', fromBusinessDateTime(todayStr, '00:00', tz))
-      .lte('scheduled_at', fromBusinessDateTime(addDaysToDateStr(todayStr, 7), '23:59', tz))
-  } else if (searchParams.filter === 'unassigned') {
-    query = query.is('provider_id', null).not('status', 'in', '("completed","cancelled")')
+
+    return q
   }
+
+  let query = applyJobFilters(
+    supabase
+      .from('jobs')
+      .select('*, customer:customers(full_name, email), service:services(name), provider:providers(display_name, color), address:addresses(line1, city), location:locations(id, name)')
+  ).order('scheduled_at', { ascending: false })
 
   let { data: jobs, error: jobsError } = await query.limit(100)
 
@@ -132,27 +147,63 @@ export default async function JobsPage({
     if (jobsError) console.error('[jobs] retry also failed:', jobsError.message)
   }
 
-  // Free-text search across customer name, address, and booking ID — the
-  // result set is already capped at 100 rows so filtering in memory is fine.
+  // Free-text search across customer name, address, and booking ID — applied
+  // in memory to the (capped) display list actually rendered in the table.
   const searchTerm = searchParams.q?.trim().toLowerCase()
-  if (searchTerm && jobs) {
-    jobs = jobs.filter((job: any) =>
+  function matchesSearch(job: any) {
+    if (!searchTerm) return true
+    return (
       job.customer?.full_name?.toLowerCase().includes(searchTerm) ||
       job.address?.line1?.toLowerCase().includes(searchTerm) ||
       job.address?.city?.toLowerCase().includes(searchTerm) ||
       job.id?.toLowerCase().includes(searchTerm)
     )
   }
+  if (searchTerm && jobs) {
+    jobs = jobs.filter(matchesSearch)
+  }
+
+  // Header stats ("Total Bookings" / "Revenue") must NEVER be derived from the
+  // capped 100-row display query above — that's what produced impossible
+  // numbers like "Completed" showing more revenue than "All". Instead, run a
+  // second, uncapped query with the exact same filters but only the columns
+  // needed to count and sum, so the stats always reflect every matching row,
+  // not just whichever page happened to survive the display query's cap.
+  let { data: statsRows, error: statsError } = await applyJobFilters(
+    supabase
+      .from('jobs')
+      .select('id, status, price_override, total_price, price, customer:customers(full_name), address:addresses(line1, city)')
+  )
+
+  if (statsError) {
+    console.error('[jobs] stats query failed, retrying once:', statsError.message)
+    const retry = await applyJobFilters(
+      supabase
+        .from('jobs')
+        .select('id, status, price_override, total_price, price, customer:customers(full_name), address:addresses(line1, city)')
+    )
+    statsRows = retry.data
+    statsError = retry.error
+    if (statsError) console.error('[jobs] stats retry also failed:', statsError.message)
+  }
+
+  // Keep the header stats consistent with an active search too, rather than
+  // reporting totals for the filter set the search box is meant to narrow.
+  const statsSource = (statsRows || []).filter(matchesSearch)
 
   // Cancelled bookings never happened / won't be paid, so their $ shouldn't quietly inflate
   // the headline Revenue figure — excluded by default and whenever viewing a mix of other
   // statuses. The one exception: if the admin has deliberately filtered down to exactly
   // "Cancelled" (to see what was lost), the total should reflect that view.
   const isCancelledOnlyView = selectedStatuses.length === 1 && selectedStatuses[0] === 'cancelled'
-  const totalRevenueCents = (jobs || []).reduce((sum: number, job: any) => {
+  const totalBookingsCount = statsError ? (jobs?.length || 0) : statsSource.length
+  const totalRevenueCents = (statsError ? (jobs || []) : statsSource).reduce((sum: number, job: any) => {
     if (!isCancelledOnlyView && job.status === 'cancelled') return sum
     return sum + (job.price_override ?? job.total_price ?? job.price ?? 0)
   }, 0)
+  const hasCancelled = statsError
+    ? (jobs || []).some((j: any) => j.status === 'cancelled')
+    : statsSource.some((j: any) => j.status === 'cancelled')
 
   const FILTERS = [
     { label: 'All bookings', value: '' },
@@ -171,10 +222,10 @@ export default async function JobsPage({
           <p className="text-sm text-gray-500 mt-0.5">
             {jobsError ? '—' : (
               <>
-                <span className="font-medium text-gray-700">Total Bookings:</span> {jobs?.length || 0}
+                <span className="font-medium text-gray-700">Total Bookings:</span> {totalBookingsCount}
                 <span className="mx-2 text-gray-300">|</span>
                 <span className="font-medium text-gray-700">Revenue:</span> {formatCurrency(totalRevenueCents)}
-                {!isCancelledOnlyView && (jobs || []).some((j: any) => j.status === 'cancelled') && (
+                {!isCancelledOnlyView && hasCancelled && (
                   <span className="text-gray-400"> (excludes cancelled)</span>
                 )}
               </>
