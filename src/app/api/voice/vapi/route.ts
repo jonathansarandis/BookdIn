@@ -92,7 +92,7 @@ async function dispatchTool(name: string, args: any, business: any, callCtx: { v
 // (AEST), Adelaide (ACST), and Perth (AWST) can be on a different calendar
 // date near midnight.
 async function handleGetCurrentDatetime(business: any, args: any) {
-  const loc = await resolveLocation(admin, business.id, args?.location)
+  const { location: loc } = await resolveLocation(admin, business.id, args?.location)
   const tz = loc?.timezone || business.timezone || 'Australia/Melbourne'
   const info = getCurrentDateTimeInfo(tz)
   return {
@@ -127,7 +127,10 @@ async function handleCheckAvailability(business: any, args: any) {
     return 'I need both a date and the service you are after to check availability.'
   }
 
-  const loc = await resolveLocation(admin, business.id, location)
+  const { location: loc, ambiguous, locations } = await resolveLocation(admin, business.id, location)
+  if (ambiguous) {
+    return `We operate in a few different areas: ${locations.map((l: any) => l.name).join(', ')}. Which one is the property in?`
+  }
   if (!loc) return "We don't have any active service locations set up — let me transfer you to a team member."
 
   const service = await resolveService(admin, business.id, service_type)
@@ -157,7 +160,10 @@ async function handleGetPricing(business: any, args: any) {
   const { service_type, bedrooms, bathrooms, location } = args
   if (!service_type) return 'Which service would you like pricing for?'
 
-  const loc = await resolveLocation(admin, business.id, location)
+  const { location: loc, ambiguous, locations } = await resolveLocation(admin, business.id, location)
+  if (ambiguous) {
+    return `We operate in a few different areas: ${locations.map((l: any) => l.name).join(', ')}. Which one are you after pricing for? Prices can differ by location.`
+  }
   const service = await resolveService(admin, business.id, service_type)
   if (!service) return `I couldn't find a service matching "${service_type}".`
 
@@ -206,10 +212,14 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
 
   // Independent lookups — run in parallel instead of chaining, since the
   // caller is waiting live on the phone for this whole tool call to finish.
-  const [loc, service] = await Promise.all([
+  const [locResolution, service] = await Promise.all([
     resolveLocation(admin, business.id, location || state || suburb),
     resolveService(admin, business.id, service_type),
   ])
+  const { location: loc, ambiguous, locations } = locResolution
+  if (ambiguous) {
+    return `We operate in a few different areas: ${locations.map((l: any) => l.name).join(', ')}. Which one is ${address_line1 ? 'this address' : 'the property'} in, so I book it to the right team and price?`
+  }
   if (!loc) return "We don't have any active service locations set up — let me transfer you to a team member."
   if (!service) return `I couldn't find a service matching "${service_type}".`
 

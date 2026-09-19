@@ -49,6 +49,7 @@ PROPERTY DETAILS — before confirming the price and booking, make sure you've a
 PRICING — always confirm the real number with the tool, and always say GST out loud:
 - Never quote a price from memory or from the services list above — always call get_pricing once you know the service and property details, and state the number it gives you back. That figure already has GST added on top, it's the final total the customer pays.
 - Even though GST is already included in that number, always say so explicitly when you state it — e.g. "that comes to $196.90, including GST" or "so all up, with GST, that's $196.90." Never just say the bare dollar figure with no mention of GST at all — the caller should always hear that GST is accounted for, not have to ask.
+{{multi_location_pricing_note}}
 
 EMAIL ADDRESSES — never guess the spelling:
 - When you ask for their email, always ask them to spell it out, especially the part before the @ — e.g. "Could you spell that for me, just to make sure I've got it exactly right?"
@@ -72,8 +73,20 @@ THERE IS NO ONE TO TRANSFER TO — YOU HANDLE THE CALL YOURSELF:
 
 {{knowledge_base}}`
 
-export function buildToolDefinitions(serverUrl: string) {
+export function buildToolDefinitions(serverUrl: string, locations: any[] = []) {
   const server = { url: serverUrl }
+  const isMultiLocation = locations.length > 1
+  const locationNames = locations.map((l: any) => l.name).join(', ')
+  // For multi-location businesses, pricing/availability/booking can differ by
+  // city (e.g. Clean Freaks: Melbourne/Sydney/Adelaide/Perth each have their
+  // own base prices in location_services). Marking `location` as required
+  // here — instead of "only needed if the business serves multiple areas",
+  // which left it up to the model's judgment — forces Aria to ask the caller
+  // which city they're in before pricing/booking, rather than the server
+  // silently guessing one location when she doesn't pass it.
+  const locationDescription = isMultiLocation
+    ? `Which of our locations the caller is in (${locationNames}). REQUIRED for this business — always ask if you don't already know, since pricing and availability differ by location.`
+    : 'Suburb or city the caller is in, if you know it yet.'
   return [
     {
       type: 'function',
@@ -100,9 +113,9 @@ export function buildToolDefinitions(serverUrl: string) {
           properties: {
             date: { type: 'string', description: 'Date to check, formatted YYYY-MM-DD.' },
             service_type: { type: 'string', description: 'The service the caller wants, e.g. "standard clean", "end of lease clean", "deep clean".' },
-            location: { type: 'string', description: 'Suburb or city the caller is in, only needed if the business serves multiple areas.' },
+            location: { type: 'string', description: locationDescription },
           },
-          required: ['date', 'service_type'],
+          required: isMultiLocation ? ['date', 'service_type', 'location'] : ['date', 'service_type'],
         },
       },
     },
@@ -118,9 +131,9 @@ export function buildToolDefinitions(serverUrl: string) {
             service_type: { type: 'string', description: 'The service to price, e.g. "standard clean".' },
             bedrooms: { type: 'number', description: 'Number of bedrooms, if the service is priced by room count.' },
             bathrooms: { type: 'number', description: 'Number of bathrooms, if the service is priced by room count.' },
-            location: { type: 'string', description: 'Suburb or city, only needed if the business serves multiple areas.' },
+            location: { type: 'string', description: locationDescription },
           },
-          required: ['service_type'],
+          required: isMultiLocation ? ['service_type', 'location'] : ['service_type'],
         },
       },
     },
@@ -146,7 +159,7 @@ export function buildToolDefinitions(serverUrl: string) {
             bedrooms: { type: 'number', description: 'Number of bedrooms, if relevant to pricing.' },
             bathrooms: { type: 'number', description: 'Number of bathrooms, if relevant to pricing.' },
             frequency: { type: 'string', description: 'One of one_time, weekly, fortnightly, monthly. Defaults to one_time.' },
-            location: { type: 'string', description: 'Suburb or city, only needed if the business serves multiple areas.' },
+            location: { type: 'string', description: isMultiLocation ? `Which of our locations this booking is for (${locationNames}) — should match the suburb/state above.` : 'Suburb or city, only needed if the business serves multiple areas.' },
           },
           required: ['full_name', 'address_line1', 'suburb', 'state', 'service_type', 'date', 'time'],
         },
@@ -190,12 +203,21 @@ export function buildSystemPrompt(business: any, services: any[], locations: any
 
   const businessHours = business.voice_business_hours || 'Monday to Saturday, 8am–6pm'
 
+  // Prices genuinely differ by city (location_services overrides the base
+  // service price per location) — this line exists because callers were
+  // getting quoted the wrong city's price when Aria didn't nail down which
+  // location they were in before calling get_pricing/check_availability.
+  const multiLocationPricingNote = locations.length > 1
+    ? `- We operate in several separate areas (${locations.map((l: any) => l.name).join(', ')}) and prices can differ between them. Always find out which one the caller is in — from their suburb or which office they mentioned — before calling get_pricing or check_availability. If you're not sure, just ask "Which area are you in — ${locations.map((l: any) => l.name).join(', ')}?" Never assume a location.`
+    : ''
+
   return SYSTEM_PROMPT_TEMPLATE
     .replaceAll('{{agent_name}}', agentName)
     .replaceAll('{{business_name}}', business.name)
     .replaceAll('{{business_details}}', businessDetails)
     .replaceAll('{{services_pricing}}', servicesPricing)
     .replaceAll('{{business_hours}}', businessHours)
+    .replaceAll('{{multi_location_pricing_note}}', multiLocationPricingNote)
     .replaceAll('{{custom_personality}}', business.voice_agent_personality || '')
     .replaceAll('{{knowledge_base}}', business.voice_agent_knowledge
       ? `REFERENCE KNOWLEDGE — packages, add-ons, and policies:\nThis is background knowledge, not a script. Never recite it unprompted — draw on it only when a caller asks something specific it answers.\n\n${business.voice_agent_knowledge}`
@@ -217,7 +239,7 @@ export function buildVapiAssistantPayload(business: any, services: any[], locati
       provider: 'anthropic',
       model: 'claude-sonnet-4-6',
       messages: [{ role: 'system', content: systemPrompt }],
-      tools: buildToolDefinitions(serverUrl),
+      tools: buildToolDefinitions(serverUrl, locations),
     },
     voice: {
       provider: '11labs',
@@ -277,7 +299,7 @@ export function buildVapiRealtimePayload(business: any, services: any[], locatio
       provider: 'openai',
       model: 'gpt-realtime-2025-08-28',
       messages: [{ role: 'system', content: systemPrompt }],
-      tools: buildToolDefinitions(serverUrl),
+      tools: buildToolDefinitions(serverUrl, locations),
       temperature: 0.7,
       maxTokens: 300,
     },

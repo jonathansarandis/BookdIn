@@ -95,28 +95,41 @@ function parseArgs(raw: any): Record<string, any> {
   }
 }
 
+export interface LocationResolution {
+  location: { id: string; name: string; timezone: string } | null
+  /** true when the business has more than one active location and `hint`
+   *  didn't match any of them (or wasn't given) — the caller must be asked
+   *  which city/suburb they're in rather than silently defaulting to one. */
+  ambiguous: boolean
+  locations: { id: string; name: string; timezone: string }[]
+}
+
 /**
- * Resolves which location a call should book against.
+ * Resolves which location a call should book/price against.
  * - Single-location businesses: always use the only active location.
  * - Multi-location: match `hint` (a suburb/city the caller mentioned, e.g.
- *   "Melbourne" or "Perth") against location names; falls back to the first
- *   active location if no hint matches, so the call can still proceed.
+ *   "Melbourne" or "Perth") against location names. If there's no hint or no
+ *   match, this is genuinely ambiguous — callers of this function MUST check
+ *   `ambiguous` and ask the caller which location they mean rather than
+ *   guessing, since silently picking one (e.g. the first row returned by the
+ *   DB) previously caused Perth/Adelaide callers to be quoted Melbourne's
+ *   prices.
  */
-export async function resolveLocation(admin: SupabaseClient, businessId: string, hint?: string | null) {
+export async function resolveLocation(admin: SupabaseClient, businessId: string, hint?: string | null): Promise<LocationResolution> {
   const { data: locations } = await admin
     .from('locations')
     .select('id, name, timezone')
     .eq('business_id', businessId)
     .eq('is_active', true)
 
-  if (!locations || locations.length === 0) return null
-  if (locations.length === 1) return locations[0]
+  if (!locations || locations.length === 0) return { location: null, ambiguous: false, locations: [] }
+  if (locations.length === 1) return { location: locations[0], ambiguous: false, locations }
 
   if (hint) {
     const match = locations.find((l: any) => l.name?.toLowerCase().includes(hint.toLowerCase()))
-    if (match) return match
+    if (match) return { location: match, ambiguous: false, locations }
   }
-  return locations[0]
+  return { location: null, ambiguous: true, locations }
 }
 
 export async function resolveService(admin: SupabaseClient, businessId: string, serviceTypeHint: string) {
