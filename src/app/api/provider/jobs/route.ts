@@ -12,6 +12,16 @@ import { getProviderFromPortalCookie } from '@/lib/providerPortal'
 
 const PROVIDER_SELECT = 'id, display_name, color, is_active, payout_percent, business_id'
 
+// Customer phone/email are never sent to the Cleaner Portal, full stop — per Jonathan.
+// Originally this only withheld contact details until the day of service (see git
+// history), but the decision was tightened to "never, at any point" after Reyan
+// flagged that a subcontractor with a customer's number is a channel for contacting
+// them directly and undercutting Clean Freaks' quoted price — a recent cancellation
+// (customer found a "$100 cheaper" quote right after being assigned) made this a live
+// concern rather than a hypothetical one. If a cleaner genuinely needs to reach a
+// customer (running late, can't find the address), that has to go through the office,
+// not a number in this portal.
+
 export async function GET() {
   const admin = createAdminClient()
 
@@ -69,7 +79,7 @@ export async function GET() {
       tax_amount,
       price_override,
       provider_fee_extra,
-      customer:customers(full_name, phone, email),
+      customer:customers(full_name),
       service:services(name),
       address:addresses(line1, city, state, postcode),
       location:locations(timezone),
@@ -100,7 +110,8 @@ export async function GET() {
       bathrooms: job.bathrooms,
       frequency: job.frequency,
       payout_cents,
-      customer: job.customer,
+      // phone/email intentionally not selected above and not included here — see note at top of file.
+      customer: job.customer ? { full_name: job.customer.full_name } : null,
       service: job.service,
       address: job.address,
       location: job.location,

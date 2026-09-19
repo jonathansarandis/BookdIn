@@ -209,14 +209,10 @@ export default function ProviderDashboard() {
                         </a>
                       </div>
                     )}
-                    {job.customer?.phone && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <a href={`tel:${job.customer.phone}`} className="text-blue-600 hover:underline">
-                          {job.customer.phone}
-                        </a>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 text-sm text-gray-400 italic">
+                      <User className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                      <span>Need to reach the customer? Call the office.</span>
+                    </div>
                     {(bedBath || extrasNames.length > 0) && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
