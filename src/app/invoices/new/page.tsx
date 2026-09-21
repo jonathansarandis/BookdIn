@@ -27,7 +27,7 @@ export default function NewInvoicePage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
       const [{ data: cx }, { data: jbs }, { data: biz }] = await Promise.all([
         supabase.from('customers').select('id, full_name').eq('business_id', profile!.business_id!).order('full_name'),
-        supabase.from('jobs').select('id, scheduled_at, price, service:services(name), customer:customers(full_name)').eq('business_id', profile!.business_id!).eq('status', 'completed').is('invoice_id', null).order('scheduled_at', { ascending: false }).limit(20),
+        supabase.from('jobs').select('id, scheduled_at, price, price_override, total_price, service:services(name), customer:customers(full_name), job_extras(name, price, quantity)').eq('business_id', profile!.business_id!).eq('status', 'completed').is('invoice_id', null).order('scheduled_at', { ascending: false }).limit(20),
         supabase.from('businesses').select('tax_rate, tax_name, show_tax, tax_mode').eq('id', profile!.business_id!).single(),
       ])
       setCustomers(cx || [])
@@ -49,12 +49,53 @@ export default function NewInvoicePage() {
   function addItem() { setItems(i => [...i, { description: '', quantity: '1', unit_price: '' }]) }
   function removeItem(i: number) { setItems(items => items.filter((_, idx) => idx !== i)) }
 
-  function handleJobSelect(jobId: string) {
+  async function handleJobSelect(jobId: string) {
     const job = jobs.find(j => j.id === jobId)
-    if (job) {
-      setForm(f => ({ ...f, job_id: jobId, customer_id: job.customer?.id || f.customer_id }))
-      setItems([{ description: job.service?.name || 'Cleaning service', quantity: '1', unit_price: String(job.price / 100) }])
+    if (!job) return
+    setForm(f => ({ ...f, job_id: jobId, customer_id: job.customer?.id || f.customer_id }))
+
+    // Additional charges (e.g. added day-of-service) are stored as separate child
+    // jobs linked via parent_job_id, not on the booking's own price — pull them in
+    // as their own line items instead of leaving staff to manually fold the amount
+    // into the base service line. Only ones that actually got charged count.
+    const supabase = createClient()
+    const { data: children } = await supabase
+      .from('jobs')
+      .select('total_price, customer_notes, payment_status')
+      .eq('parent_job_id', jobId)
+      .in('payment_status', ['authorized', 'paid'])
+
+    const extras = job.job_extras || []
+    const extrasTotalCents = extras.reduce((sum: number, e: any) => sum + (e.price || 0) * (e.quantity || 1), 0)
+    const additionalCharges = (children || []).filter((c: any) => (c.total_price || 0) > 0)
+    const additionalChargesTotalCents = additionalCharges.reduce((sum: number, c: any) => sum + (c.total_price || 0), 0)
+
+    // Chargeable amount for the booking overall (extras-at-booking-time inclusive,
+    // day-of-service extras/additional-charges are NOT — see job_extras/follow-up-charge
+    // routes), minus whatever we're about to list as its own line below.
+    const chargeableCents = job.price_override ?? job.total_price ?? job.price
+    const baseCents = chargeableCents - extrasTotalCents - additionalChargesTotalCents
+
+    const newItems: LineItem[] = [
+      { description: job.service?.name || 'Cleaning service', quantity: '1', unit_price: (baseCents / 100).toFixed(2) },
+    ]
+    for (const e of extras) {
+      const amountCents = (e.price || 0) * (e.quantity || 1)
+      if (amountCents <= 0) continue
+      newItems.push({
+        description: e.quantity > 1 ? `${e.name} ×${e.quantity}` : e.name,
+        quantity: '1',
+        unit_price: (amountCents / 100).toFixed(2),
+      })
     }
+    for (const c of additionalCharges) {
+      newItems.push({
+        description: c.customer_notes || 'Additional charge',
+        quantity: '1',
+        unit_price: (c.total_price / 100).toFixed(2),
+      })
+    }
+    setItems(newItems)
   }
 
   const subtotal = items.reduce((sum, item) => {
@@ -121,7 +162,7 @@ export default function NewInvoicePage() {
                 <option value="">Select a job...</option>
                 {jobs.map(j => (
                   <option key={j.id} value={j.id}>
-                    {j.customer?.full_name} — {j.service?.name} — ${(j.price/100).toFixed(2)} — {new Date(j.scheduled_at).toLocaleDateString()}
+                    {j.customer?.full_name} — {j.service?.name} — ${((j.price_override ?? j.total_price ?? j.price)/100).toFixed(2)} — {new Date(j.scheduled_at).toLocaleDateString()}
                   </option>
                 ))}
               </select>

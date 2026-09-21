@@ -29,9 +29,21 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
 
   const lineItems: InvoicePdfLineItem[] = []
   if (invoice.job) {
+    // Additional charges added after the initial booking (e.g. on the day of service)
+    // are stored as separate child jobs linked via parent_job_id, not folded into this
+    // job's own price — pull them in as their own line items rather than letting them
+    // sit merged into a single combined "service" amount.
+    const { data: children } = await admin
+      .from('jobs')
+      .select('total_price, customer_notes, payment_status')
+      .eq('parent_job_id', invoice.job.id)
+      .in('payment_status', ['authorized', 'paid'])
+    const additionalCharges = (children || []).filter((c: any) => (c.total_price || 0) > 0)
+    const additionalChargesTotalCents = additionalCharges.reduce((sum: number, c: any) => sum + (c.total_price || 0), 0)
+
     const extras = invoice.job.job_extras || []
     const extrasTotalCents = extras.reduce((sum: number, e: any) => sum + (e.price || 0) * (e.quantity || 1), 0)
-    const serviceAmountCents = invoice.subtotal - extrasTotalCents
+    const serviceAmountCents = invoice.subtotal - extrasTotalCents - additionalChargesTotalCents
     lineItems.push({ description: invoice.job.service?.name || 'Service', amountCents: serviceAmountCents })
     for (const e of extras) {
       const amountCents = (e.price || 0) * (e.quantity || 1)
@@ -43,6 +55,9 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
         description: e.quantity > 1 ? `${e.name} ×${e.quantity}` : e.name,
         amountCents,
       })
+    }
+    for (const c of additionalCharges) {
+      lineItems.push({ description: c.customer_notes || 'Additional charge', amountCents: c.total_price })
     }
   } else {
     lineItems.push({ description: invoice.notes || 'Services rendered', amountCents: invoice.subtotal })
