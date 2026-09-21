@@ -125,15 +125,23 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
   }
   if (data.customer.email) doc.text(data.customer.email)
   if (data.customer.phone) doc.text(data.customer.phone)
+  const billToBottom = doc.y
 
+  let serviceBottom = billToBottom
   if (data.serviceName || data.serviceDate) {
     doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text('SERVICE', PAGE_MARGIN + 300, billToY, { width: pageWidth - 300 })
     doc.font('Helvetica').fontSize(11).fillColor(INK).text(data.serviceName || '—', PAGE_MARGIN + 300, billToY + 14, { width: pageWidth - 300 })
     if (data.serviceDate) {
       doc.fontSize(9).fillColor(MUTED).text(formatDateShortWithYear(data.serviceDate), PAGE_MARGIN + 300, doc.y, { width: pageWidth - 300 })
     }
+    serviceBottom = doc.y
   }
 
+  // Two side-by-side columns (BILL TO / SERVICE) each leave pdfkit's cursor (doc.y)
+  // at the bottom of whichever column was drawn last, not the taller of the two.
+  // Resync to the true bottom before moving on, or a long address/email/phone list
+  // on one side gets overlapped by the table that follows.
+  doc.y = Math.max(billToBottom, serviceBottom)
   doc.moveDown(3)
 
   // ── Line items table ──────────────────────────────────────────────────
@@ -151,8 +159,13 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
   doc.font('Helvetica').fontSize(10).fillColor(INK)
   for (const item of data.lineItems) {
     doc.text(item.description, descX, rowY, { width: pageWidth - amountColWidth - 20 })
+    const descBottom = doc.y
     doc.text(money(item.amountCents), amountX, rowY, { width: amountColWidth, align: 'right' })
-    rowY = doc.y + 10
+    const amountBottom = doc.y
+    // Same fix as above: when the description wraps to 2+ lines (e.g. a second
+    // line item / added extra), the amount column's single-line height must not
+    // be allowed to win and understate the row — take the taller of the two.
+    rowY = Math.max(descBottom, amountBottom) + 10
   }
 
   doc.moveTo(PAGE_MARGIN, rowY).lineTo(PAGE_MARGIN + pageWidth, rowY).strokeColor(RULE).stroke()
