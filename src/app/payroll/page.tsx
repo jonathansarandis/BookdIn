@@ -20,7 +20,7 @@ interface Job {
   cash_paid: number
   provider_paid_at: string | null
   provider_id: string
-  completed_at: string
+  scheduled_at: string
 }
 
 interface Provider {
@@ -75,14 +75,20 @@ export default function PayrollPage() {
 
     const [{ data: provData }, { data: jobData }] = await Promise.all([
       supabase.from('providers').select('id, display_name, color, payout_percent').eq('business_id', businessId).order('display_name'),
+      // Bucketed by scheduled_at (the booked service date), not completed_at —
+      // completed_at is just whenever someone happened to tap "mark complete"
+      // in the app/provider portal, which can lag the actual job date by days
+      // and was pushing jobs into the following week's payroll. scheduled_at is
+      // what the rest of the app (calendar, jobs list) already treats as "the
+      // date of the job," so payroll now agrees with everywhere else.
       supabase.from('jobs')
-        .select('id, customer:customers(full_name), price, total_price, price_override, tax_amount, provider_fee_extra, pay_rate_override, provider_refund_deduction, cash_paid, provider_paid_at, provider_id, completed_at')
+        .select('id, customer:customers(full_name), price, total_price, price_override, tax_amount, provider_fee_extra, pay_rate_override, provider_refund_deduction, cash_paid, provider_paid_at, provider_id, scheduled_at')
         .eq('business_id', businessId)
         .eq('status', 'completed')
         .not('provider_id', 'is', null)
-        .gte('completed_at', weekStart.toISOString())
-        .lt('completed_at', weekEnd.toISOString())
-        .order('completed_at'),
+        .gte('scheduled_at', weekStart.toISOString())
+        .lt('scheduled_at', weekEnd.toISOString())
+        .order('scheduled_at'),
     ])
     setProviders(provData || [])
     setJobs((jobData as any) || [])
