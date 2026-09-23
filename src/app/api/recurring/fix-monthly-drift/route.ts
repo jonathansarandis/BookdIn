@@ -18,7 +18,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { computeExpectedDates, toleranceMs, materializeRecurringJobs } from '@/lib/recurring/materialize'
+import { computeExpectedDates, materializeRecurringJobs } from '@/lib/recurring/materialize'
 
 const serviceClient = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,7 +42,17 @@ async function getBusinessId() {
 function diffSchedule(schedule: any, existingJobs: { id: string; scheduled_at: string; status: string }[], now: Date) {
   const anchor = new Date(schedule.anchor_date)
   const expectedDates = computeExpectedDates(anchor, 'monthly', now)
-  const tolerance = toleranceMs('monthly')
+  // NOT toleranceMs('monthly') (10 days) here — that's the ongoing-materialize
+  // tolerance, meant to accept a legitimate few-day reschedule as "still covers
+  // this occurrence" so it isn't duplicated. Using it here to decide what counts
+  // as "drifted" is exactly why this tool reported 0 corrections for Dana:
+  // calendar-month drift is often only 1-3 days past the true 28-day mark
+  // (e.g. Oct 3 -> Nov 3 is 3 days past the correct Oct 31), so it slid under a
+  // 10-day bar and was silently treated as already-correct. This tool exists
+  // specifically to catch that drift, so it needs a much tighter bar — a real
+  // intentional reschedule is very unlikely to land within a day of the old
+  // calendar-month-wrong date by coincidence.
+  const tolerance = 24 * 60 * 60 * 1000
 
   const claimed = new Set<string>()
   for (const expected of expectedDates) {
