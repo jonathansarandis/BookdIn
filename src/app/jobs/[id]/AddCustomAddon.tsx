@@ -23,9 +23,12 @@ export default function AddCustomAddon({ jobId }: Props) {
   }
 
   async function handleSubmit() {
-    const priceCents = Math.round(parseFloat(price) * 100)
+    // Blank price is allowed — staff sometimes need to add a placeholder line
+    // item ("Wet Wipe Blinds — to be determined") for scope that's only priced
+    // once the cleaner sees the job on-site, and fill in the real number later.
+    const priceCents = price.trim() === '' ? 0 : Math.round(parseFloat(price) * 100)
     if (!name.trim()) { setError('Name is required'); return }
-    if (isNaN(priceCents) || priceCents <= 0) { setError('Enter a valid amount greater than $0.00'); return }
+    if (isNaN(priceCents) || priceCents < 0) { setError('Enter a valid amount (0 or more)'); return }
 
     setLoading(true)
     setError(null)
@@ -76,7 +79,7 @@ export default function AddCustomAddon({ jobId }: Props) {
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">$</span>
           <input
             type="number"
-            min="0.01"
+            min="0"
             step="0.01"
             placeholder="0.00"
             value={price}
@@ -96,7 +99,7 @@ export default function AddCustomAddon({ jobId }: Props) {
         </button>
         <button
           onClick={handleSubmit}
-          disabled={loading || !name.trim() || !price}
+          disabled={loading || !name.trim()}
           className="flex-1 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
         >
           {loading && <Loader2 className="w-3 h-3 animate-spin" />}

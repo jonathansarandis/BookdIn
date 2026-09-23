@@ -40,7 +40,9 @@ export async function POST(
   if (!name?.trim()) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
-  if (!Number.isInteger(price_cents) || price_cents <= 0) {
+  // 0 is allowed — staff use it for placeholder/"to be determined" line items
+  // (scope only priced once the cleaner sees the job on-site), filled in later.
+  if (!Number.isInteger(price_cents) || price_cents < 0) {
     return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
   }
 
