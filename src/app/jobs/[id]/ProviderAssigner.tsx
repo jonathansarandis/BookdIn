@@ -13,6 +13,7 @@ interface Provider {
 
 interface Props {
   jobId: string
+  recurringScheduleId?: string | null
   currentProviderId: string | null
   currentProviderName: string | null
   currentProviderColor: string | null
@@ -23,7 +24,7 @@ function getInitials(name: string) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 }
 
-export default function ProviderAssigner({ jobId, currentProviderId, currentProviderName, currentProviderColor, providers }: Props) {
+export default function ProviderAssigner({ jobId, recurringScheduleId, currentProviderId, currentProviderName, currentProviderColor, providers }: Props) {
   const [providerId, setProviderId] = useState<string | null>(currentProviderId)
   const [providerName, setProviderName] = useState<string | null>(currentProviderName)
   const [providerColor, setProviderColor] = useState<string | null>(currentProviderColor)
@@ -39,6 +40,19 @@ export default function ProviderAssigner({ jobId, currentProviderId, currentProv
       .from('jobs')
       .update({ provider_id: id })
       .eq('id', jobId)
+
+    // Recurring jobs: once staff has assigned a cleaner for this series, every
+    // future auto-materialized occurrence should inherit them too, instead of
+    // showing up unassigned every cycle (materialize.ts reads provider_id off
+    // the schedule row, not any individual past job). Assigning a provider on
+    // one occurrence is a reasonable signal that it should hold for the whole
+    // series — best-effort, doesn't block the visible job update above.
+    if (!error && recurringScheduleId) {
+      supabase.from('recurring_schedules').update({ provider_id: id }).eq('id', recurringScheduleId)
+        .then(({ error: schedErr }) => {
+          if (schedErr) console.error('[ProviderAssigner] Failed to sync provider to recurring schedule:', schedErr.message)
+        })
+    }
 
     setSaving(false)
     if (!error) {

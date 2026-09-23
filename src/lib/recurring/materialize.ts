@@ -114,7 +114,7 @@ export async function materializeRecurringJobs(
   // re-checked every run, not skipped.
   let query = supabase
     .from('recurring_schedules')
-    .select('*, service:services(name, duration_minutes)')
+    .select('*, service:services(name, duration_minutes), customer:customers(stripe_customer_id)')
     .eq('is_active', true)
     .is('paused_until', null)
 
@@ -191,7 +191,14 @@ export async function materializeRecurringJobs(
           notes: schedule.notes || null,
           booking_source: 'recurring',
           payment_method: schedule.auto_charge ? 'card' : 'other',
-          payment_status: 'unpaid',
+          // Carry forward the card on file, same idea as provider_id above —
+          // once a card has been attached to any occurrence of this series
+          // (attach-saved-card / secure-card save propagate it onto the
+          // schedule row), every future occurrence should already have it
+          // instead of starting unpaid and needing the customer re-contacted.
+          stripe_customer_id: schedule.stripe_payment_method_id ? (schedule.customer?.stripe_customer_id || null) : null,
+          stripe_payment_method_id: schedule.stripe_payment_method_id || null,
+          payment_status: schedule.stripe_payment_method_id ? 'card_on_file' : 'unpaid',
         })
 
       if (!jobError) {

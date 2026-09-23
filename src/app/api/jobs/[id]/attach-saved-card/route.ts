@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const { data: job, error: jobError } = await admin
     .from('jobs')
-    .select('id, business_id, customer_id, scheduled_at, customer:customers(stripe_customer_id), business:businesses(timezone, stripe_account_id)')
+    .select('id, business_id, customer_id, scheduled_at, recurring_schedule_id, customer:customers(stripe_customer_id), business:businesses(timezone, stripe_account_id)')
     .eq('id', params.id)
     .eq('business_id', profile.business_id)
     .single()
@@ -86,6 +86,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .eq('id', params.id)
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+
+  // Recurring jobs: carry this card forward onto every future auto-materialized
+  // occurrence (see migrations/20260923_recurring_schedules_card.sql) instead of
+  // needing it re-attached every cycle. Best-effort — the card is already saved
+  // on this job regardless of whether this succeeds.
+  if (job.recurring_schedule_id) {
+    await admin.from('recurring_schedules').update({ stripe_payment_method_id: paymentMethodId }).eq('id', job.recurring_schedule_id)
+  }
 
   // Best-effort: same booking-stage conversion upload as a fresh card capture —
   // a rebooking customer reusing a saved card still counts as "booked + card down".

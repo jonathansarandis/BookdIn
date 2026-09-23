@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   // this lookup naturally fails for anyone replaying an already-consumed link.)
   const { data: job, error: jobError } = await supabase
     .from('jobs')
-    .select('id, business_id, scheduled_at, card_setup_token_expires_at, customer:customers(id, full_name), business:businesses(timezone, stripe_account_id)')
+    .select('id, business_id, scheduled_at, card_setup_token_expires_at, recurring_schedule_id, customer:customers(id, full_name), business:businesses(timezone, stripe_account_id)')
     .eq('card_setup_token', token)
     .single()
 
@@ -70,6 +70,13 @@ export async function POST(request: NextRequest) {
   if (updateError) {
     console.error('[secure-card/save] DB update failed:', updateError.message)
     return NextResponse.json({ error: 'Failed to record card — please contact support' }, { status: 500 })
+  }
+
+  // Recurring jobs: carry this card forward onto every future auto-materialized
+  // occurrence (see migrations/20260923_recurring_schedules_card.sql) instead of
+  // needing it re-attached every cycle.
+  if (job.recurring_schedule_id) {
+    await supabase.from('recurring_schedules').update({ stripe_payment_method_id: paymentMethodId }).eq('id', job.recurring_schedule_id)
   }
 
   // Best-effort: tell Google Ads this lead actually booked and put a card

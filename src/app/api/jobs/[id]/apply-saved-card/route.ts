@@ -37,7 +37,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const { data: job, error: jobError } = await admin
     .from('jobs')
-    .select('id, business_id, stripe_payment_method_id, customer_id')
+    .select('id, business_id, stripe_payment_method_id, customer_id, recurring_schedule_id')
     .eq('id', params.id)
     .single()
 
@@ -79,6 +79,13 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (updateError) {
     console.error('[apply-saved-card] DB update failed:', updateError.message)
     return NextResponse.json({ error: 'Failed to save card' }, { status: 500 })
+  }
+
+  // Recurring jobs: carry this card forward onto every future auto-materialized
+  // occurrence (see migrations/20260923_recurring_schedules_card.sql) instead of
+  // needing it re-attached every cycle.
+  if (job.recurring_schedule_id) {
+    await admin.from('recurring_schedules').update({ stripe_payment_method_id: cpm.stripe_payment_method_id }).eq('id', job.recurring_schedule_id)
   }
 
   console.log(`[apply-saved-card] Applied saved card to job ${job.id}`)

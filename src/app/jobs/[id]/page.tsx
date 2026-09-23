@@ -331,6 +331,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             </div>
             <ProviderAssigner
               jobId={job.id}
+              recurringScheduleId={job.recurring_schedule_id || null}
               currentProviderId={job.provider_id || null}
               currentProviderName={job.provider?.display_name || null}
               currentProviderColor={job.provider?.color || null}
