@@ -36,9 +36,24 @@ export default function ProviderAssigner({ jobId, recurringScheduleId, currentPr
     setSaving(true)
     setSaved(false)
 
+    // Assigning a provider is also a status transition: the calendar colors
+    // jobs by status (pending=amber, assigned=purple, ...), and staff expect
+    // a job to visibly flip to "Assigned"/purple the moment a cleaner is put
+    // on it — not stay amber/pending forever with a cleaner quietly attached.
+    // Only auto-advance out of the early pending/confirmed states though —
+    // never downgrade a job that's already on_the_way/in_progress/completed/
+    // cancelled just because its provider was changed.
+    let statusPatch: { status?: string } = {}
+    if (id) {
+      const { data: currentJob } = await supabase.from('jobs').select('status').eq('id', jobId).single()
+      if (currentJob && ['pending', 'confirmed'].includes(currentJob.status)) {
+        statusPatch = { status: 'assigned' }
+      }
+    }
+
     const { error } = await supabase
       .from('jobs')
-      .update({ provider_id: id })
+      .update({ provider_id: id, ...statusPatch })
       .eq('id', jobId)
 
     // Recurring jobs: once staff has assigned a cleaner for this series, every

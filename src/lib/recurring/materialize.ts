@@ -181,7 +181,14 @@ export async function materializeRecurringJobs(
           provider_id: schedule.provider_id || null,
           address_id: schedule.address_id || null,
           recurring_schedule_id: schedule.id,
-          status: 'pending',
+          // A materialized occurrence that's already inheriting a carried-forward
+          // provider from the schedule is, in practice, an assigned booking — it
+          // should render that way on the calendar (purple) from the moment it's
+          // created, not sit as amber/pending until someone opens it and re-saves
+          // the same provider. Only auto-advance to 'assigned'; never to a status
+          // further along than that (schedules never carry forward in_progress/
+          // completed/cancelled state — those are per-occurrence).
+          status: schedule.provider_id ? 'assigned' : 'pending',
           scheduled_at: expected.toISOString(),
           duration_minutes: schedule.service?.duration_minutes || 120,
           price: schedule.price,
