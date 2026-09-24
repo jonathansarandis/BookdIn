@@ -312,8 +312,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             notes: notes ?? null,
             provider_id: provider_id ?? null,
             is_flexible_time: is_flexible_time ?? false,
+            // Was missing entirely — editing a booking's location never touched
+            // jobs.location_id, so the edit silently no-opped on this field. That's
+            // how a job stayed shown under its original city on the calendar no
+            // matter how many times staff "changed" the location via edit.
+            location_id,
           })
           .eq('id', editJobId)
+
+        // Same carry-forward gap as provider_id/stripe_payment_method_id: a location
+        // change on one occurrence of a recurring series should stick for the whole
+        // series, not just the single edited job — otherwise every future
+        // auto-materialized occurrence keeps reappearing under the old city
+        // (materialize.ts inserts `location_id: schedule.location_id`, read from the
+        // schedule row, never from the edited job).
+        if (existingJob?.recurring_schedule_id) {
+          const { error: schedLocErr } = await admin
+            .from('recurring_schedules')
+            .update({ location_id })
+            .eq('id', existingJob.recurring_schedule_id)
+          if (schedLocErr) {
+            console.error('[admin booking] Failed to sync location_id to recurring schedule:', schedLocErr.message)
+          }
+        }
 
         await admin.from('job_extras').delete().eq('job_id', editJobId)
         if (extraDetails.length > 0) {
