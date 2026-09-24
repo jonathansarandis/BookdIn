@@ -111,11 +111,19 @@ async function buildReport(businessId: string) {
   let totalUnresolved = 0
 
   for (const schedule of schedules || []) {
+    // Only 'cancelled' was excluded here before — which meant a job that had
+    // already been completed and paid (or was in progress) but happened to sit
+    // just outside this tool's drift tolerance got its scheduled_at rewritten
+    // right along with the genuinely-still-upcoming ones. That's how Adrian
+    // Wiley's Sep 18 completed/paid clean got moved to Sep 26 on 24 Sep 2026 —
+    // the job's real-world outcome (who cleaned what, when, and what they were
+    // charged) is fixed history and must never be touched by a date-correction
+    // tool; only jobs that haven't happened yet are fair game.
     const { data: existingJobs } = await serviceClient
       .from('jobs')
       .select('id, scheduled_at, status')
       .eq('recurring_schedule_id', schedule.id)
-      .neq('status', 'cancelled')
+      .not('status', 'in', '(cancelled,completed,in_progress)')
       .gte('scheduled_at', new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString())
 
     const { corrections, unresolved } = diffSchedule(schedule, existingJobs || [], now)
