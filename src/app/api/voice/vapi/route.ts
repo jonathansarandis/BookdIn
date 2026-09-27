@@ -277,6 +277,11 @@ async function handleCreateBooking(business: any, args: any, callCtx: { vapiCall
   const tz = loc.timezone || business.timezone || 'Australia/Melbourne'
   const scheduledAtIso = fromBusinessDateTime(date, normalizeTime(time), tz)
 
+  const todayStartIso = fromBusinessDateTime(getCurrentDateTimeInfo(tz).today, '00:00', tz)
+  if (new Date(scheduledAtIso) < new Date(todayStartIso)) {
+    return 'That date has already passed — could you give me a different date?'
+  }
+
   const { data: job, error: jobErr } = await admin
     .from('jobs')
     .insert({

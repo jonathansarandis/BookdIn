@@ -6,6 +6,7 @@ import { Resend } from 'resend'
 import { sendBookingConfirmation } from '@/lib/email'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { fromBusinessDateTime } from '@/lib/datetime'
+import { formatInTimeZone } from 'date-fns-tz'
 import { createSubmission, logStep, markProcessed, markFailed } from '@/lib/bookings/submissionStore'
 import { sendExpoPush } from '@/lib/push/expo'
 import { inferLocationIdFromState } from '@/lib/bookings/inferLocation'
@@ -331,6 +332,19 @@ export async function POST(request: NextRequest) {
     // 5. Create job (pending status — no card yet)
     const tz = location.timezone || business.timezone || 'Australia/Melbourne'
     const scheduledAtIso = fromBusinessDateTime(scheduled_date, effectiveTime, tz)
+
+    // Reject backdated bookings — evaluated against "today" in the location's own
+    // timezone, not server/UTC time, so this can't reject/accept off by one day.
+    const todayStartIso = fromBusinessDateTime(formatInTimeZone(new Date(), tz, 'yyyy-MM-dd'), '00:00', tz)
+    if (new Date(scheduledAtIso) < new Date(todayStartIso)) {
+      await logStep(supabase, submissionId!, { step: 'validation', status: 'failed', error: 'backdated date' })
+      await markFailed(supabase, submissionId!, 'Attempted to book a date in the past')
+      return NextResponse.json(
+        { error: 'Please select today or a future date.' },
+        { status: 400 },
+      )
+    }
+
     const t_job = Date.now()
     const { data: job, error: jobError } = await supabase
       .from('jobs')
