@@ -71,7 +71,20 @@ export async function POST(request: NextRequest) {
     const transcript = body?.message?.transcript ?? body?.message?.artifact?.transcript ?? null
     const recordingUrl = body?.message?.recordingUrl ?? body?.message?.artifact?.recordingUrl ?? null
 
-    row.status = row.status && row.status !== 'in_progress' ? row.status : 'completed'
+    // end-of-call-report IS the definitive "this call is over" signal — always finalize
+    // to 'completed' here, full stop. The previous version tried to preserve row.status
+    // unless it was still 'in_progress', on the assumption that anything else already
+    // reflected a real terminal state. That assumption was wrong: Vapi's end-of-call-report
+    // payload embeds a `call` object that's a metadata snapshot, not a live value — it can
+    // still read "ringing" (its state from earlier in the call's life) even though the call
+    // has just ended. rawStatus (line ~46) picked that stale "ringing" up and, since the row
+    // wasn't yet 'completed', line 67 wrote it into row.status. This ternary then saw
+    // 'ringing' !== 'in_progress' and mistook it for an already-good terminal status,
+    // leaving the row stuck on "ringing" forever — that's why every call in the dashboard
+    // showed "ringing" regardless of age. There is no legitimate reason to keep any
+    // rawStatus-derived value once we know for certain (via the event type itself) that the
+    // call has ended.
+    row.status = 'completed'
     if (durationSeconds != null) row.duration_seconds = Math.round(durationSeconds)
     if (transcript) row.transcript = transcript
     if (recordingUrl) row.recording_url = recordingUrl
