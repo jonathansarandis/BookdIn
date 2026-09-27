@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Phone, Mail, Clock, Plus, Loader2, FileText, CheckCircle2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, Clock, Plus, Loader2, FileText, CheckCircle2, Trash2, Pencil, MapPin } from 'lucide-react'
 import LostReasonModal, { LOST_REASONS } from '@/components/crm/LostReasonModal'
 import ConfirmDeleteModal from '@/components/crm/ConfirmDeleteModal'
 import { formatSourceLabel } from '@/lib/crm/sourceLabels'
@@ -57,6 +57,8 @@ export default function CRMContactPage() {
   const [showFollowupForm, setShowFollowupForm] = useState(false)
   const [showLostModal, setShowLostModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [editingContact, setEditingContact] = useState(false)
+  const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', location: '' })
 
   const [activityForm, setActivityForm] = useState({
     type: 'note',
@@ -153,6 +155,33 @@ export default function CRMContactPage() {
     await fetchData()
   }
 
+  function startEditingContact() {
+    setEditForm({
+      full_name: contact.full_name || '',
+      email: contact.email || '',
+      phone: contact.phone || '',
+      location: contact.location || '',
+    })
+    setEditingContact(true)
+  }
+
+  async function handleSaveContact(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editForm.full_name.trim()) return
+    setSaving(true)
+
+    await supabase.from('crm_contacts').update({
+      full_name: editForm.full_name.trim(),
+      email: editForm.email.trim() || null,
+      phone: editForm.phone.trim() || null,
+      location: editForm.location.trim() || null,
+    }).eq('id', params.id)
+
+    setSaving(false)
+    setEditingContact(false)
+    await fetchData()
+  }
+
   async function handleDelete() {
     // Only the CRM record — the linked customer row (if any) is untouched.
     await supabase.from('crm_activities').delete().eq('contact_id', params.id)
@@ -180,6 +209,15 @@ export default function CRMContactPage() {
           <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${STAGE_COLORS[contact.stage]}`}>
             {contact.stage}
           </span>
+          {!editingContact && (
+            <button
+              onClick={startEditingContact}
+              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-brand-600 transition-colors"
+              title="Edit contact"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => setShowDeleteModal(true)}
             className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-red-600 transition-colors"
@@ -287,17 +325,84 @@ export default function CRMContactPage() {
           {/* Contact info */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <h2 className="font-semibold text-gray-900">Contact info</h2>
-            {contact.email && (
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="w-4 h-4 text-gray-400" />
-                <a href={`mailto:${contact.email}`} className="text-brand-600 hover:underline truncate">{contact.email}</a>
-              </div>
-            )}
-            {contact.phone && (
-              <div className="flex items-center gap-2 text-sm">
-                <Phone className="w-4 h-4 text-gray-400" />
-                <a href={`tel:${contact.phone}`} className="text-gray-700">{contact.phone}</a>
-              </div>
+            {editingContact ? (
+              <form onSubmit={handleSaveContact} className="space-y-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Full name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.full_name}
+                    onChange={e => setEditForm({ ...editForm, full_name: e.target.value })}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={editForm.location}
+                    onChange={e => setEditForm({ ...editForm, location: e.target.value })}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={saving || !editForm.full_name.trim()}
+                    className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingContact(false)}
+                    className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                {contact.email && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    <a href={`mailto:${contact.email}`} className="text-brand-600 hover:underline truncate">{contact.email}</a>
+                  </div>
+                )}
+                {contact.phone && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <a href={`tel:${contact.phone}`} className="text-gray-700">{contact.phone}</a>
+                  </div>
+                )}
+                {contact.location && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-700">{contact.location}</span>
+                  </div>
+                )}
+              </>
             )}
             {contact.stage === 'lost' && contact.lost_reason && (
               <div className="pt-2 border-t border-gray-100">

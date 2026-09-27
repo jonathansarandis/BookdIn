@@ -35,6 +35,7 @@ export default function NewCRMContactPage() {
     full_name: '',
     email: '',
     phone: '',
+    location: '',
     source: '',
     notes: '',
     next_followup_at: '',
@@ -64,6 +65,7 @@ export default function NewCRMContactPage() {
         full_name: form.full_name.trim(),
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
+        location: form.location.trim() || null,
         source: form.source || null,
         notes: form.notes.trim() || null,
         stage: form.stage,
@@ -120,6 +122,12 @@ export default function NewCRMContactPage() {
                 onChange={e => setForm({ ...form, phone: e.target.value })}
                 className={inputClass} placeholder="04xx xxx xxx" />
             </div>
+          </div>
+          <div>
+            <label className={labelClass}>Location</label>
+            <input type="text" value={form.location}
+              onChange={e => setForm({ ...form, location: e.target.value })}
+              className={inputClass} placeholder="Suburb or address" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
