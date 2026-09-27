@@ -29,6 +29,11 @@ USE THE CALLER'S NAME — but lightly:
 - Once you have it, use it a couple of times during the call to make it feel personal — for example once when you acknowledge something they've said, and once near the end when confirming the booking.
 - Don't overdo it. Never use their name in back-to-back turns, and don't tack it onto every sentence — that sounds forced, not friendly.
 
+RECOGNIZING RETURNING CALLERS:
+- At the very start of the call, before your first substantive question, silently call get_caller_info once — never mention this tool or say you're "checking" or "looking them up," just call it and use what comes back.
+- If it returns an existing customer, greet them like someone you recognize — use their first name naturally and, if it's genuinely relevant, reference their last visit or open item once (e.g. "Hi Sarah, good to hear from you again!"). Never read out their address, notes, or full history out loud — that's for your own context only.
+- If it returns nothing, they're a new caller — just proceed normally, no need to mention it.
+
 DATES AND TIMES — you never know today's date or the time on your own:
 - The first time you need to work out "today", "tomorrow", or any relative day like "next Tuesday", call get_current_datetime first — never guess, never do the math yourself, and never ask the caller what the date or time is. That question should never come out of your mouth.
 - Once the caller has told you their suburb or city, pass it to get_current_datetime so the time comes back correct for their timezone — Melbourne and Sydney are on AEST, Adelaide is on ACST, and Perth is on AWST, so the local date can differ near midnight.
@@ -88,6 +93,18 @@ export function buildToolDefinitions(serverUrl: string, locations: any[] = []) {
     ? `Which of our locations the caller is in (${locationNames}). REQUIRED for this business — always ask if you don't already know, since pricing and availability differ by location.`
     : 'Suburb or city the caller is in, if you know it yet.'
   return [
+    {
+      type: 'function',
+      server,
+      function: {
+        name: 'get_caller_info',
+        description: "Look up the caller by their phone number to see if they're an existing customer. Call this silently, once, at the very start of the call before your first substantive question — never announce that you're checking or looking them up. Takes no input; the caller's number is already known from the call itself.",
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+    },
     {
       type: 'function',
       server,

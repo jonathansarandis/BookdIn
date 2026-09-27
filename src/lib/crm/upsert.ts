@@ -114,6 +114,69 @@ export async function upsertCrmContact(
   return { contact_id: created.id, created: true }
 }
 
+export interface ContactLookupResult {
+  contact_id: string
+  full_name: string
+  email: string | null
+  phone: string | null
+  stage: string | null
+  customer_id: string | null
+  last_activity_at: string | null
+  lost_reason: string | null
+  most_recent_note: string | null
+}
+
+/**
+ * Read-only caller-ID lookup: given a phone number, find the existing crm_contacts
+ * row for it (if any) within the business. Used to recognize a returning caller —
+ * on the calls/dialer list and detail pages (so staff see "Jane Smith" instead of
+ * a bare number and don't have to search for it manually), and by Aria's
+ * get_caller_info tool (so she can greet a returning customer by name and know
+ * whether their last inquiry needs follow-up) — instead of creating a duplicate
+ * phone-only entry the way a booking/inquiry upsert would.
+ *
+ * Exact match on the stored phone string, same as the matching logic in
+ * upsertCrmContact above — this repo doesn't currently normalize phone formats
+ * before storing them, so a lookup here is only as good as what was saved.
+ * Never throws; returns null on no match or on error.
+ */
+export async function findContactByPhone(
+  supabase: SupabaseClient,
+  businessId: string,
+  phone: string | null | undefined
+): Promise<ContactLookupResult | null> {
+  if (!phone) return null
+
+  const { data: contact, error } = await supabase
+    .from('crm_contacts')
+    .select('id, full_name, email, phone, stage, customer_id, last_activity_at, lost_reason')
+    .eq('business_id', businessId)
+    .eq('phone', phone)
+    .limit(1)
+    .maybeSingle()
+  if (error || !contact) return null
+
+  const { data: activity } = await supabase
+    .from('crm_activities')
+    .select('title, body')
+    .eq('contact_id', contact.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  return {
+    contact_id: contact.id,
+    full_name: contact.full_name,
+    email: contact.email,
+    phone: contact.phone,
+    stage: contact.stage,
+    customer_id: contact.customer_id,
+    last_activity_at: contact.last_activity_at,
+    lost_reason: contact.lost_reason,
+    most_recent_note: activity?.body || activity?.title || null,
+  }
+}
+
 export interface LogCrmActivityParams {
   business_id: string
   contact_id: string

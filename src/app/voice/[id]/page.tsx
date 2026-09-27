@@ -5,12 +5,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Phone, Clock, ExternalLink, PlayCircle, ClipboardCheck, Check } from 'lucide-react'
+import { ArrowLeft, Phone, Clock, ExternalLink, PlayCircle, ClipboardCheck, Check, UserCircle2 } from 'lucide-react'
 
 export default function VoiceCallDetailPage() {
   const params = useParams()
   const [call, setCall] = useState<any>(null)
   const [job, setJob] = useState<any>(null)
+  const [contact, setContact] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [markingReviewed, setMarkingReviewed] = useState(false)
   const supabase = createClient()
@@ -46,6 +47,19 @@ export default function VoiceCallDetailPage() {
         .eq('id', callRow.booking_id)
         .single()
       setJob(jobRow)
+    }
+
+    // Caller-ID matching: recognize a returning customer by their number instead of
+    // just showing a bare phone number — lets Reyan/Shayne confirm at a glance whether
+    // this caller's concern has already been logged/addressed elsewhere in the CRM.
+    if (callRow?.phone_number_from && profile?.business_id) {
+      const { data: contactRow } = await supabase
+        .from('crm_contacts')
+        .select('id, full_name, stage, last_activity_at')
+        .eq('business_id', profile.business_id)
+        .eq('phone', callRow.phone_number_from)
+        .maybeSingle()
+      setContact(contactRow || null)
     }
     setLoading(false)
   }
@@ -85,6 +99,17 @@ export default function VoiceCallDetailPage() {
           >
             <PlayCircle className="w-4 h-4" /> Listen to recording
           </a>
+        )}
+
+        {contact && (
+          <Link
+            href={`/crm/${contact.id}`}
+            className="mt-3 inline-flex items-center gap-2 text-sm text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-2 hover:bg-brand-100 transition-colors"
+          >
+            <UserCircle2 className="w-4 h-4" />
+            Known contact — {contact.full_name} ({contact.stage || 'lead'})
+            <ExternalLink className="w-3.5 h-3.5 ml-1" />
+          </Link>
         )}
       </div>
 

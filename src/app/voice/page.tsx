@@ -42,6 +42,7 @@ function statusBadge(call: any) {
 
 export default function VoiceDashboardPage() {
   const [calls, setCalls] = useState<any[]>([])
+  const [contactsByPhone, setContactsByPhone] = useState<Record<string, { id: string; full_name: string }>>({})
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -59,6 +60,23 @@ export default function VoiceDashboardPage() {
       .limit(200)
     setCalls(data || [])
     setLoading(false)
+
+    // Caller-ID matching: batch-resolve every distinct caller number on this page against
+    // crm_contacts, so a returning customer shows by name instead of a bare number the
+    // team has to go search for manually (Shayne/Reyan's ask).
+    const phones = Array.from(new Set((data || []).map((c: any) => c.phone_number_from).filter(Boolean)))
+    if (phones.length && profile?.business_id) {
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('id, full_name, phone')
+        .eq('business_id', profile.business_id)
+        .in('phone', phones)
+      const map: Record<string, { id: string; full_name: string }> = {}
+      for (const c of contacts || []) {
+        if (c.phone) map[c.phone] = { id: c.id, full_name: c.full_name }
+      }
+      setContactsByPhone(map)
+    }
   }
 
   const windowStart = last7Days()
@@ -117,7 +135,22 @@ export default function VoiceDashboardPage() {
                   <td className="px-5 py-3 text-gray-900">
                     {new Date(call.created_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
                   </td>
-                  <td className="px-5 py-3 text-gray-700">{call.phone_number_from || 'Unknown'}</td>
+                  <td className="px-5 py-3 text-gray-700">
+                    {call.phone_number_from && contactsByPhone[call.phone_number_from] ? (
+                      <div>
+                        <Link
+                          href={`/crm/${contactsByPhone[call.phone_number_from].id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="font-medium text-brand-700 hover:underline"
+                        >
+                          {contactsByPhone[call.phone_number_from].full_name}
+                        </Link>
+                        <div className="text-xs text-gray-400">{call.phone_number_from}</div>
+                      </div>
+                    ) : (
+                      call.phone_number_from || 'Unknown'
+                    )}
+                  </td>
                   <td className="px-5 py-3 text-gray-500 inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {formatDuration(call.duration_seconds)}</td>
                   <td className="px-5 py-3">{statusBadge(call)}</td>
                 </tr>

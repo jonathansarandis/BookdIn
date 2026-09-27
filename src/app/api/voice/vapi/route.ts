@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { calcJobPrice, applyFrequencyDiscount, calcTaxSplit } from '@/lib/pricing'
 import { fromBusinessDateTime, formatBusinessDateTime, getCurrentDateTimeInfo } from '@/lib/datetime'
-import { upsertCrmContact, logCrmActivity } from '@/lib/crm/upsert'
+import { upsertCrmContact, logCrmActivity, findContactByPhone } from '@/lib/crm/upsert'
 import { sendBookingConfirmation } from '@/lib/email'
 import { getAvailableSlots } from '@/lib/voice/availability'
 import {
@@ -74,12 +74,32 @@ export async function POST(request: NextRequest) {
 
 async function dispatchTool(name: string, args: any, business: any, callCtx: { vapiCallId: string | null; fromNumber: string | null }) {
   switch (name) {
+    case 'get_caller_info': return handleGetCallerInfo(business, callCtx)
     case 'get_current_datetime': return handleGetCurrentDatetime(business, args)
     case 'check_availability': return handleCheckAvailability(business, args)
     case 'get_pricing': return handleGetPricing(business, args)
     case 'create_booking': return handleCreateBooking(business, args, callCtx)
     case 'take_message': return handleTakeMessage(business, args, callCtx)
     default: return `Unknown tool: ${name}`
+  }
+}
+
+// Caller-ID matching for Aria — looks the caller's number up against crm_contacts
+// (the same table the dialer/CRM UI matches against) so she can recognize a returning
+// customer instead of treating every call as brand new. Read-only and best-effort:
+// no phone number, lookup error, or no match all just mean "treat as a new caller" —
+// never worth failing the call over. Deliberately returns only what's safe for the
+// model to reference out loud (first name, stage, a short note) — never the contact's
+// email/address, which she has no reason to read back to someone on the phone.
+async function handleGetCallerInfo(business: any, callCtx: { vapiCallId: string | null; fromNumber: string | null }) {
+  if (!callCtx.fromNumber) return { known: false }
+  const contact = await findContactByPhone(admin, business.id, callCtx.fromNumber)
+  if (!contact) return { known: false }
+  return {
+    known: true,
+    first_name: contact.full_name?.split(' ')[0] || null,
+    stage: contact.stage,
+    note: contact.most_recent_note,
   }
 }
 
