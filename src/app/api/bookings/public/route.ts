@@ -257,11 +257,12 @@ export async function POST(request: NextRequest) {
     // 3. Create or find customer
     let customerId: string
     let isExistingCustomer = false
+    let existingStripeCustomerId: string | null = null
     const t_cx = Date.now()
     try {
       const { data: existingCustomer } = await supabase
         .from('customers')
-        .select('id, gclid, gbraid, wbraid')
+        .select('id, gclid, gbraid, wbraid, stripe_customer_id')
         .eq('business_id', business_id)
         .eq('email', customer.email)
         .single()
@@ -269,6 +270,7 @@ export async function POST(request: NextRequest) {
       if (existingCustomer) {
         isExistingCustomer = true
         customerId = existingCustomer.id
+        existingStripeCustomerId = existingCustomer.stripe_customer_id || null
         // Per-field update: only write non-null new values; null incoming = preserve existing
         const updates: Record<string, string> = {}
         if (gclid)  updates.gclid  = gclid
@@ -329,6 +331,27 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to create address: ${e.message}`)
     }
 
+    // 4a. Repeat customer with a card already on file from a previous booking — reuse it
+    // instead of always sending a "set up your card" link. This is the same lookup the
+    // admin "New booking" form does when staff pick an existing customer
+    // (src/app/booking/page.tsx); the public form never had an equivalent, so a repeat
+    // customer booking online always got a fresh card-setup email even when staff already
+    // had a working card for them, forcing a follow-up call every time (Reyan/Shayne's
+    // report). Card is attached but NOT authorized here — same 'card_on_file' status and
+    // nightly pre-auth cron used everywhere else, so this doesn't charge anything early.
+    let savedPaymentMethodId: string | null = null
+    if (isExistingCustomer && existingStripeCustomerId) {
+      const { data: savedCard } = await supabase
+        .from('customer_payment_methods')
+        .select('stripe_payment_method_id')
+        .eq('customer_id', customerId)
+        .eq('business_id', business_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      savedPaymentMethodId = savedCard?.stripe_payment_method_id || null
+    }
+
     // 5. Create job (pending status — no card yet)
     const tz = location.timezone || business.timezone || 'Australia/Melbourne'
     const scheduledAtIso = fromBusinessDateTime(scheduled_date, effectiveTime, tz)
@@ -362,8 +385,9 @@ export async function POST(request: NextRequest) {
         tax_amount: taxSplit.tax,
         frequency: effectiveFrequency,
         customer_notes: customer_notes || null,
-        payment_status: 'unpaid',
+        payment_status: savedPaymentMethodId ? 'card_on_file' : 'unpaid',
         payment_method: 'card',
+        ...(savedPaymentMethodId ? { stripe_payment_method_id: savedPaymentMethodId, stripe_customer_id: existingStripeCustomerId } : {}),
         booking_source: 'online',
         is_flexible_time: isFlexible,
         bedrooms: service?.pricing_type === 'room_based' ? (bedrooms ?? null) : null,
@@ -421,14 +445,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5a. Generate single-use card-setup token (14-day expiry)
-    const { randomBytes } = await import('crypto')
-    const cardSetupToken = randomBytes(32).toString('hex')
-    const tokenExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-    await supabase.from('jobs').update({
-      card_setup_token: cardSetupToken,
-      card_setup_token_expires_at: tokenExpiresAt.toISOString(),
-    }).eq('id', job.id)
+    // 5a. Generate single-use card-setup token (14-day expiry) — skipped when a saved
+    // card was already attached above; there's nothing for the customer to set up.
+    let cardSetupToken: string | null = null
+    if (!savedPaymentMethodId) {
+      const { randomBytes } = await import('crypto')
+      cardSetupToken = randomBytes(32).toString('hex')
+      const tokenExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+      await supabase.from('jobs').update({
+        card_setup_token: cardSetupToken,
+        card_setup_token_expires_at: tokenExpiresAt.toISOString(),
+      }).eq('id', job.id)
+    }
 
     // 6. Insert extras (using pre-fetched extraDetails from step 2b)
     if (extraDetails.length > 0) {
@@ -444,7 +472,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Capture for closure use in after()
-    const cardSetupUrl = business.stripe_charges_enabled
+    const cardSetupUrl = business.stripe_charges_enabled && cardSetupToken
       ? `${process.env.NEXT_PUBLIC_APP_URL}/secure-card/${cardSetupToken}`
       : undefined
 
@@ -495,13 +523,16 @@ export async function POST(request: NextRequest) {
             .eq('business_id', business_id)
 
           if (staffProfiles?.length) {
+            const cardNote = savedPaymentMethodId
+              ? 'Their saved card from a previous booking was attached automatically — no need to chase card details.'
+              : 'Call to confirm and ensure they complete the card details link.'
             await supabase.from('notifications').insert(
               staffProfiles.map(staff => ({
                 business_id,
                 user_id: staff.id,
                 type: 'call_prompt',
-                title: `📞 Call ${customer.full_name} to confirm booking`,
-                body: `New online booking for ${service?.name} on ${formatDate(scheduled_date)}. Call to confirm and ensure they complete the card details link.`,
+                title: `📞 ${savedPaymentMethodId ? 'Repeat booking' : 'Call'} ${customer.full_name}${savedPaymentMethodId ? '' : ' to confirm booking'}`,
+                body: `New online booking for ${service?.name} on ${formatDate(scheduled_date)}. ${cardNote}`,
                 entity_type: 'job',
                 entity_id: job.id,
                 action_url: `/jobs/${job.id}`,
