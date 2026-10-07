@@ -139,9 +139,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     customerCard = cpm ?? null
     if (job.stripe_payment_method_id) savedCard = cpm ?? null
   }
-  const canUseSavedCard = !!customerCard
-    && customerCard.stripe_payment_method_id !== job.stripe_payment_method_id
-    && job.status !== 'cancelled'
+  const canUseSavedCard = !!job.customer_id && job.status !== 'cancelled'
 
   // Photos
   const [beforePhotos, afterPhotos] = await Promise.all([
@@ -444,8 +442,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <PayButton jobId={job.id} amount={chargeableCents}
                     label={`Collect payment · $${(chargeableCents / 100).toFixed(2)}`} />
                 )}
-                {canUseSavedCard && customerCard && (
-                  <UseSavedCardButton jobId={job.id} paymentMethodId={customerCard.stripe_payment_method_id} brand={customerCard.card_brand} last4={customerCard.card_last4} />
+                {canUseSavedCard && (
+                  <UseSavedCardButton jobId={job.id} customerId={job.customer_id} currentPaymentMethodId={job.stripe_payment_method_id ?? null} fallback={customerCard ? { paymentMethodId: customerCard.stripe_payment_method_id, brand: customerCard.card_brand, last4: customerCard.card_last4 } : null} />
                 )}
                 <AdminCardEntry jobId={job.id} hasCard={false} />
                 <CardSetupButton jobId={job.id} hasCard={false} />
@@ -460,8 +458,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 </p>
                 <PreauthorizeButton jobId={job.id} />
                 <ChargeNowButton jobId={job.id} totalPrice={chargeableCents} />
-                {canUseSavedCard && customerCard && (
-                  <UseSavedCardButton replacing jobId={job.id} paymentMethodId={customerCard.stripe_payment_method_id} brand={customerCard.card_brand} last4={customerCard.card_last4} />
+                {canUseSavedCard && (
+                  <UseSavedCardButton jobId={job.id} customerId={job.customer_id} currentPaymentMethodId={job.stripe_payment_method_id ?? null} fallback={customerCard ? { paymentMethodId: customerCard.stripe_payment_method_id, brand: customerCard.card_brand, last4: customerCard.card_last4 } : null} />
                 )}
                 <AdminCardEntry jobId={job.id} hasCard={true} />
                 <CardSetupButton jobId={job.id} hasCard={true} />
@@ -497,8 +495,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   Pre-authorisation failed. Retry with the saved card or collect a new one.
                 </p>
                 <PreauthorizeButton jobId={job.id} label="Try pre-authorize again" />
-                {canUseSavedCard && customerCard && (
-                  <UseSavedCardButton replacing jobId={job.id} paymentMethodId={customerCard.stripe_payment_method_id} brand={customerCard.card_brand} last4={customerCard.card_last4} />
+                {canUseSavedCard && (
+                  <UseSavedCardButton jobId={job.id} customerId={job.customer_id} currentPaymentMethodId={job.stripe_payment_method_id ?? null} fallback={customerCard ? { paymentMethodId: customerCard.stripe_payment_method_id, brand: customerCard.card_brand, last4: customerCard.card_last4 } : null} />
                 )}
                 <AdminCardEntry jobId={job.id} hasCard={false} />
                 <CardSetupButton jobId={job.id} hasCard={false} />
