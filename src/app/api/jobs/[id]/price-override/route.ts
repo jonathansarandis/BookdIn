@@ -23,8 +23,10 @@ export async function POST(
   }
 
   let price_override: number | null
+  let notify = false
   try {
     const body = await req.json()
+    notify = body.notify === true
     price_override = body.price_override ?? null
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
@@ -69,7 +71,9 @@ export async function POST(
   // so the customer actually sees the corrected amount, instead of relying on
   // staff to remember to hit "Resend confirmation email" separately.
   let confirmation_resent = false
-  if (job.confirmation_email_sent_at) {
+  // Only when staff explicitly opts in — silently emailing on every price tweak
+  // gave customers a second, near-duplicate confirmation.
+  if (notify && job.confirmation_email_sent_at) {
     try {
       const result = await resendBookingConfirmation(params.id, profile.business_id)
       confirmation_resent = result.success

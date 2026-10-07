@@ -59,6 +59,10 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
     for (const c of additionalCharges) {
       lineItems.push({ description: c.customer_notes || 'Additional charge', amountCents: c.total_price })
     }
+  } else if (Array.isArray(invoice.line_items) && invoice.line_items.length > 0) {
+    for (const li of invoice.line_items) {
+      lineItems.push({ description: li.description || 'Service', amountCents: li.amountCents || 0 })
+    }
   } else {
     lineItems.push({ description: invoice.notes || 'Services rendered', amountCents: invoice.subtotal })
   }

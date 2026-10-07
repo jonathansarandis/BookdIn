@@ -177,7 +177,10 @@ function bookingSummaryTable(
 
   // Itemised price breakdown: a line for the service (with room counts) plus
   // one line per add-on, so the customer sees exactly what makes up the total.
-  const extras = (job.extras || []).filter(e => e && e.name)
+  const allExtras = (job.extras || []).filter(e => e && e.name)
+  // Add-ons with no fixed price are "to be quoted upon arrival" — kept out of the confirmed total.
+  const extras = allExtras.filter(e => (e.price || 0) > 0)
+  const quoteExtras = allExtras.filter(e => !((e.price || 0) > 0))
   const extrasTotalCents = extras.reduce((sum, e) => sum + (e.price || 0) * (e.quantity || 1), 0)
   const serviceLineCents = subtotalCents - extrasTotalCents
   const roomSuffix = [
@@ -200,6 +203,15 @@ function bookingSummaryTable(
       (e.quantity && e.quantity > 1) ? `${e.name} ×${e.quantity}` : e.name,
       (e.price || 0) * (e.quantity || 1),
     )).join('')
+
+  const quoteRows = quoteExtras.length > 0 ? `
+      <tr>
+        <td style="${cellStyle}background-color:#fffbeb;">
+          <p style="${labelStyle}">Additional services &mdash; to be quoted upon arrival</p>
+          ${quoteExtras.map(e => `<p style="${valueStyle}">${(e.quantity && e.quantity > 1) ? `${e.name} ×${e.quantity}` : e.name} <span style="color:#92400e;">&mdash; price to be confirmed on site</span></p>`).join('')}
+          <p style="margin:8px 0 0;color:#92400e;font-size:12px;line-height:1.5;">These are not included in your confirmed price. Your cleaner will quote them on arrival and they will only go ahead with your approval.</p>
+        </td>
+      </tr>` : ''
 
   const taxRows = showTax ? `
       <tr>
@@ -243,9 +255,10 @@ function bookingSummaryTable(
       </tr>
       ${breakdownRows}
       ${taxRows}
+      ${quoteRows}
       <tr>
         <td style="padding:14px 16px;background-color:#f0ebe3;">
-          <p style="${labelStyle}">Total</p>
+          <p style="${labelStyle}">${quoteExtras.length > 0 ? 'Total Confirmed Booking Price' : 'Total'}</p>
           <p style="margin:0;color:#1a1a1a;font-size:17px;font-weight:600;">${formatMoney(displayTotalCents, business.currency)}</p>
         </td>
       </tr>

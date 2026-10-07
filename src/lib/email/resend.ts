@@ -11,6 +11,10 @@ interface JobEmailRow {
   price_override: number | null
   tax_amount: number
   payment_status: string | null
+  is_flexible_time?: boolean | null
+  bedrooms?: number | null
+  bathrooms?: number | null
+  job_extras?: Array<{ name: string; price: number | null; quantity: number | null }> | null
   stripe_payment_method_id: string | null
   card_setup_token: string | null
   card_setup_token_expires_at: string | null
@@ -39,7 +43,9 @@ export async function resendBookingConfirmation(jobId: string, businessId: strin
     .from('jobs')
     .select(`
       id, scheduled_at, total_price, price_override, tax_amount, payment_status,
+      is_flexible_time, bedrooms, bathrooms,
       stripe_payment_method_id, card_setup_token, card_setup_token_expires_at,
+      job_extras(name, price, quantity),
       customer:customers(full_name, email),
       service:services(name),
       address:addresses(line1, city, state, postcode),
@@ -85,6 +91,10 @@ export async function resendBookingConfirmation(jobId: string, businessId: strin
       total_price: job.total_price,
       price_override: job.price_override,
       tax_amount: job.tax_amount,
+      is_flexible_time: job.is_flexible_time ?? false,
+      bedrooms: job.bedrooms ?? null,
+      bathrooms: job.bathrooms ?? null,
+      extras: (job.job_extras || []).map(e => ({ name: e.name, price: e.price || 0, quantity: e.quantity ?? 1 })),
     },
     customer: job.customer,
     business: job.business,

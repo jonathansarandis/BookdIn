@@ -78,11 +78,32 @@ export async function POST(request: NextRequest) {
   if ('error' in ctx) return ctx.error
   const { admin, businessId } = ctx
 
-  const orphans = await findOrphans(admin, businessId)
+  const allOrphans = await findOrphans(admin, businessId)
   const results: any[] = []
+
+  // Several orphaned jobs often belong to ONE series (e.g. a past visit plus
+  // an upcoming one for the same customer + service + frequency). Creating a
+  // schedule per job produced duplicate schedules, so group them: one schedule
+  // anchored to the latest job, and every job in the group linked to it.
+  const groups = new Map<string, any[]>()
+  for (const j of allOrphans) {
+    const key = `${j.customer_id}|${j.service_id}|${j.frequency}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(j)
+  }
+  const orphans = Array.from(groups.values()).map(g => {
+    const latest = g[g.length - 1] // findOrphans orders by scheduled_at asc
+    return { ...latest, _groupIds: g.map(x => x.id) }
+  })
+
+  // location_id is NOT NULL on recurring_schedules; some old jobs have none.
+  let fallbackLocationId: string | null = null
+  const { data: firstLoc } = await admin.from('locations').select('id').eq('business_id', businessId).eq('is_active', true).order('name').limit(1).maybeSingle()
+  fallbackLocationId = firstLoc?.id ?? null
 
   for (const job of orphans) {
     try {
+      job.location_id = job.location_id || fallbackLocationId
       const nextOccurrence = getNextDate(new Date(job.scheduled_at), job.frequency)
       const { data: scheduleRow, error: scheduleErr } = await admin
         .from('recurring_schedules')
@@ -114,7 +135,7 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      await admin.from('jobs').update({ recurring_schedule_id: scheduleRow.id }).eq('id', job.id)
+      await admin.from('jobs').update({ recurring_schedule_id: scheduleRow.id }).in('id', job._groupIds)
       results.push({ job_id: job.id, customer: job.customer?.full_name, ok: true, schedule_id: scheduleRow.id })
     } catch (e: any) {
       results.push({ job_id: job.id, customer: job.customer?.full_name, ok: false, error: e.message })

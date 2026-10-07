@@ -12,6 +12,7 @@ import CardSetupButton from '@/app/jobs/[id]/CardSetupButton'
 import AdminCardEntry from '@/app/jobs/[id]/AdminCardEntry'
 import ChargeButton from '@/app/jobs/[id]/ChargeButton'
 import PreauthorizeButton from '@/app/jobs/[id]/PreauthorizeButton'
+import UseSavedCardButton from '@/app/jobs/[id]/UseSavedCardButton'
 import ChargeNowButton from '@/app/jobs/[id]/ChargeNowButton'
 import CancelCardButton from '@/app/jobs/[id]/CancelCardButton'
 import NotesEditor from '@/app/jobs/[id]/NotesEditor'
@@ -125,15 +126,22 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   // customer_payment_methods (kept in sync whenever a card is saved/reused)
   // rather than calling Stripe on every page load.
   let savedCard: { card_brand: string | null; card_last4: string | null } | null = null
-  if (job.customer_id && job.stripe_payment_method_id) {
+  // The customer's saved card (one per customer+business) — offered as a one-click
+  // "use saved card" on bookings that don't have it attached yet.
+  let customerCard: { stripe_payment_method_id: string; card_brand: string | null; card_last4: string | null } | null = null
+  if (job.customer_id) {
     const { data: cpm } = await adminClient
       .from('customer_payment_methods')
-      .select('card_brand, card_last4')
+      .select('stripe_payment_method_id, card_brand, card_last4')
       .eq('customer_id', job.customer_id)
       .eq('business_id', businessId)
-      .single()
-    savedCard = cpm ?? null
+      .maybeSingle()
+    customerCard = cpm ?? null
+    if (job.stripe_payment_method_id) savedCard = cpm ?? null
   }
+  const canUseSavedCard = !!customerCard
+    && customerCard.stripe_payment_method_id !== job.stripe_payment_method_id
+    && job.status !== 'cancelled'
 
   // Photos
   const [beforePhotos, afterPhotos] = await Promise.all([
@@ -436,6 +444,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <PayButton jobId={job.id} amount={chargeableCents}
                     label={`Collect payment · $${(chargeableCents / 100).toFixed(2)}`} />
                 )}
+                {canUseSavedCard && customerCard && (
+                  <UseSavedCardButton jobId={job.id} paymentMethodId={customerCard.stripe_payment_method_id} brand={customerCard.card_brand} last4={customerCard.card_last4} />
+                )}
                 <AdminCardEntry jobId={job.id} hasCard={false} />
                 <CardSetupButton jobId={job.id} hasCard={false} />
               </>
@@ -449,6 +460,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 </p>
                 <PreauthorizeButton jobId={job.id} />
                 <ChargeNowButton jobId={job.id} totalPrice={chargeableCents} />
+                {canUseSavedCard && customerCard && (
+                  <UseSavedCardButton replacing jobId={job.id} paymentMethodId={customerCard.stripe_payment_method_id} brand={customerCard.card_brand} last4={customerCard.card_last4} />
+                )}
                 <AdminCardEntry jobId={job.id} hasCard={true} />
                 <CardSetupButton jobId={job.id} hasCard={true} />
                 <CancelCardButton jobId={job.id} label="Cancel saved card" />
@@ -483,6 +497,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   Pre-authorisation failed. Retry with the saved card or collect a new one.
                 </p>
                 <PreauthorizeButton jobId={job.id} label="Try pre-authorize again" />
+                {canUseSavedCard && customerCard && (
+                  <UseSavedCardButton replacing jobId={job.id} paymentMethodId={customerCard.stripe_payment_method_id} brand={customerCard.card_brand} last4={customerCard.card_last4} />
+                )}
                 <AdminCardEntry jobId={job.id} hasCard={false} />
                 <CardSetupButton jobId={job.id} hasCard={false} />
               </div>
@@ -559,6 +576,15 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                     )}
                     {child.payment_status === 'capture_failed' && (
                       <p className="text-xs text-red-600">Capture failed</p>
+                    )}
+                    {/* Cancelling a pre-auth ('release') returns the charge to card_on_file —
+                        previously there was no way to delete it from there, so a declined
+                        upsell kept counting in the booking total and revenue. */}
+                    {['card_on_file', 'unpaid', 'pending'].includes(child.payment_status) && (
+                      <div className="space-y-1.5 pt-2 border-t border-gray-100">
+                        <p className="text-xs text-gray-500">Not charged. Remove it if the customer isn&apos;t going ahead.</p>
+                        <RemoveChargeButton jobId={child.id} />
+                      </div>
                     )}
                     {child.payment_status === 'auth_released' && (
                       <div className="space-y-1.5 pt-2 border-t border-gray-100">

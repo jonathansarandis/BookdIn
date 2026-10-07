@@ -27,7 +27,7 @@ export default function NewInvoicePage() {
       const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
       const [{ data: cx }, { data: jbs }, { data: biz }] = await Promise.all([
         supabase.from('customers').select('id, full_name').eq('business_id', profile!.business_id!).order('full_name'),
-        supabase.from('jobs').select('id, scheduled_at, price, price_override, total_price, service:services(name), customer:customers(full_name), job_extras(name, price, quantity)').eq('business_id', profile!.business_id!).eq('status', 'completed').is('invoice_id', null).order('scheduled_at', { ascending: false }).limit(20),
+        supabase.from('jobs').select('id, scheduled_at, price, price_override, total_price, service:services(name), customer_id, customer:customers(id, full_name), job_extras(name, price, quantity)').eq('business_id', profile!.business_id!).eq('status', 'completed').is('invoice_id', null).is('parent_job_id', null).order('scheduled_at', { ascending: false }).limit(500),
         supabase.from('businesses').select('tax_rate, tax_name, show_tax, tax_mode').eq('id', profile!.business_id!).single(),
       ])
       setCustomers(cx || [])
@@ -119,7 +119,19 @@ export default function NewInvoicePage() {
     const subtotalCents = taxMode === 'exclusive' ? lineTotalCents : lineTotalCents - taxCents
     const totalCents = lineTotalCents + (taxMode === 'exclusive' ? taxCents : 0)
 
-    const { data: invoice, error } = await supabase.from('invoices').insert({
+    const customLineItems = items
+      .filter(it => it.description.trim() || parseFloat(it.unit_price || '0') > 0)
+      .map(it => {
+        const qty = parseFloat(it.quantity || '1') || 1
+        const unit = parseFloat(it.unit_price || '0') || 0
+        const desc = it.description.trim() || 'Service'
+        return {
+          description: qty > 1 ? `${desc} ×${qty}` : desc,
+          amountCents: Math.round(qty * unit * 100),
+        }
+      })
+
+    const baseRow = {
       business_id: profile!.business_id!,
       customer_id: form.customer_id,
       job_id: form.job_id || null,
@@ -130,7 +142,13 @@ export default function NewInvoicePage() {
       total: totalCents,
       due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
       notes: form.notes || null,
-    }).select().single()
+    }
+    let { data: invoice, error } = await supabase.from('invoices')
+      .insert({ ...baseRow, line_items: customLineItems }).select().single()
+    // line_items column comes from migration 20261007 — fall back so invoicing still works pre-migration.
+    if (error && /line_items/.test(error.message || '')) {
+      ;({ data: invoice, error } = await supabase.from('invoices').insert(baseRow).select().single())
+    }
 
     if (!error && invoice && form.job_id) {
       await supabase.from('jobs').update({ invoice_id: invoice.id }).eq('id', form.job_id)

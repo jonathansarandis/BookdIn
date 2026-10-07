@@ -18,10 +18,11 @@ export default function PriceOverrideEditor({ jobId, initialOverride, derivedTot
   // page (charge buttons, etc.) re-reads the new amount. Throwing surfaces the
   // error inside InlinePriceEditor.
   async function handleCommit(price_override: number | null) {
+    const notify = confirm('Email the customer an updated confirmation with the new price?\n\nOK = send one updated email\nCancel = save the price without emailing')
     const res = await fetch(`/api/jobs/${jobId}/price-override`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ price_override }),
+      body: JSON.stringify({ price_override, notify }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error || 'Save failed')

@@ -184,7 +184,8 @@ export default function RecurringPage() {
       setSchedules(scheds || [])
       setOrphanJobs(orphans || [])
 
-      alert(`Fixed ${data.schedules_created} booking${data.schedules_created === 1 ? '' : 's'}${data.schedules_failed ? ` (${data.schedules_failed} failed — check logs)` : ''}. Materialized ${data.materialize?.jobsCreated || 0} upcoming occurrence(s).`)
+      const failures = (data.results || []).filter((r: any) => !r.ok).map((r: any) => `${r.customer || 'Unknown'}: ${r.error}`).join('\n')
+      alert(`Fixed ${data.schedules_created} schedule${data.schedules_created === 1 ? '' : 's'}${data.schedules_failed ? ` (${data.schedules_failed} failed)` : ''}. Created ${data.materialize?.jobsCreated || 0} upcoming booking(s).${failures ? `\n\nFailures:\n${failures}` : ''}`)
     } catch (err: any) {
       alert(`Fix failed: ${err.message}`)
     } finally {
