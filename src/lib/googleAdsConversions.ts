@@ -25,6 +25,7 @@
 // gets rejected here. Each business must reconnect Google Ads once (Settings
 // → Google Ads → Reconnect) after this ships, to re-grant consent with the
 // wider scope.
+import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   decryptGoogleAdsCredentials,
@@ -51,9 +52,52 @@ function bareConversionActionId(conversionActionIdOrResourceName: string): strin
   return parts[parts.length - 1]
 }
 
+// ── Enhanced conversions for leads: hashed first-party identifiers ─────────────
+// Google matches uploads to signed-in users via SHA-256 of normalised email /
+// E.164 phone, on top of the gclid. Normalisation rules per Google's spec:
+// trim + lowercase; gmail.com/googlemail.com also drop dots in the local part.
+const sha256Hex = (v: string) => createHash('sha256').update(v).digest('hex')
+
+function hashedEmail(email?: string | null): string | null {
+  if (!email) return null
+  let e = email.trim().toLowerCase()
+  if (!e.includes('@')) return null
+  const [local, domain] = e.split('@')
+  const l = (domain === 'gmail.com' || domain === 'googlemail.com') ? local.replace(/\./g, '') : local
+  return sha256Hex(`${l}@${domain}`)
+}
+
+function hashedPhone(phone?: string | null): string | null {
+  if (!phone) return null
+  let d = phone.replace(/[^\d+]/g, '')
+  if (d.startsWith('+')) d = '+' + d.slice(1).replace(/\D/g, '')
+  else if (d.startsWith('00')) d = '+' + d.slice(2)
+  else if (d.startsWith('0')) d = '+61' + d.slice(1) // Australian local format
+  else if (d.startsWith('61')) d = '+' + d
+  else return null
+  if (d.replace(/\D/g, '').length < 8) return null
+  return sha256Hex(d)
+}
+
+async function customerIdentifiers(customerId?: string | null): Promise<Array<Record<string, string>>> {
+  if (!customerId) return []
+  try {
+    const admin = createAdminClient()
+    const { data: c } = await admin.from('customers').select('email, phone').eq('id', customerId).maybeSingle()
+    const ids: Array<Record<string, string>> = []
+    const em = hashedEmail(c?.email)
+    const ph = hashedPhone(c?.phone)
+    if (em) ids.push({ emailAddress: em })
+    if (ph) ids.push({ phoneNumber: ph })
+    return ids
+  } catch {
+    return [] // identifiers are an enhancement; never block the gclid upload
+  }
+}
+
 async function uploadClickConversion(
   business: BusinessGoogleAdsConfig,
-  opts: { gclid: string; conversionActionId: string; conversionDateTime: Date; conversionValue: number; currencyCode: string; orderId: string },
+  opts: { customerId?: string | null; gclid: string; conversionActionId: string; conversionDateTime: Date; conversionValue: number; currencyCode: string; orderId: string },
 ): Promise<{ success: boolean; error?: string }> {
   const creds = decryptGoogleAdsCredentials(business)
   const accessToken = await getAccessToken(creds)
@@ -70,8 +114,11 @@ async function uploadClickConversion(
     }
   }
 
-  const body = {
+  const userIdentifiers = await customerIdentifiers(opts.customerId)
+
+  const body: Record<string, any> = {
     destinations: [destination],
+    encoding: 'HEX', // how the hashed identifiers below are encoded
     events: [
       {
         transactionId: opts.orderId, // job id — lets Google dedupe retries
@@ -79,6 +126,7 @@ async function uploadClickConversion(
         adIdentifiers: { gclid: opts.gclid },
         currency: opts.currencyCode,
         conversionValue: opts.conversionValue,
+        ...(userIdentifiers.length ? { userData: { userIdentifiers } } : {}),
       },
     ],
   }
@@ -165,6 +213,7 @@ export async function syncJobConversionToGoogleAds(jobId: string): Promise<SyncR
   const conversionDate = job.completed_at ? new Date(job.completed_at) : new Date()
 
   const result = await uploadClickConversion(business, {
+    customerId: job.customer_id,
     gclid,
     conversionActionId: business.google_ads_conversion_action_id,
     conversionDateTime: conversionDate,
@@ -259,6 +308,7 @@ export async function syncBookingConversionToGoogleAds(jobId: string): Promise<S
   const conversionDate = new Date()
 
   const result = await uploadClickConversion(business, {
+    customerId: job.customer_id,
     gclid,
     conversionActionId: business.google_ads_booking_conversion_action_id,
     conversionDateTime: conversionDate,
