@@ -708,7 +708,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           from: `BookdIn <hello@bookdin.co>`,
           to: business.contact_email,
           bcc: 'jonathan.sarandis@gmail.com',
-          reply_to: ownerCustomer?.email,
+          ...(/^[^\s@.][^\s@]*@[^\s@]+\.[^\s@]+$/.test(ownerCustomer?.email || '') ? { reply_to: ownerCustomer?.email } : {}),
           subject: `📞 New booking — call ${ownerCustomer?.full_name} now`,
           html: `
             <div style="margin: 0; padding: 40px 20px; background: #f5f3ef; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">

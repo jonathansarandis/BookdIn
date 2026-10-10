@@ -415,6 +415,7 @@ export async function POST(request: NextRequest) {
           .from('recurring_schedules')
           .insert({
             business_id,
+            location_id, // NOT NULL on the live DB — omitting it silently dropped every recurring public booking's schedule
             customer_id: customerId,
             service_id,
             address_id: addr?.id ?? null,
@@ -617,7 +618,7 @@ export async function POST(request: NextRequest) {
               from: `BookdIn <hello@bookdin.co>`,
               to: business.contact_email,
               bcc: 'jonathan.sarandis@gmail.com',
-              reply_to: customer.email,
+              ...(/^[^\s@.][^\s@]*@[^\s@]+\.[^\s@]+$/.test(customer.email || '') ? { reply_to: customer.email } : {}), // an invalid customer address (e.g. leading dot) must not stop the staff email
               subject: `📞 New booking — call ${customer.full_name} now`,
               html: `
             <div style="margin: 0; padding: 40px 20px; background: #f5f3ef; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
