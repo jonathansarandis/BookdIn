@@ -22,7 +22,7 @@ export default function EditChargeAmount({ jobId, totalPrice }: { jobId: string;
     const supabase = createClient()
     const { error: err } = await supabase
       .from('jobs')
-      .update({ total_price: Math.round(n * 100), tax_amount: 0 })
+      .update({ total_price: Math.round(n * 100), tax_amount: 0 } as any)
       .eq('id', jobId)
       .not('parent_job_id', 'is', null)
     setLoading(false)
