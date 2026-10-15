@@ -83,7 +83,7 @@ export async function GET() {
       service:services(name),
       address:addresses(line1, city, state, postcode),
       location:locations(timezone),
-      job_extras(id, name, price)
+      job_extras(id, name, price, quantity, extra:extras(is_quote_only))
     `)
     .eq('provider_id', provider.id)
     .not('status', 'in', '("cancelled")')
@@ -115,7 +115,14 @@ export async function GET() {
       service: job.service,
       address: job.address,
       location: job.location,
-      job_extras: job.job_extras,
+      // Quote-on-arrival add-ons are flagged so the portal can show them separately from
+      // priced add-ons. Price is deliberately not exposed to cleaners.
+      job_extras: (job.job_extras || []).map((ex: any) => ({
+        id: ex.id,
+        name: ex.name,
+        quantity: ex.quantity ?? 1,
+        quote_on_arrival: !!ex.extra?.is_quote_only || !((ex.price || 0) > 0),
+      })),
     }
   })
 

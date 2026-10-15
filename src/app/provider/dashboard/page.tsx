@@ -172,7 +172,11 @@ export default function ProviderDashboard() {
                 job.bedrooms != null && `${job.bedrooms} bed`,
                 job.bathrooms != null && `${job.bathrooms} bath`,
               ].filter(Boolean).join(' / ')
-              const extrasNames = (job.job_extras || []).map((ex: any) => ex.name)
+              const allExtras = (job.job_extras || []) as any[]
+              const fixedExtras = allExtras.filter(ex => !ex.quote_on_arrival)
+              const quoteExtras = allExtras.filter(ex => ex.quote_on_arrival)
+              const label = (ex: any) => (ex.quantity > 1 ? `${ex.name} ×${ex.quantity}` : ex.name)
+              const extrasNames = fixedExtras.map(label)
               return (
                 <div key={job.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   {/* Job header */}
@@ -221,6 +225,17 @@ export default function ProviderDashboard() {
                           {bedBath && extrasNames.length > 0 && ' '}
                           {extrasNames.length > 0 && `+ ${extrasNames.join(', ')}`}
                         </span>
+                      </div>
+                    )}
+                    {quoteExtras.length > 0 && (
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs font-semibold text-blue-800 mb-1">Quote on arrival — confirm before starting</p>
+                        <ul className="text-sm text-blue-900 list-disc pl-4 space-y-0.5">
+                          {quoteExtras.map((ex: any) => <li key={ex.id}>{label(ex)}</li>)}
+                        </ul>
+                        <p className="text-xs text-blue-700 mt-1.5">
+                          Not included in the booked price. Discuss and agree the price with the customer on site first. Only do this work once they approve, then tell the office so it can be charged. Call the office if unsure.
+                        </p>
                       </div>
                     )}
                     {job.payout_cents > 0 && (
