@@ -63,6 +63,19 @@ export interface BookingFormRendererProps {
   } | null
 }
 
+
+// Detects the "How many storeys / levels?" custom field and whether the answer is multi-level.
+// Multi-level properties aren't in the website package price, so we warn the customer on the
+// form and pass the answer through in the booking notes so staff/cleaners see it.
+function isStoreyField(cf: any): boolean {
+  return /stor(e)?y|stories|level|floor/i.test(cf?.label || '')
+}
+function isMultiLevelAnswer(v: any): boolean {
+  if (v == null || v === '') return false
+  const t = String(v).trim().toLowerCase()
+  return !/^(1|one|single|1 storey|single storey|single-storey|single level)\b/.test(t)
+}
+
 export default function BookingFormRenderer({
   businessId,
   locationId,
@@ -212,7 +225,13 @@ export default function BookingFormRenderer({
           state: values.address.state,
           postcode: values.address.postcode,
         },
-        customer_notes: values.contact_info.customer_notes || null,
+        customer_notes: (() => {
+          const multi = (formData.customFields || []).filter((f: any) => isStoreyField(f) && isMultiLevelAnswer(values.custom[f.id]))
+          const tag = multi.length
+            ? `MULTI-LEVEL PROPERTY (customer selected: ${multi.map((f: any) => values.custom[f.id]).join(', ')}) — multi-level fee NOT included in booking price; customer was shown a notice that it will be confirmed.`
+            : ''
+          return [tag, values.contact_info.customer_notes].filter(Boolean).join('\n\n') || null
+        })(),
         bedrooms: svc.pricing_type === 'room_based' ? values.room_counts.bedrooms : null,
         bathrooms: svc.pricing_type === 'room_based' ? values.room_counts.bathrooms : null,
         custom_field_values: values.custom,
@@ -652,12 +671,18 @@ export default function BookingFormRenderer({
       const cf = formData.customFields.find(f => f.id === p.custom_field_id)
       if (!cf) return null
       return (
-        <CustomFieldInput
-          key={p.id}
-          field={cf}
-          value={values.custom[cf.id] ?? null}
-          onChange={v => setValues(prev => ({ ...prev, custom: { ...prev.custom, [cf.id]: v } }))}
-        />
+        <div key={p.id} className="space-y-2">
+          <CustomFieldInput
+            field={cf}
+            value={values.custom[cf.id] ?? null}
+            onChange={v => setValues(prev => ({ ...prev, custom: { ...prev.custom, [cf.id]: v } }))}
+          />
+          {isStoreyField(cf) && isMultiLevelAnswer(values.custom[cf.id]) && (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Please note: multi-level properties incur an additional fee that is <strong>not included</strong> in the price shown above. Our team will confirm the exact amount with you before your clean.
+            </p>
+          )}
+        </div>
       )
     }
     return null
