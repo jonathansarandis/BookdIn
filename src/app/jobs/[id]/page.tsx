@@ -18,6 +18,8 @@ import CancelCardButton from '@/app/jobs/[id]/CancelCardButton'
 import NotesEditor from '@/app/jobs/[id]/NotesEditor'
 import ScheduleEditor from '@/app/jobs/[id]/ScheduleEditor'
 import FollowUpChargeButton from '@/app/jobs/[id]/FollowUpChargeButton'
+import EditChargeAmount from '@/app/jobs/[id]/EditChargeAmount'
+import MarkPaidButton from '@/app/jobs/[id]/MarkPaidButton'
 import AddCustomAddon from '@/app/jobs/[id]/AddCustomAddon'
 import PriceOverrideEditor from '@/app/jobs/[id]/PriceOverrideEditor'
 import ResendConfirmationButton from '@/app/jobs/[id]/ResendConfirmationButton'
@@ -569,6 +571,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                       <div className="space-y-1.5 pt-2 border-t border-gray-100">
                         <p className="text-xs text-red-600">Authorization failed</p>
                         <PreauthorizeButton jobId={child.id} label="Try again" />
+                        <EditChargeAmount jobId={child.id} totalPrice={child.total_price} />
+                        <MarkPaidButton jobId={child.id} />
                         <RemoveChargeButton jobId={child.id} />
                       </div>
                     )}
@@ -581,12 +585,16 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                     {['card_on_file', 'unpaid', 'pending'].includes(child.payment_status) && (
                       <div className="space-y-1.5 pt-2 border-t border-gray-100">
                         <p className="text-xs text-gray-500">Not charged. Remove it if the customer isn&apos;t going ahead.</p>
+                        <EditChargeAmount jobId={child.id} totalPrice={child.total_price} />
+                        <MarkPaidButton jobId={child.id} />
                         <RemoveChargeButton jobId={child.id} />
                       </div>
                     )}
                     {child.payment_status === 'auth_released' && (
                       <div className="space-y-1.5 pt-2 border-t border-gray-100">
                         <p className="text-xs text-gray-500">Authorization released</p>
+                        <EditChargeAmount jobId={child.id} totalPrice={child.total_price} />
+                        <MarkPaidButton jobId={child.id} />
                         <RemoveChargeButton jobId={child.id} />
                       </div>
                     )}
