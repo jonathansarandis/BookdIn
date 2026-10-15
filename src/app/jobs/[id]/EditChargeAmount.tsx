@@ -19,7 +19,7 @@ export default function EditChargeAmount({ jobId, totalPrice }: { jobId: string;
     if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return }
     setLoading(true)
     setError(null)
-    const supabase = createClient()
+    const supabase: any = createClient()
     const { error: err } = await supabase
       .from('jobs')
       .update({ total_price: Math.round(n * 100), tax_amount: 0 } as any)
