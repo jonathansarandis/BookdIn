@@ -99,20 +99,39 @@ export async function POST(
 
   const paymentMethodIdToUse = cpm?.stripe_payment_method_id ?? parent.stripe_payment_method_id
 
-  // Look up the per-business Custom service
-  const { data: customService, error: svcError } = await supabase
-    .from('services')
-    .select('id')
-    .eq('business_id', parent.business_id)
-    .eq('pricing_type', 'custom')
-    .single()
-
-  if (svcError || !customService) {
-    console.error(`[follow-up-charge] Custom service not found for business ${parent.business_id}`)
-    return NextResponse.json(
-      { error: 'Custom service not seeded for this business' },
-      { status: 500 }
-    )
+  // Dedicated "Additional Charge" service for upsell/add-on child jobs. This used to grab
+  // whichever service had pricing_type='custom', so when staff renamed that service to
+  // "Complaint Revisit" every upsell started showing as a complaint revisit. Now it uses (and
+  // auto-creates, if missing) its own service, so renaming/using other services can't affect it.
+  let customService: { id: string } | null = null
+  {
+    const { data: existing } = await supabase
+      .from('services')
+      .select('id')
+      .eq('business_id', parent.business_id)
+      .eq('name', 'Additional Charge')
+      .limit(1)
+      .maybeSingle()
+    customService = existing ?? null
+  }
+  if (!customService) {
+    const { data: created, error: createErr } = await supabase
+      .from('services')
+      .insert({
+        business_id: parent.business_id,
+        name: 'Additional Charge',
+        description: 'System service used for upsells and additional charges',
+        pricing_type: 'custom',
+        base_price: 0,
+        duration_minutes: 0,
+      })
+      .select('id')
+      .single()
+    if (createErr || !created) {
+      console.error(`[follow-up-charge] Could not create Additional Charge service for business ${parent.business_id}:`, createErr?.message)
+      return NextResponse.json({ error: 'Could not set up the Additional Charge service' }, { status: 500 })
+    }
+    customService = created
   }
 
   // Idempotency: reuse an unresolved (auth_failed) child job for this parent
