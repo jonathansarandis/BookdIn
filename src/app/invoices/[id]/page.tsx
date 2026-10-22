@@ -84,7 +84,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           </div>
         </div>
         <span className={cn('px-3 py-1 rounded-full text-sm font-medium border capitalize', STATUS_STYLES[invoice.status] || 'bg-gray-100 text-gray-700')}>
-          {invoice.status}
+          {invoice.status === 'draft' ? 'unsent' : invoice.status}
         </span>
       </div>
 
@@ -202,6 +202,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
               <Download className="w-3.5 h-3.5" />
               Download PDF
             </a>
+            {invoice.status !== 'void' && (
+              <Link href={`/invoices/${invoice.id}/edit`} className="w-full py-2 px-4 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors flex items-center justify-center">
+                Edit invoice
+              </Link>
+            )}
             {invoice.customer?.email && (
               <EmailInvoiceButton invoiceId={invoice.id} />
             )}

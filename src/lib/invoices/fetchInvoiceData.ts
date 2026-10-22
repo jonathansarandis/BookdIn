@@ -35,7 +35,13 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
   } catch {}
 
   const lineItems: InvoicePdfLineItem[] = []
-  if (invoice.job) {
+  const hasStoredLines = Array.isArray(invoice.line_items) && invoice.line_items.length > 0
+  if (hasStoredLines) {
+    // Stored (possibly staff-edited) line items always win over the job-derived breakdown.
+    for (const li of invoice.line_items) {
+      lineItems.push({ description: li.description || 'Service', amountCents: li.amountCents || 0 })
+    }
+  } else if (invoice.job) {
     // Additional charges added after the initial booking (e.g. on the day of service)
     // are stored as separate child jobs linked via parent_job_id, not folded into this
     // job's own price — pull them in as their own line items rather than letting them
