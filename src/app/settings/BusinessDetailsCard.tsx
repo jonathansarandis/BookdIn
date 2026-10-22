@@ -17,6 +17,7 @@ export default function BusinessDetailsCard({ businessId }: { businessId?: strin
   const [bnLabel, setBnLabel] = useState('ABN')
   const [bnNumber, setBnNumber] = useState('')
   const [tncUrl, setTncUrl] = useState('')
+  const [payDetails, setPayDetails] = useState('')
   const [tncUrlError, setTncUrlError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -33,6 +34,10 @@ export default function BusinessDetailsCard({ businessId }: { businessId?: strin
       .eq('id', businessId)
       .single()
       .then(({ data }) => {
+        // Separate query: column comes from a later migration, so a missing column must not break this card.
+        supabase.from('businesses').select('invoice_payment_details').eq('id', businessId).single().then(({ data: pd }) => {
+          if (pd) setPayDetails((pd as any).invoice_payment_details || '')
+        })
         if (data) {
           setPhone(data.phone || '')
           setWebsite(data.website || '')
@@ -75,6 +80,10 @@ export default function BusinessDetailsCard({ businessId }: { businessId?: strin
         tnc_url: tncUrl || null,
       })
       .eq('id', businessId)
+    if (!err) {
+      const { error: pdErr } = await supabase.from('businesses').update({ invoice_payment_details: payDetails.trim() || null } as any).eq('id', businessId)
+      if (pdErr && !/invoice_payment_details/.test(pdErr.message || '')) setError(pdErr.message)
+    }
     setSaving(false)
     if (err) {
       setError(err.message)
@@ -177,6 +186,17 @@ export default function BusinessDetailsCard({ businessId }: { businessId?: strin
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Invoice payment details</label>
+              <textarea
+                rows={5}
+                value={payDetails}
+                onChange={e => setPayDetails(e.target.value)}
+                placeholder={'Please make payment to:\n\nBusiness name\nAccount no. 00 000 0000\nBsb. 000 000'}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <p className="text-xs text-gray-400 mt-1">Printed automatically on every invoice PDF.</p>
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Business number label</label>
               <select

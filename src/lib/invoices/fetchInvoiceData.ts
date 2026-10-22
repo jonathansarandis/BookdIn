@@ -27,6 +27,13 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
 
   if (!business) return null
 
+  // Separate lookup so invoices still render if the invoice_payment_details migration hasn't run yet.
+  let paymentDetails: string | null = null
+  try {
+    const { data: pd, error: pdErr } = await admin.from('businesses').select('invoice_payment_details').eq('id', businessId).single()
+    if (!pdErr) paymentDetails = pd?.invoice_payment_details ?? null
+  } catch {}
+
   const lineItems: InvoicePdfLineItem[] = []
   if (invoice.job) {
     // Additional charges added after the initial booking (e.g. on the day of service)
@@ -101,6 +108,7 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
     taxLabel: invoice.tax_name || business.tax_name || 'GST',
     totalCents: invoice.total || 0,
     notes: invoice.notes,
+    paymentDetails,
   }
 
   return { invoice, pdfData }

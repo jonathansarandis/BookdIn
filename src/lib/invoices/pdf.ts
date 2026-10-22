@@ -40,6 +40,7 @@ export interface InvoicePdfData {
   taxLabel: string
   totalCents: number
   notes?: string | null
+  paymentDetails?: string | null
 }
 
 const INK = '#1a1a1a'
@@ -195,6 +196,18 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
   doc.text('Total (inc-GST)', totalsX, rowY, { width: totalsLabelWidth })
   doc.text(money(data.totalCents), totalsX + totalsLabelWidth, rowY, { width: 100, align: 'right' })
   rowY = doc.y + 30
+
+  // Payment instructions box (bank details etc.) — added automatically to every invoice.
+  if (data.paymentDetails && data.paymentDetails.trim()) {
+    const text = data.paymentDetails.trim()
+    doc.font('Helvetica').fontSize(10)
+    const boxPad = 12
+    const textH = doc.heightOfString(text, { width: pageWidth - boxPad * 2 })
+    if (rowY + textH + boxPad * 2 > doc.page.height - PAGE_MARGIN) { doc.addPage(); rowY = PAGE_MARGIN }
+    doc.rect(PAGE_MARGIN, rowY, pageWidth, textH + boxPad * 2).fill('#E8F0F6')
+    doc.fillColor(INK).font('Helvetica').fontSize(10).text(text, PAGE_MARGIN + boxPad, rowY + boxPad, { width: pageWidth - boxPad * 2 })
+    rowY = rowY + textH + boxPad * 2 + 20
+  }
 
   if (data.notes) {
     doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text('NOTES', PAGE_MARGIN, rowY)
