@@ -159,7 +159,8 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
 
   doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED)
   doc.text('DESCRIPTION', descX, tableTop)
-  doc.text('AMOUNT (EX-GST)', amountX, tableTop, { width: amountColWidth, align: 'right' })
+  const noTax = !data.taxCents
+  doc.text(noTax ? 'AMOUNT' : 'AMOUNT (EX-GST)', amountX, tableTop, { width: amountColWidth, align: 'right' })
   doc.moveTo(PAGE_MARGIN, tableTop + 16).lineTo(PAGE_MARGIN + pageWidth, tableTop + 16).strokeColor(RULE).stroke()
 
   let rowY = tableTop + 24
@@ -181,19 +182,21 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
   const totalsX = PAGE_MARGIN + pageWidth - 220
   const totalsLabelWidth = 120
   doc.font('Helvetica').fontSize(10).fillColor(MUTED)
-  doc.text('Subtotal (ex-GST)', totalsX, rowY, { width: totalsLabelWidth })
-  doc.fillColor(INK).text(money(data.subtotalCents), totalsX + totalsLabelWidth, rowY, { width: 100, align: 'right' })
-  rowY = doc.y + 6
+  if (!noTax) {
+    doc.text('Subtotal (ex-GST)', totalsX, rowY, { width: totalsLabelWidth })
+    doc.fillColor(INK).text(money(data.subtotalCents), totalsX + totalsLabelWidth, rowY, { width: 100, align: 'right' })
+    rowY = doc.y + 6
 
-  doc.fillColor(MUTED).text(data.taxLabel, totalsX, rowY, { width: totalsLabelWidth })
-  doc.fillColor(INK).text(money(data.taxCents), totalsX + totalsLabelWidth, rowY, { width: 100, align: 'right' })
-  rowY = doc.y + 8
+    doc.fillColor(MUTED).text(data.taxLabel, totalsX, rowY, { width: totalsLabelWidth })
+    doc.fillColor(INK).text(money(data.taxCents), totalsX + totalsLabelWidth, rowY, { width: 100, align: 'right' })
+    rowY = doc.y + 8
+  }
 
   doc.moveTo(totalsX, rowY).lineTo(PAGE_MARGIN + pageWidth, rowY).strokeColor(RULE).stroke()
   rowY += 8
 
   doc.font('Helvetica-Bold').fontSize(12).fillColor(INK)
-  doc.text('Total (inc-GST)', totalsX, rowY, { width: totalsLabelWidth })
+  doc.text(noTax ? 'Total' : 'Total (inc-GST)', totalsX, rowY, { width: totalsLabelWidth })
   doc.text(money(data.totalCents), totalsX + totalsLabelWidth, rowY, { width: 100, align: 'right' })
   rowY = doc.y + 30
 

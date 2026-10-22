@@ -17,6 +17,7 @@ export default function NewInvoicePage() {
   const [jobs, setJobs] = useState<any[]>([])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: '1', unit_price: '' }])
   const [form, setForm] = useState({ customer_id: '', job_id: '', issue_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '' })
+  const [noGst, setNoGst] = useState(false)
   const [billing, setBilling] = useState({ ...emptyBilling })
   const [newCustomer, setNewCustomer] = useState({ full_name: '', email: '', phone: '' })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -138,14 +139,14 @@ export default function NewInvoicePage() {
     }
 
     const lineTotalCents = Math.round(subtotal * 100)
-    const showTaxBreakdown = taxRate > 0 && showTax
+    const showTaxBreakdown = taxRate > 0 && showTax && !noGst
     const taxCents = showTaxBreakdown
       ? taxMode === 'exclusive'
         ? Math.round(lineTotalCents * taxRate / 100)
         : Math.round(lineTotalCents * taxRate / (100 + taxRate))
       : 0
-    const subtotalCents = taxMode === 'exclusive' ? lineTotalCents : lineTotalCents - taxCents
-    const totalCents = lineTotalCents + (taxMode === 'exclusive' ? taxCents : 0)
+    const subtotalCents = noGst ? lineTotalCents : taxMode === 'exclusive' ? lineTotalCents : lineTotalCents - taxCents
+    const totalCents = lineTotalCents + (!noGst && taxMode === 'exclusive' ? taxCents : 0)
 
     const customLineItems = items
       .filter(it => it.description.trim() || parseFloat(it.unit_price || '0') > 0)
@@ -298,16 +299,22 @@ export default function NewInvoicePage() {
             </div>
           ))}
           <div className="pt-3 border-t border-gray-100 space-y-2">
+            {taxRate > 0 && showTax && (
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={noGst} onChange={e => setNoGst(e.target.checked)} className="rounded border-gray-300" />
+                Don&apos;t include {taxName} on this invoice
+              </label>
+            )}
             {(() => {
               const lineTc = Math.round(subtotal * 100)
-              const showBreakdown = taxRate > 0 && showTax
+              const showBreakdown = taxRate > 0 && showTax && !noGst
               const tx = showBreakdown
                 ? taxMode === 'exclusive'
                   ? Math.round(lineTc * taxRate / 100)
                   : Math.round(lineTc * taxRate / (100 + taxRate))
                 : 0
-              const sub = taxMode === 'exclusive' ? lineTc : lineTc - tx
-              const total = lineTc + (taxMode === 'exclusive' ? tx : 0)
+              const sub = noGst ? lineTc : taxMode === 'exclusive' ? lineTc : lineTc - tx
+              const total = lineTc + (!noGst && taxMode === 'exclusive' ? tx : 0)
               return (
                 <>
                   {showBreakdown && (

@@ -20,6 +20,7 @@ export default function EditInvoicePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [items, setItems] = useState<LineItem[]>([])
   const [form, setForm] = useState({ issue_date: '', due_date: '', notes: '' })
+  const [noGst, setNoGst] = useState(false)
   const [billing, setBilling] = useState({ ...emptyBilling })
   const [customerName, setCustomerName] = useState('')
   const [tax, setTax] = useState({ rate: 0, name: 'Tax', show: false, mode: 'exclusive' as 'exclusive' | 'inclusive' })
@@ -32,6 +33,7 @@ export default function EditInvoicePage() {
       const { data: biz } = await supabase.from('businesses').select('tax_rate, tax_name, show_tax, tax_mode').eq('id', inv.business_id).single()
       if (biz) setTax({ rate: biz.tax_rate ?? 0, name: biz.tax_name?.trim() || 'Tax', show: biz.show_tax ?? false, mode: biz.tax_mode ?? 'exclusive' })
       setCustomerName(inv.customer?.full_name || '')
+      setNoGst(!!biz && (biz.tax_rate ?? 0) > 0 && (biz.show_tax ?? false) && !inv.tax_amount)
       setForm({ issue_date: toInput(inv.created_at), due_date: toInput(inv.due_date), notes: inv.notes || '' })
       setBilling(parseBillingAddress(inv.billing_address))
       let lines: LineItem[] = []
@@ -54,10 +56,10 @@ export default function EditInvoicePage() {
   const update = (i: number, field: string, v: string) => setItems(its => its.map((it, idx) => idx === i ? { ...it, [field]: v } : it))
   const lineTotal = items.reduce((sum, it) => sum + (parseFloat(it.quantity || '0') * parseFloat(it.unit_price || '0')), 0)
   const lineTc = Math.round(lineTotal * 100)
-  const showBreakdown = tax.rate > 0 && tax.show
+  const showBreakdown = tax.rate > 0 && tax.show && !noGst
   const taxCents = showBreakdown ? (tax.mode === 'exclusive' ? Math.round(lineTc * tax.rate / 100) : Math.round(lineTc * tax.rate / (100 + tax.rate))) : 0
-  const subtotalCents = tax.mode === 'exclusive' ? lineTc : lineTc - taxCents
-  const totalCents = lineTc + (tax.mode === 'exclusive' ? taxCents : 0)
+  const subtotalCents = noGst ? lineTc : tax.mode === 'exclusive' ? lineTc : lineTc - taxCents
+  const totalCents = lineTc + (!noGst && tax.mode === 'exclusive' ? taxCents : 0)
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
@@ -120,6 +122,12 @@ export default function EditInvoicePage() {
             </div>
           ))}
           <div className="pt-3 border-t border-gray-100 space-y-2 text-sm">
+            {tax.rate > 0 && tax.show && (
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={noGst} onChange={e => setNoGst(e.target.checked)} className="rounded border-gray-300" />
+                Don&apos;t include {tax.name} on this invoice
+              </label>
+            )}
             {showBreakdown && (<>
               <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${(subtotalCents / 100).toFixed(2)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">{tax.name} ({tax.rate}%)</span><span>${(taxCents / 100).toFixed(2)}</span></div>
