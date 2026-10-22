@@ -17,20 +17,22 @@ export async function POST(req: Request) {
   if (!profile?.business_id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let since = '2026-08-15'
-  try { const b = await req.json(); if (b?.since) since = b.since } catch {}
+  let before: string | null = null
+  let limit = 20
+  try { const b = await req.json(); if (b?.since) since = b.since; if (b?.before) before = b.before; if (b?.limit) limit = Math.min(Number(b.limit) || 20, 40) } catch {}
 
   const admin = createAdminClient()
-  const { data: jobs } = await admin
+  let q = admin
     .from('jobs')
-    .select('id')
+    .select('id, completed_at')
     .eq('business_id', profile.business_id)
     .eq('status', 'completed')
     .eq('payment_status', 'paid')
     .is('parent_job_id', null)
     .is('conversion_uploaded_at', null)
     .gte('completed_at', since)
-    .order('completed_at', { ascending: false })
-    .limit(300)
+  if (before) q = q.lt('completed_at', before)
+  const { data: jobs } = await q.order('completed_at', { ascending: false }).limit(limit)
 
   const summary: Record<string, number> = {}
   for (const j of jobs ?? []) {
@@ -38,5 +40,7 @@ export async function POST(req: Request) {
     const k = r.uploaded ? 'uploaded' : (r.reason || 'failed')
     summary[k] = (summary[k] || 0) + 1
   }
-  return NextResponse.json({ considered: jobs?.length ?? 0, summary })
+  const last = jobs && jobs.length ? jobs[jobs.length - 1].completed_at : null
+  // Pass `next` back as `before` to continue; null/done=true means finished.
+  return NextResponse.json({ considered: jobs?.length ?? 0, summary, next: last, done: !jobs || jobs.length < limit })
 }
