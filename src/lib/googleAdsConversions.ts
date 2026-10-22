@@ -123,6 +123,7 @@ async function uploadClickConversion(
       {
         transactionId: opts.orderId, // job id — lets Google dedupe retries
         eventTimestamp: opts.conversionDateTime.toISOString(), // RFC 3339, e.g. 2026-08-26T23:07:22.220Z
+        eventSource: 'WEB', // required by the Data Manager API — the click originated on the website
         adIdentifiers: { gclid: opts.gclid },
         currency: opts.currencyCode,
         conversionValue: opts.conversionValue,
