@@ -103,6 +103,9 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                   {invoice.customer.full_name}
                 </Link>
               </div>
+              {invoice.billing_address && (
+                <p className="text-sm text-gray-500 ml-6 whitespace-pre-line">{invoice.billing_address}</p>
+              )}
               {invoice.customer.email && (
                 <p className="text-sm text-gray-500 ml-6">{invoice.customer.email}</p>
               )}

@@ -14,7 +14,7 @@ export default function NewInvoicePage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: '1', unit_price: '' }])
-  const [form, setForm] = useState({ customer_id: '', job_id: '', issue_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '' })
+  const [form, setForm] = useState({ customer_id: '', job_id: '', issue_date: new Date().toISOString().slice(0, 10), due_date: '', billing_address: '', notes: '' })
   const [newCustomer, setNewCustomer] = useState({ full_name: '', email: '', phone: '' })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const isNewCustomer = form.customer_id === '__new__'
@@ -168,12 +168,19 @@ export default function NewInvoicePage() {
       ...(form.issue_date ? { created_at: new Date(form.issue_date + 'T12:00:00').toISOString() } : {}),
       due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
       notes: form.notes || null,
+      billing_address: form.billing_address.trim() || null,
     }
     let { data: invoice, error } = await supabase.from('invoices')
       .insert({ ...baseRow, line_items: customLineItems }).select().single()
     // line_items column comes from migration 20261007 — fall back so invoicing still works pre-migration.
+    // Optional columns come from later migrations — retry without them so invoicing keeps working pre-migration.
+    if (error && /billing_address/.test(error.message || '')) {
+      const { billing_address, ...withoutAddr } = baseRow as any
+      ;({ data: invoice, error } = await supabase.from('invoices').insert({ ...withoutAddr, line_items: customLineItems }).select().single())
+    }
     if (error && /line_items/.test(error.message || '')) {
-      ;({ data: invoice, error } = await supabase.from('invoices').insert(baseRow).select().single())
+      const { billing_address, ...withoutAddr } = baseRow as any
+      ;({ data: invoice, error } = await supabase.from('invoices').insert(withoutAddr).select().single())
     }
 
     if (!error && invoice && form.job_id) {
@@ -230,6 +237,12 @@ export default function NewInvoicePage() {
               <input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer(n => ({ ...n, phone: e.target.value }))} className={inputClass} />
             </div>
           )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Billing address</label>
+            <textarea rows={2} value={form.billing_address} onChange={e => setForm(f => ({ ...f, billing_address: e.target.value }))}
+              placeholder={'Street address\nSuburb STATE Postcode'} className={inputClass + ' resize-none'} />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>

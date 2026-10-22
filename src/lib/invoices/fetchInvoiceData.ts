@@ -92,6 +92,7 @@ export async function fetchInvoiceForPdf(admin: any, invoiceId: string, business
       phone: invoice.customer?.phone,
     },
     customerAddress: invoice.job?.address || null,
+    billingAddress: invoice.billing_address || null,
     serviceDate: invoice.job?.scheduled_at || null,
     serviceName: invoice.job?.service?.name || null,
     lineItems,

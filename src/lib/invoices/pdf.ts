@@ -31,6 +31,7 @@ export interface InvoicePdfData {
     phone?: string | null
   }
   customerAddress?: { line1: string; city: string; state: string; postcode: string } | null
+  billingAddress?: string | null
   serviceDate?: string | null
   serviceName?: string | null
   lineItems: InvoicePdfLineItem[]
@@ -122,7 +123,9 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
   doc.font('Helvetica-Bold').fontSize(9).fillColor(MUTED).text('BILL TO', PAGE_MARGIN, billToY)
   doc.font('Helvetica').fontSize(11).fillColor(INK).text(data.customer.fullName, PAGE_MARGIN, billToY + 14)
   doc.fontSize(9).fillColor(MUTED)
-  if (data.customerAddress) {
+  if (data.billingAddress && data.billingAddress.trim()) {
+    for (const line of data.billingAddress.split('\n')) { if (line.trim()) doc.text(line.trim()) }
+  } else if (data.customerAddress) {
     doc.text(data.customerAddress.line1)
     doc.text(`${data.customerAddress.city} ${data.customerAddress.state} ${data.customerAddress.postcode}`)
   }
