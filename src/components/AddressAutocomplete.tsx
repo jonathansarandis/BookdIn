@@ -15,12 +15,14 @@ interface Props {
   value: AddressValue
   onChange: (v: AddressValue) => void
   stateOptions?: string[]
+  required?: boolean   // default true; set false for optional addresses (e.g. invoice billing address)
+  title?: string
 }
 
 const cls = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent'
 const lbl = 'block text-xs font-medium text-gray-600 mb-1.5'
 
-export default function AddressAutocomplete({ value, onChange, stateOptions }: Props) {
+export default function AddressAutocomplete({ value, onChange, stateOptions, required = true }: Props) {
   const line1Ref = useRef<HTMLInputElement>(null)
   const onChangeRef = useRef(onChange)
   const manualRef = useRef(false)
@@ -85,11 +87,11 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
   return (
     <div className="space-y-3">
       <div>
-        <label className={lbl}>Street address *</label>
+        <label className={lbl}>Street address{required ? ' *' : ''}</label>
         <div className="relative">
           <input
             ref={line1Ref}
-            required
+            required={required}
             value={value.line1}
             onChange={e => onChange({ ...value, line1: e.target.value })}
             placeholder={manual ? '123 Main Street' : 'Start typing an address...'}
@@ -114,9 +116,9 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="col-span-2 sm:col-span-1">
-          <label className={lbl}>Suburb *</label>
+          <label className={lbl}>Suburb{required ? ' *' : ''}</label>
           <input
-            required
+            required={required}
             value={value.city}
             onChange={e => onChange({ ...value, city: e.target.value })}
             placeholder="Melbourne"
@@ -124,10 +126,10 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
           />
         </div>
         <div>
-          <label className={lbl}>State *</label>
+          <label className={lbl}>State{required ? ' *' : ''}</label>
           {stateOptions ? (
             <select
-              required
+              required={required}
               value={value.state}
               onChange={e => onChange({ ...value, state: e.target.value })}
               className={cls}
@@ -137,7 +139,7 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
             </select>
           ) : (
             <input
-              required
+              required={required}
               value={value.state}
               onChange={e => onChange({ ...value, state: e.target.value })}
               placeholder="VIC"
@@ -146,9 +148,9 @@ export default function AddressAutocomplete({ value, onChange, stateOptions }: P
           )}
         </div>
         <div>
-          <label className={lbl}>Postcode *</label>
+          <label className={lbl}>Postcode{required ? ' *' : ''}</label>
           <input
-            required
+            required={required}
             value={value.postcode}
             onChange={e => onChange({ ...value, postcode: e.target.value })}
             placeholder="3000"

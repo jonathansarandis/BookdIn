@@ -5,7 +5,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import BillingAddressInput from '@/components/BillingAddressInput'
+import AddressAutocomplete from '@/components/AddressAutocomplete'
+import { emptyBilling, formatBillingAddress, parseBillingAddress } from '@/lib/billingAddress'
 import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react'
 
 interface LineItem { description: string; quantity: string; unit_price: string }
@@ -18,7 +19,8 @@ export default function EditInvoicePage() {
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [items, setItems] = useState<LineItem[]>([])
-  const [form, setForm] = useState({ issue_date: '', due_date: '', billing_address: '', notes: '' })
+  const [form, setForm] = useState({ issue_date: '', due_date: '', notes: '' })
+  const [billing, setBilling] = useState({ ...emptyBilling })
   const [customerName, setCustomerName] = useState('')
   const [tax, setTax] = useState({ rate: 0, name: 'Tax', show: false, mode: 'exclusive' as 'exclusive' | 'inclusive' })
 
@@ -30,7 +32,8 @@ export default function EditInvoicePage() {
       const { data: biz } = await supabase.from('businesses').select('tax_rate, tax_name, show_tax, tax_mode').eq('id', inv.business_id).single()
       if (biz) setTax({ rate: biz.tax_rate ?? 0, name: biz.tax_name?.trim() || 'Tax', show: biz.show_tax ?? false, mode: biz.tax_mode ?? 'exclusive' })
       setCustomerName(inv.customer?.full_name || '')
-      setForm({ issue_date: toInput(inv.created_at), due_date: toInput(inv.due_date), billing_address: inv.billing_address || '', notes: inv.notes || '' })
+      setForm({ issue_date: toInput(inv.created_at), due_date: toInput(inv.due_date), notes: inv.notes || '' })
+      setBilling(parseBillingAddress(inv.billing_address))
       let lines: LineItem[] = []
       if (Array.isArray(inv.line_items) && inv.line_items.length) {
         lines = inv.line_items.map((li: any) => ({ description: li.description || '', quantity: '1', unit_price: ((li.amountCents || 0) / 100).toFixed(2) }))
@@ -71,7 +74,7 @@ export default function EditInvoicePage() {
     const patch: any = {
       line_items, subtotal: subtotalCents, tax_amount: taxCents, tax_name: showBreakdown ? tax.name : null, total: totalCents,
       due_date: form.due_date ? new Date(form.due_date + 'T12:00:00').toISOString() : null,
-      notes: form.notes || null, billing_address: form.billing_address.trim() || null,
+      notes: form.notes || null, billing_address: formatBillingAddress(billing) || null,
     }
     if (form.issue_date) patch.created_at = new Date(form.issue_date + 'T12:00:00').toISOString()
     let { error } = await supabase.from('invoices').update(patch).eq('id', id)
@@ -95,7 +98,7 @@ export default function EditInvoicePage() {
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Billing address</label>
-            <BillingAddressInput value={form.billing_address} onChange={v => setForm(f => ({ ...f, billing_address: v }))} className={cls} />
+            <AddressAutocomplete value={billing} onChange={setBilling} required={false} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Issued date</label><input type="date" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} className={cls} /></div>

@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import BillingAddressInput from '@/components/BillingAddressInput'
+import AddressAutocomplete from '@/components/AddressAutocomplete'
+import { emptyBilling, formatBillingAddress } from '@/lib/billingAddress'
 import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react'
 
 interface LineItem { description: string; quantity: string; unit_price: string }
@@ -15,7 +16,8 @@ export default function NewInvoicePage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: '1', unit_price: '' }])
-  const [form, setForm] = useState({ customer_id: '', job_id: '', issue_date: new Date().toISOString().slice(0, 10), due_date: '', billing_address: '', notes: '' })
+  const [form, setForm] = useState({ customer_id: '', job_id: '', issue_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '' })
+  const [billing, setBilling] = useState({ ...emptyBilling })
   const [newCustomer, setNewCustomer] = useState({ full_name: '', email: '', phone: '' })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const isNewCustomer = form.customer_id === '__new__'
@@ -169,7 +171,7 @@ export default function NewInvoicePage() {
       ...(form.issue_date ? { created_at: new Date(form.issue_date + 'T12:00:00').toISOString() } : {}),
       due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
       notes: form.notes || null,
-      billing_address: form.billing_address.trim() || null,
+      billing_address: formatBillingAddress(billing) || null,
     }
     let { data: invoice, error } = await supabase.from('invoices')
       .insert({ ...baseRow, line_items: customLineItems }).select().single()
@@ -241,7 +243,7 @@ export default function NewInvoicePage() {
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Billing address</label>
-            <BillingAddressInput value={form.billing_address} onChange={v => setForm(f => ({ ...f, billing_address: v }))} className={inputClass} />
+            <AddressAutocomplete value={billing} onChange={setBilling} required={false} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
