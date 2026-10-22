@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import BillingAddressInput from '@/components/BillingAddressInput'
 import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react'
 
 interface LineItem { description: string; quantity: string; unit_price: string }
@@ -94,7 +95,7 @@ export default function EditInvoicePage() {
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Billing address</label>
-            <textarea rows={2} value={form.billing_address} onChange={e => setForm(f => ({ ...f, billing_address: e.target.value }))} className={cls + ' resize-none'} placeholder={'Street address\nSuburb STATE Postcode'} />
+            <BillingAddressInput value={form.billing_address} onChange={v => setForm(f => ({ ...f, billing_address: v }))} className={cls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Issued date</label><input type="date" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} className={cls} /></div>
