@@ -7,6 +7,7 @@ import { ArrowLeft, User, Calendar, FileText, Download } from 'lucide-react'
 import { formatCurrency, formatDateShort, cn } from '@/lib/utils'
 import PayButton from '@/components/payments/PayButton'
 import EmailInvoiceButton from './EmailInvoiceButton'
+import InvoiceDatesEditor from './InvoiceDatesEditor'
 
 const STATUS_STYLES: Record<string, string> = {
   draft:   'bg-gray-100 text-gray-600 border-gray-200',
@@ -168,16 +169,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
               <span className="text-gray-500">Total</span>
               <span className="font-semibold text-gray-900">{formatCurrency(invoice.total)}</span>
             </div>
-            {invoice.due_date && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Due date</span>
-                <span className="text-gray-900">{formatDateShort(invoice.due_date)}</span>
-              </div>
-            )}
+            <InvoiceDatesEditor invoiceId={invoice.id} issuedAt={invoice.created_at} dueDate={invoice.due_date} />
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Status</span>
               <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border capitalize', STATUS_STYLES[invoice.status])}>
-                {invoice.status}
+                {invoice.status === 'draft' ? 'unsent' : invoice.status}
               </span>
             </div>
             {canPay && (

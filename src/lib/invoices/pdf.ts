@@ -108,8 +108,11 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Buffer> 
     .text(data.invoiceNumber, { width: pageWidth, align: 'right' })
     .text(`Issued ${formatDateShortWithYear(data.createdAt)}`, { width: pageWidth, align: 'right' })
   if (data.dueDate) doc.text(`Due ${formatDateShortWithYear(data.dueDate)}`, { width: pageWidth, align: 'right' })
-  doc.font('Helvetica-Bold').fillColor(INK)
-    .text(data.status.toUpperCase(), { width: pageWidth, align: 'right' })
+  // Internal workflow states (draft/sent) are not printed on the customer's invoice.
+  if (['paid', 'void', 'overdue'].includes(data.status)) {
+    doc.font('Helvetica-Bold').fillColor(INK)
+      .text(data.status.toUpperCase(), { width: pageWidth, align: 'right' })
+  }
 
   doc.moveDown(2)
   doc.y = Math.max(doc.y, businessTextY + 90, headerTop + LOGO_BOX + 10)

@@ -103,7 +103,7 @@ export default async function InvoicesPage() {
                   <td className="px-4 py-3.5">
                     <Link href={`/invoices/${invoice.id}`} className="block">
                       <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border capitalize', STATUS_COLORS[invoice.status])}>
-                        {invoice.status}
+                        {invoice.status === 'draft' ? 'unsent' : invoice.status}
                       </span>
                     </Link>
                   </td>

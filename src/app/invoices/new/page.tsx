@@ -14,7 +14,7 @@ export default function NewInvoicePage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: '1', unit_price: '' }])
-  const [form, setForm] = useState({ customer_id: '', job_id: '', due_date: '', notes: '' })
+  const [form, setForm] = useState({ customer_id: '', job_id: '', issue_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '' })
   const [newCustomer, setNewCustomer] = useState({ full_name: '', email: '', phone: '' })
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const isNewCustomer = form.customer_id === '__new__'
@@ -165,6 +165,7 @@ export default function NewInvoicePage() {
       tax_amount: taxCents,
       tax_name: showTaxBreakdown ? taxName : null,
       total: totalCents,
+      ...(form.issue_date ? { created_at: new Date(form.issue_date + 'T12:00:00').toISOString() } : {}),
       due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
       notes: form.notes || null,
     }
@@ -230,9 +231,15 @@ export default function NewInvoicePage() {
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Due date</label>
-            <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className={inputClass} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Issued date</label>
+              <input type="date" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Due date</label>
+              <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className={inputClass} />
+            </div>
           </div>
         </div>
 
