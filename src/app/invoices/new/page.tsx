@@ -117,7 +117,14 @@ export default function NewInvoicePage() {
     let customerId = form.customer_id
     if (customerId === '__new__') {
       if (!newCustomer.full_name.trim()) { setErrorMsg('Enter the customer name'); setLoading(false); return }
-      const { data: created, error: cErr } = await supabase.from('customers').insert({
+      // A customer with this email may already exist (unique per business) — reuse them instead of failing.
+      const emailTrim = newCustomer.email.trim()
+      let existingId: string | null = null
+      if (emailTrim) {
+        const { data: ex } = await supabase.from('customers').select('id').eq('business_id', profile!.business_id!).ilike('email', emailTrim).limit(1).maybeSingle()
+        existingId = ex?.id ?? null
+      }
+      const { data: created, error: cErr } = existingId ? { data: { id: existingId }, error: null } : await supabase.from('customers').insert({
         business_id: profile!.business_id!,
         full_name: newCustomer.full_name.trim(),
         email: newCustomer.email.trim() || null,
