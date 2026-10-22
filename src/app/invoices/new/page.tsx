@@ -15,6 +15,9 @@ export default function NewInvoicePage() {
   const [jobs, setJobs] = useState<any[]>([])
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: '1', unit_price: '' }])
   const [form, setForm] = useState({ customer_id: '', job_id: '', due_date: '', notes: '' })
+  const [newCustomer, setNewCustomer] = useState({ full_name: '', email: '', phone: '' })
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const isNewCustomer = form.customer_id === '__new__'
   const [taxRate, setTaxRate] = useState(0)
   const [taxName, setTaxName] = useState('Tax')
   const [showTax, setShowTax] = useState(false)
@@ -105,9 +108,24 @@ export default function NewInvoicePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    setErrorMsg(null)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', user!.id).single()
+
+    // One-off / new customer: create the customer record first so the invoice has someone to bill.
+    let customerId = form.customer_id
+    if (customerId === '__new__') {
+      if (!newCustomer.full_name.trim()) { setErrorMsg('Enter the customer name'); setLoading(false); return }
+      const { data: created, error: cErr } = await supabase.from('customers').insert({
+        business_id: profile!.business_id!,
+        full_name: newCustomer.full_name.trim(),
+        email: newCustomer.email.trim() || null,
+        phone: newCustomer.phone.trim() || null,
+      } as any).select('id').single()
+      if (cErr || !created) { setErrorMsg(cErr?.message || 'Could not create customer'); setLoading(false); return }
+      customerId = created.id
+    }
 
     const lineTotalCents = Math.round(subtotal * 100)
     const showTaxBreakdown = taxRate > 0 && showTax
@@ -133,7 +151,7 @@ export default function NewInvoicePage() {
 
     const baseRow = {
       business_id: profile!.business_id!,
-      customer_id: form.customer_id,
+      customer_id: customerId,
       job_id: form.job_id || null,
       status: 'draft',
       subtotal: subtotalCents,
@@ -155,7 +173,8 @@ export default function NewInvoicePage() {
     }
 
     setLoading(false)
-    if (!error) router.push('/invoices')
+    if (error) { setErrorMsg(error.message || 'Could not create invoice'); return }
+    router.push(invoice ? `/invoices/${invoice.id}` : '/invoices')
   }
 
   const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
@@ -191,9 +210,18 @@ export default function NewInvoicePage() {
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Customer *</label>
             <select required value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} className={inputClass}>
               <option value="">Select customer...</option>
+              <option value="__new__">+ New / one-off customer…</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
             </select>
           </div>
+
+          {isNewCustomer && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 rounded-lg p-3">
+              <input required placeholder="Full name *" value={newCustomer.full_name} onChange={e => setNewCustomer(n => ({ ...n, full_name: e.target.value }))} className={inputClass} />
+              <input type="email" placeholder="Email (to send invoice)" value={newCustomer.email} onChange={e => setNewCustomer(n => ({ ...n, email: e.target.value }))} className={inputClass} />
+              <input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer(n => ({ ...n, phone: e.target.value }))} className={inputClass} />
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Due date</label>
@@ -281,6 +309,8 @@ export default function NewInvoicePage() {
             rows={3} placeholder="Payment instructions, thank you note..."
             className={inputClass + ' resize-none'} />
         </div>
+
+        {errorMsg && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{errorMsg}</p>}
 
         <div className="flex gap-3 pb-8">
           <button type="button" onClick={() => router.back()}
