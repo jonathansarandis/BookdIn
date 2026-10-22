@@ -97,7 +97,7 @@ async function customerIdentifiers(customerId?: string | null): Promise<Array<Re
 
 async function uploadClickConversion(
   business: BusinessGoogleAdsConfig,
-  opts: { customerId?: string | null; gclid: string; conversionActionId: string; conversionDateTime: Date; conversionValue: number; currencyCode: string; orderId: string },
+  opts: { customerId?: string | null; gclid?: string | null; conversionActionId: string; conversionDateTime: Date; conversionValue: number; currencyCode: string; orderId: string },
 ): Promise<{ success: boolean; error?: string }> {
   const creds = decryptGoogleAdsCredentials(business)
   const accessToken = await getAccessToken(creds)
@@ -115,6 +115,8 @@ async function uploadClickConversion(
   }
 
   const userIdentifiers = await customerIdentifiers(opts.customerId)
+  // Need at least one way for Google to match the conversion: a click ID or hashed identifiers.
+  if (!opts.gclid && userIdentifiers.length === 0) return { success: false, error: 'no_gclid_or_identifiers' }
 
   const body: Record<string, any> = {
     destinations: [destination],
@@ -124,7 +126,7 @@ async function uploadClickConversion(
         transactionId: opts.orderId, // job id — lets Google dedupe retries
         eventTimestamp: opts.conversionDateTime.toISOString(), // RFC 3339, e.g. 2026-08-26T23:07:22.220Z
         eventSource: 'WEB', // required by the Data Manager API — the click originated on the website
-        adIdentifiers: { gclid: opts.gclid },
+        ...(opts.gclid ? { adIdentifiers: { gclid: opts.gclid } } : {}),
         currency: opts.currencyCode,
         conversionValue: opts.conversionValue,
         ...(userIdentifiers.length ? { userData: { userIdentifiers } } : {}),
@@ -208,7 +210,9 @@ export async function syncJobConversionToGoogleAds(jobId: string): Promise<SyncR
     if (customer?.gclid) gclid = customer.gclid
   }
 
-  if (!gclid) return { uploaded: false, reason: 'no_gclid' } // organic/referral booking — expected, not an error
+  // No gclid is fine: Enhanced Conversions for Leads can match on the customer's hashed
+  // email/phone alone. Only skip when we have neither (checked inside the upload).
+  if (!gclid && !job.customer_id) return { uploaded: false, reason: 'no_gclid' }
 
   const conversionValueCents = job.total_price ?? job.price ?? 0
   const conversionDate = job.completed_at ? new Date(job.completed_at) : new Date()
@@ -228,6 +232,7 @@ export async function syncJobConversionToGoogleAds(jobId: string): Promise<SyncR
     return { uploaded: true }
   }
 
+  if (result.error === 'no_gclid_or_identifiers') return { uploaded: false, reason: 'no_gclid' }
   await admin.from('jobs').update({ conversion_upload_error: result.error?.slice(0, 2000) }).eq('id', jobId)
   return { uploaded: false, reason: 'upload_failed', error: result.error }
 }
@@ -300,7 +305,9 @@ export async function syncBookingConversionToGoogleAds(jobId: string): Promise<S
     if (customer?.gclid) gclid = customer.gclid
   }
 
-  if (!gclid) return { uploaded: false, reason: 'no_gclid' } // organic/referral booking — expected, not an error
+  // No gclid is fine: Enhanced Conversions for Leads can match on the customer's hashed
+  // email/phone alone. Only skip when we have neither (checked inside the upload).
+  if (!gclid && !job.customer_id) return { uploaded: false, reason: 'no_gclid' }
 
   const conversionValueCents = job.total_price ?? job.price ?? 0
   // Conversion date is "now" (the moment the card was captured), not
@@ -323,6 +330,7 @@ export async function syncBookingConversionToGoogleAds(jobId: string): Promise<S
     return { uploaded: true }
   }
 
+  if (result.error === 'no_gclid_or_identifiers') return { uploaded: false, reason: 'no_gclid' }
   await admin.from('jobs').update({ booking_conversion_upload_error: result.error?.slice(0, 2000) }).eq('id', jobId)
   return { uploaded: false, reason: 'upload_failed', error: result.error }
 }
