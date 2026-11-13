@@ -176,7 +176,7 @@ export default function JobPopover({ job, businessTimezone, onClose }: Props) {
                   <div className="mt-1 space-y-0.5">
                     {job.job_extras.map((ex: any) => (
                       <p key={ex.id || ex.name} className="text-xs text-gray-400">
-                        + {ex.name} · ${(ex.price / 100).toFixed(2)}
+                        + {ex.name}{(ex.quantity ?? 1) > 1 ? ` ×${ex.quantity}` : ''} · ${((ex.price * (ex.quantity ?? 1)) / 100).toFixed(2)}{(ex.quantity ?? 1) > 1 ? ` ($${(ex.price / 100).toFixed(2)} each)` : ''}
                       </p>
                     ))}
                   </div>

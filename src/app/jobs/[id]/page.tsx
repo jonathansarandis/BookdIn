@@ -90,7 +90,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         provider:providers(id, display_name, color, payout_percent),
         address:addresses(line1, city, state, postcode),
         location:locations(timezone),
-        job_extras(id, name, price, extra:extras(is_quote_only))
+        job_extras(id, name, price, quantity, extra:extras(is_quote_only))
       `)
       .eq('id', params.id)
       .eq('business_id', profile?.business_id)
@@ -355,10 +355,16 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             {job.job_extras?.length > 0
               ? job.job_extras.map((extra: any) => (
                   <div key={extra.id} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">{extra.name}</span>
+                    <span className="text-gray-600">
+                      {extra.name}
+                      {(extra.quantity ?? 1) > 1 && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">×{extra.quantity}</span>}
+                    </span>
                     {extra.extra?.is_quote_only
                       ? <span className="text-gray-500 italic text-xs">Quote on arrival</span>
-                      : <span className="text-gray-900 font-medium">+${(extra.price / 100).toFixed(2)}</span>
+                      : <span className="text-gray-900 font-medium">
+                          +${((extra.price * (extra.quantity ?? 1)) / 100).toFixed(2)}
+                          {(extra.quantity ?? 1) > 1 && <span className="block text-xs text-gray-400 font-normal text-right">${(extra.price / 100).toFixed(2)} each</span>}
+                        </span>
                     }
                   </div>
                 ))
